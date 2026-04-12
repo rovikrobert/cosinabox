@@ -1,23 +1,12 @@
-"""Followup reminder job — surfaces stale stakeholders.
-
-Layer 1: followup_reminder default threshold = 14 days past cadence.
-"""
+"""Follow-up reminder — surfaces stale stakeholder contacts."""
 
 from __future__ import annotations
 
-from datetime import date, datetime
+from datetime import date
 from typing import Any
 
 from cosinabox import defaults
 from cosinabox.jobs.base import Job, JobContext
-
-CADENCE_DAYS = {
-    "daily": 1,
-    "weekly": 7,
-    "biweekly": 14,
-    "monthly": 30,
-    "quarterly": 90,
-}
 
 
 class FollowupReminderJob(Job):
@@ -31,17 +20,38 @@ class FollowupReminderJob(Job):
         staleness_days: int = defaults.FOLLOWUP_STALENESS_DAYS,
     ) -> None:
         self.stakeholders = stakeholders
-        self.today = today or datetime.utcnow().date()
+        self.today = today or date.today()
         self.staleness_days = staleness_days
 
-    def run(self, context: JobContext) -> str:  # noqa: ARG002
+    def run(self, context: JobContext) -> str:
+        cadence_map = {
+            "daily": 1, "weekly": 7, "biweekly": 14,
+            "monthly": 30, "quarterly": 90,
+        }
         stale: list[str] = []
         for s in self.stakeholders:
-            cadence = CADENCE_DAYS.get(s.get("cadence", "weekly"), 7)
-            last = date.fromisoformat(s["last_contact"])
-            days_since = (self.today - last).days
-            if days_since > cadence + self.staleness_days:
-                stale.append(f"- {s['name']} ({days_since}d since contact)")
+            lc = s.get("last_contact") or s.get("last_interaction")
+            if not lc:
+                continue
+            try:
+                last = date.fromisoformat(str(lc)[:10])
+            except (ValueError, TypeError):
+                continue
+            days = (self.today - last).days
+            cadence = s.get("cadence", "weekly")
+            threshold = cadence_map.get(cadence, 7) + self.staleness_days
+            if days > threshold:
+                name = s.get("name", "?")
+                role = s.get("role", "")
+                stale.append(
+                    f"- {name} ({role}) — {days}d since last contact, "
+                    f"cadence: {cadence}"
+                )
+
         if not stale:
-            return "(no stale follow-ups)"
-        return "Stale follow-ups:\n" + "\n".join(stale)
+            return ""  # Empty = no message sent
+
+        return (
+            f"Follow-up reminder ({len(stale)} contacts cooling):\n\n"
+            + "\n".join(stale)
+        )

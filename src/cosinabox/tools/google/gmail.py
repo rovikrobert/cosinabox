@@ -33,7 +33,20 @@ def _header(payload: dict[str, Any], name: str) -> str:
 
 
 def _fetch_messages(service: Resource, q: str, max_results: int) -> list[GmailMessage]:
-    resp = service.users().messages().list(userId="me", q=q, maxResults=max_results).execute()
+    # Gmail search index lags up to 1 hour on sent mail.
+    # Use labelIds=["SENT"] for reliable sent mail queries.
+    import re
+
+    if re.search(r"\bin:sent\b", q):
+        stripped_q = re.sub(r"\bin:sent\b", "", q).strip()
+        resp = (
+            service.users()
+            .messages()
+            .list(userId="me", labelIds=["SENT"], q=stripped_q or None, maxResults=max_results)
+            .execute()
+        )
+    else:
+        resp = service.users().messages().list(userId="me", q=q, maxResults=max_results).execute()
     out: list[GmailMessage] = []
     for ref in resp.get("messages", []):
         full = (
