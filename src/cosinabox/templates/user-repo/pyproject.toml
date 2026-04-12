@@ -1,0 +1,14 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "my-cos"
+version = "0.0.1"
+requires-python = ">=3.11"
+dependencies = [
+  "cosinabox[google]>=0.1,<0.2",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["."]
