@@ -97,7 +97,10 @@ class TestBuildToolRegistry:
     def test_calendar_only(self) -> None:
         defs, handlers = build_tool_registry({"calendar": _make_calendar()})
         assert len(defs) == len(CALENDAR_TOOL_DEFINITIONS)
-        assert set(handlers.keys()) == {"calendar_list_events", "calendar_find_conflicts"}
+        assert set(handlers.keys()) == {
+            "calendar_list_events", "calendar_find_conflicts",
+            "calendar_create_event", "calendar_find_free_time",
+        }
 
     def test_attio_only(self) -> None:
         defs, handlers = build_tool_registry({"attio": _make_attio()})
@@ -240,6 +243,75 @@ class TestHandlerExecution:
         result = handlers["fireflies_list_meetings"](hours=48)
         ff.list_recent_meetings.assert_called_once_with(hours=48)
         assert "Sync" in result
+
+    def test_calendar_create_event_success(self) -> None:
+        cal = _make_calendar()
+        created = FakeEvent(
+            "new-1", "Team Sync",
+            datetime(2026, 4, 14, 14, 0, tzinfo=timezone.utc),
+            datetime(2026, 4, 14, 15, 0, tzinfo=timezone.utc),
+        )
+        cal.create_event.return_value = created
+        _, handlers = build_tool_registry({"calendar": cal})
+        result = handlers["calendar_create_event"](
+            summary="Team Sync",
+            start="2026-04-14T14:00:00+00:00",
+            end="2026-04-14T15:00:00+00:00",
+        )
+        assert "Event created" in result
+        assert "Team Sync" in result
+        cal.create_event.assert_called_once()
+
+    def test_calendar_create_event_conflict(self) -> None:
+        from cosinabox.tools.google.calendar import CalendarConflict
+
+        cal = _make_calendar()
+        conflicts = [
+            FakeEvent(
+                "e1", "Standup",
+                datetime(2026, 4, 14, 14, 0, tzinfo=timezone.utc),
+                datetime(2026, 4, 14, 14, 30, tzinfo=timezone.utc),
+            )
+        ]
+        cal.create_event.side_effect = CalendarConflict(conflicts)
+        _, handlers = build_tool_registry({"calendar": cal})
+        result = handlers["calendar_create_event"](
+            summary="Coffee",
+            start="2026-04-14T14:00:00+00:00",
+            end="2026-04-14T15:00:00+00:00",
+        )
+        assert "CONFLICT" in result
+        assert "Standup" in result
+
+    def test_calendar_find_free_time_returns_slots(self) -> None:
+        cal = _make_calendar()
+        cal.find_free_time.return_value = [
+            (
+                datetime(2026, 4, 14, 9, 0, tzinfo=timezone.utc),
+                datetime(2026, 4, 14, 10, 0, tzinfo=timezone.utc),
+            ),
+            (
+                datetime(2026, 4, 14, 11, 0, tzinfo=timezone.utc),
+                datetime(2026, 4, 14, 22, 0, tzinfo=timezone.utc),
+            ),
+        ]
+        _, handlers = build_tool_registry({"calendar": cal})
+        result = handlers["calendar_find_free_time"](
+            date="2026-04-14",
+            duration_minutes=30,
+        )
+        assert "09:00" in result
+        assert "Available slots" in result
+
+    def test_calendar_find_free_time_no_slots(self) -> None:
+        cal = _make_calendar()
+        cal.find_free_time.return_value = []
+        _, handlers = build_tool_registry({"calendar": cal})
+        result = handlers["calendar_find_free_time"](
+            date="2026-04-14",
+            duration_minutes=60,
+        )
+        assert "No available slots" in result
 
 
 # ---------------------------------------------------------------------------

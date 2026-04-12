@@ -7,7 +7,7 @@ runs `find_conflicts` first.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any
 
 try:
@@ -100,6 +100,75 @@ class CalendarTool:
     def find_conflicts(self, *, start: datetime, end: datetime) -> list[CalendarEvent]:
         existing = self.list_events(start=start, end=end)
         return [e for e in existing if e.start < end and e.end > start]
+
+    # Time hint windows: (start_hour, start_min, end_hour, end_min)
+    _TIME_WINDOWS: dict[str, tuple[int, int, int, int]] = {
+        "morning": (9, 0, 12, 0),
+        "lunch": (11, 30, 14, 0),
+        "afternoon": (12, 0, 18, 0),
+        "evening": (18, 0, 22, 0),
+        "dinner": (18, 0, 22, 0),
+        "coffee": (9, 0, 11, 0),
+        "breakfast": (8, 0, 10, 0),
+        "any": (9, 0, 22, 0),
+    }
+
+    def find_free_time(
+        self,
+        *,
+        date: datetime,
+        duration_minutes: int,
+        time_hint: str = "any",
+    ) -> list[tuple[datetime, datetime]]:
+        """Find available time slots on a given date.
+
+        Args:
+            date: The date to check (time component ignored, uses date only).
+            duration_minutes: Minimum slot duration in minutes.
+            time_hint: Filter window — 'morning', 'afternoon', 'evening',
+                'lunch', 'coffee', 'breakfast', 'dinner', or 'any'.
+
+        Returns:
+            List of (start, end) tuples representing free slots.
+        """
+        hint = time_hint.lower().strip()
+        window = self._TIME_WINDOWS.get(hint, self._TIME_WINDOWS["any"])
+        tz = date.tzinfo
+        day = date.replace(hour=0, minute=0, second=0, microsecond=0)
+        work_start = day.replace(hour=window[0], minute=window[1])
+        work_end = day.replace(hour=window[2], minute=window[3])
+
+        events = self.list_events(start=work_start, end=work_end)
+
+        # Collect busy intervals, skip all-day events (no time component)
+        busy: list[tuple[datetime, datetime]] = []
+        for evt in events:
+            s = max(evt.start, work_start)
+            e = min(evt.end, work_end)
+            if s < e:
+                busy.append((s, e))
+
+        # Merge overlapping intervals
+        busy.sort()
+        merged: list[tuple[datetime, datetime]] = []
+        for s, e in busy:
+            if merged and s <= merged[-1][1]:
+                merged[-1] = (merged[-1][0], max(merged[-1][1], e))
+            else:
+                merged.append((s, e))
+
+        # Compute free gaps
+        required = timedelta(minutes=duration_minutes)
+        free_slots: list[tuple[datetime, datetime]] = []
+        cursor = work_start
+        for s, e in merged:
+            if s - cursor >= required:
+                free_slots.append((cursor, s))
+            cursor = max(cursor, e)
+        if work_end - cursor >= required:
+            free_slots.append((cursor, work_end))
+
+        return free_slots
 
     def create_event(
         self,

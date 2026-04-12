@@ -116,6 +116,65 @@ CALENDAR_TOOL_DEFINITIONS: list[dict[str, Any]] = [
             "required": ["start", "end"],
         },
     },
+    {
+        "name": "calendar_create_event",
+        "description": (
+            "Create a calendar event. Automatically checks for conflicts "
+            "before creating. Supports attendees."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "summary": {
+                    "type": "string",
+                    "description": "Event title.",
+                },
+                "start": {
+                    "type": "string",
+                    "description": "Start time (ISO 8601, e.g., '2026-04-14T10:00:00+08:00').",
+                },
+                "end": {
+                    "type": "string",
+                    "description": "End time (ISO 8601).",
+                },
+                "attendees": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "List of attendee email addresses (optional).",
+                },
+            },
+            "required": ["summary", "start", "end"],
+        },
+    },
+    {
+        "name": "calendar_find_free_time",
+        "description": (
+            "Find available time slots on a given date. "
+            "Returns free windows that fit the requested duration."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "date": {
+                    "type": "string",
+                    "description": "Date to check (YYYY-MM-DD).",
+                },
+                "duration_minutes": {
+                    "type": "integer",
+                    "description": "Desired meeting duration in minutes.",
+                },
+                "time_hint": {
+                    "type": "string",
+                    "description": (
+                        "Optional time preference: 'morning' (9-12), 'lunch' (11:30-14), "
+                        "'afternoon' (12-18), 'evening' (18-22), 'coffee' (9-11), "
+                        "'any' (9-22, default)."
+                    ),
+                },
+            },
+            "required": ["date", "duration_minutes"],
+        },
+    },
 ]
 
 # ---------------------------------------------------------------------------
@@ -291,9 +350,72 @@ def _build_calendar_handlers(calendar: Any) -> dict[str, Callable[..., str]]:
             return "No conflicts found."
         return _serialize(results)
 
+    def calendar_create_event(
+        summary: str,
+        start: str,
+        end: str,
+        attendees: list[str] | None = None,
+    ) -> str:
+        from cosinabox.tools.google.calendar import CalendarConflict
+
+        start_dt = datetime.fromisoformat(start)
+        end_dt = datetime.fromisoformat(end)
+        try:
+            event = calendar.create_event(
+                summary=summary,
+                start=start_dt,
+                end=end_dt,
+                attendees=attendees,
+            )
+            lines = [
+                "Event created:",
+                f"  Title: {event.summary}",
+                f"  When: {event.start.isoformat()} — {event.end.isoformat()}",
+                f"  Event ID: {event.id}",
+            ]
+            return "\n".join(lines)
+        except CalendarConflict as exc:
+            conflicts = _serialize(exc.conflicts)
+            return f"CONFLICT — event not created. Overlapping events:\n{conflicts}"
+
+    def calendar_find_free_time(
+        date: str,
+        duration_minutes: int,
+        time_hint: str = "any",
+    ) -> str:
+        from zoneinfo import ZoneInfo
+
+        # Parse date string into a timezone-aware datetime.
+        # Use the calendar's first service timezone, or UTC as fallback.
+        day = datetime.strptime(date, "%Y-%m-%d")
+        # Attach timezone — use UTC if none available; the CalendarTool
+        # will use all configured services regardless.
+        day = day.replace(tzinfo=ZoneInfo("UTC"))
+
+        slots = calendar.find_free_time(
+            date=day,
+            duration_minutes=duration_minutes,
+            time_hint=time_hint,
+        )
+        if not slots:
+            return (
+                f"No available slots of {duration_minutes} minutes "
+                f"found on {date} (hint: {time_hint})."
+            )
+        lines = [f"Available slots ({duration_minutes} min+) on {date}:"]
+        for slot_start, slot_end in slots:
+            slot_dur = int((slot_end - slot_start).total_seconds() // 60)
+            lines.append(
+                f"  {slot_start.strftime('%H:%M')} — "
+                f"{slot_end.strftime('%H:%M')}  ({slot_dur} min)"
+            )
+        return "\n".join(lines)
+
     return {
         "calendar_list_events": calendar_list_events,
         "calendar_find_conflicts": calendar_find_conflicts,
+        "calendar_create_event": calendar_create_event,
+        "calendar_find_free_time": calendar_find_free_time,
     }
 
 
