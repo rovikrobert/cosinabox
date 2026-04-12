@@ -1,0 +1,1 @@
+"""cosinabox CLI."""

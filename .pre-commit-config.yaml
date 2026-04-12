@@ -1,0 +1,15 @@
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.4.10
+    hooks:
+      - id: ruff
+        args: [--fix]
+      - id: ruff-format
+  - repo: local
+    hooks:
+      - id: secret-scan
+        name: secret-scan
+        entry: bash -c 'git diff --cached --name-only -z | xargs -0 grep -lE "(sk-ant-|xoxb-|AIza[0-9A-Za-z_-]{35}|ghp_[A-Za-z0-9]{36})" && exit 1 || exit 0'
+        language: system
+        pass_filenames: false
+        stages: [pre-commit]
