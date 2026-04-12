@@ -12,6 +12,7 @@ from cosinabox.cli.describe import describe_cmd
 from cosinabox.cli.disable_job import disable_job_cmd
 from cosinabox.cli.enable_job import enable_job_cmd
 from cosinabox.cli.init import init_cmd
+from cosinabox.cli.auth_google import auth_cmd
 from cosinabox.cli.interview import interview_cmd
 from cosinabox.cli.test_runner import test_cmd
 from cosinabox.cli.migrate import migrate_cmd
@@ -51,6 +52,7 @@ cli.add_command(set_persona_cmd)
 cli.add_command(interview_cmd)
 cli.add_command(test_cmd)
 cli.add_command(upgrade_docs_cmd)
+cli.add_command(auth_cmd)
 
 
 if __name__ == "__main__":
