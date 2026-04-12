@@ -45,6 +45,13 @@ cosinabox = "cosinabox.cli.main:cli"
 [tool.hatch.build.targets.wheel]
 packages = ["src/cosinabox"]
 
+[tool.hatch.build.targets.wheel.force-include]
+"src/cosinabox/personas/founder.md" = "cosinabox/personas/founder.md"
+"src/cosinabox/schemas/personality.schema.json" = "cosinabox/schemas/personality.schema.json"
+"src/cosinabox/schemas/stakeholders.schema.json" = "cosinabox/schemas/stakeholders.schema.json"
+"src/cosinabox/schemas/jobs.schema.json" = "cosinabox/schemas/jobs.schema.json"
+"src/cosinabox/schemas/integrations.schema.json" = "cosinabox/schemas/integrations.schema.json"
+
 [tool.ruff]
 line-length = 100
 target-version = "py311"

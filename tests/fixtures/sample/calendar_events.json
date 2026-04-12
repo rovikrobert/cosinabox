@@ -1,0 +1,10 @@
+[
+  {"id": "e1", "summary": "Standup", "start": "2026-04-13T09:00:00+00:00", "end": "2026-04-13T09:15:00+00:00", "attendees": ["alex@loop.ai", "david@loop.ai"]},
+  {"id": "e2", "summary": "Investor sync — Sequoia", "start": "2026-04-13T10:00:00+00:00", "end": "2026-04-13T10:30:00+00:00", "attendees": ["sarah@sequoia.com"]},
+  {"id": "e3", "summary": "Lunch", "start": "2026-04-13T12:00:00+00:00", "end": "2026-04-13T13:00:00+00:00", "attendees": []},
+  {"id": "e4", "summary": "Conflict A", "start": "2026-04-13T14:00:00+00:00", "end": "2026-04-13T14:30:00+00:00", "attendees": ["jamie@loop.ai"]},
+  {"id": "e5", "summary": "Conflict B (overlaps A)", "start": "2026-04-13T14:15:00+00:00", "end": "2026-04-13T14:45:00+00:00", "attendees": ["mira@partner.co"]},
+  {"id": "e6", "summary": "1:1 with David", "start": "2026-04-13T15:00:00+00:00", "end": "2026-04-13T15:30:00+00:00", "attendees": ["david@loop.ai"]},
+  {"id": "e7", "summary": "Hiring loop debrief", "start": "2026-04-13T16:00:00+00:00", "end": "2026-04-13T17:00:00+00:00", "attendees": ["recruiter@search.io", "david@loop.ai"]},
+  {"id": "e8", "summary": "Focus block", "start": "2026-04-13T17:30:00+00:00", "end": "2026-04-13T18:30:00+00:00", "attendees": []}
+]

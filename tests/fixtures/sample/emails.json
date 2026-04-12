@@ -1,0 +1,14 @@
+[
+  {"id": "m1", "sender": "Sarah Chen <sarah@sequoia.com>", "subject": "Re: Q2 metrics update", "snippet": "Looks great. Can you confirm runway?", "date": "2026-04-12T22:30:00+00:00"},
+  {"id": "m2", "sender": "David Park <david@loop.ai>", "subject": "Hiring update", "snippet": "Two strong candidates this week.", "date": "2026-04-12T21:00:00+00:00"},
+  {"id": "m3", "sender": "Acme Procurement <noreply@acme.com>", "subject": "Your invoice is ready", "snippet": "PDF attached.", "date": "2026-04-12T19:45:00+00:00"},
+  {"id": "m4", "sender": "Recruiter <recruiter@search.io>", "subject": "Loop interview debrief", "snippet": "Notes attached, see you tomorrow.", "date": "2026-04-12T18:30:00+00:00"},
+  {"id": "m5", "sender": "Jamie Kim <jamie@loop.ai>", "subject": "Roadmap question", "snippet": "Quick clarification on Q3 priorities.", "date": "2026-04-12T17:00:00+00:00"},
+  {"id": "m6", "sender": "Mira Allen <mira@partner.co>", "subject": "Partnership next steps", "snippet": "Want to lock in next meeting.", "date": "2026-04-12T16:00:00+00:00"},
+  {"id": "m7", "sender": "Stripe <updates@stripe.com>", "subject": "Your subscription renews", "snippet": "Renewal in 5 days.", "date": "2026-04-12T15:00:00+00:00"},
+  {"id": "m8", "sender": "Calendly <no-reply@calendly.com>", "subject": "New booking", "snippet": "Booked for Friday 4pm.", "date": "2026-04-12T14:30:00+00:00"},
+  {"id": "m9", "sender": "Alice Doe <alice@randomcorp.com>", "subject": "Cold intro request", "snippet": "Hi, would love 15 min...", "date": "2026-04-12T13:00:00+00:00"},
+  {"id": "m10", "sender": "GitHub <notifications@github.com>", "subject": "[loop-ai/api] PR #123 merged", "snippet": "Merged.", "date": "2026-04-12T11:00:00+00:00"},
+  {"id": "m11", "sender": "Linear <notifications@linear.app>", "subject": "Sprint summary", "snippet": "12 issues completed.", "date": "2026-04-12T10:00:00+00:00"},
+  {"id": "m12", "sender": "Sarah Chen <sarah@sequoia.com>", "subject": "Board pre-read", "snippet": "Sending board pre-read tomorrow.", "date": "2026-04-12T09:00:00+00:00"}
+]
