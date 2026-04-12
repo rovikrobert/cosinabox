@@ -28,6 +28,16 @@ CREATE TABLE IF NOT EXISTS messages (
 );
 CREATE INDEX IF NOT EXISTS idx_messages_session_ts
     ON messages (session_id, timestamp);
+
+CREATE TABLE IF NOT EXISTS summaries (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    session_id TEXT NOT NULL,
+    summary TEXT NOT NULL,
+    messages_summarized INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_summaries_session
+    ON summaries (session_id);
 """
 
 
@@ -69,6 +79,70 @@ class Memory:
             (session_id, limit),
         )
         return [dict(row) for row in cur.fetchall()]
+
+    def message_count(self, *, session_id: str) -> int:
+        cur = self._conn.execute(
+            "SELECT COUNT(*) FROM messages WHERE session_id = ?",
+            (session_id,),
+        )
+        return cur.fetchone()[0]
+
+    def oldest_messages(
+        self, *, session_id: str, count: int,
+    ) -> list[dict[str, Any]]:
+        """Return the oldest N messages for a session (for summarization)."""
+        cur = self._conn.execute(
+            "SELECT id, role, content FROM messages "
+            "WHERE session_id = ? ORDER BY id ASC LIMIT ?",
+            (session_id, count),
+        )
+        return [dict(row) for row in cur.fetchall()]
+
+    def delete_messages_by_ids(self, ids: list[int]) -> int:
+        if not ids:
+            return 0
+        placeholders = ",".join("?" * len(ids))
+        cur = self._conn.execute(
+            f"DELETE FROM messages WHERE id IN ({placeholders})", ids,
+        )
+        self._conn.commit()
+        return cur.rowcount
+
+    # ------------------------------------------------------------------
+    # Summaries
+    # ------------------------------------------------------------------
+
+    def store_summary(
+        self,
+        *,
+        session_id: str,
+        summary: str,
+        messages_summarized: int,
+    ) -> None:
+        # Keep only the latest summary per session
+        self._conn.execute(
+            "DELETE FROM summaries WHERE session_id = ?", (session_id,),
+        )
+        ts = datetime.now(UTC).isoformat()
+        self._conn.execute(
+            "INSERT INTO summaries (session_id, summary, messages_summarized, created_at) "
+            "VALUES (?,?,?,?)",
+            (session_id, summary, messages_summarized, ts),
+        )
+        self._conn.commit()
+
+    def get_latest_summary(self, *, session_id: str) -> str | None:
+        cur = self._conn.execute(
+            "SELECT summary FROM summaries WHERE session_id = ? "
+            "ORDER BY id DESC LIMIT 1",
+            (session_id,),
+        )
+        row = cur.fetchone()
+        return row["summary"] if row else None
+
+    # ------------------------------------------------------------------
+    # Cleanup
+    # ------------------------------------------------------------------
 
     def clear_old(self, *, older_than_days: int) -> int:
         cutoff = (datetime.now(UTC) - timedelta(days=older_than_days)).isoformat()

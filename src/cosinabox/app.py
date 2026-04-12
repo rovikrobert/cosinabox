@@ -298,11 +298,15 @@ class App:
 
         from anthropic import Anthropic
 
+        from cosinabox.memory import Memory
         from cosinabox.tools.registry import build_tool_registry
 
         tool_definitions, tool_handlers = build_tool_registry(
             tool_instances, timezone=timezone,
         )
+
+        # Conversation memory (SQLite in user's config dir)
+        memory = Memory(db_path=self.config_dir / ".cosinabox" / "memory.db")
 
         loop = AgentLoop(
             anthropic_client=Anthropic(),
@@ -313,6 +317,7 @@ class App:
             ),
             tools=tool_handlers,
             tool_definitions=tool_definitions,
+            memory=memory,
             max_tool_iterations=defaults.MAX_TOOL_ITERATIONS,
             tool_iteration_delay_s=defaults.TOOL_ITERATION_DELAY_S,
             system_prompt=system_prompt,
