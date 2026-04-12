@@ -1,0 +1,12 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "personality.md frontmatter",
+  "type": "object",
+  "required": ["schema_version", "name", "timezone"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "name": {"type": "string", "minLength": 1},
+    "role": {"type": "string"},
+    "timezone": {"type": "string", "minLength": 1}
+  }
+}
