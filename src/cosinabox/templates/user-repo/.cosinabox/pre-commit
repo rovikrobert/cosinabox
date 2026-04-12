@@ -1,0 +1,30 @@
+#!/bin/bash
+set -e
+
+# cosinabox user-repo pre-commit hook.
+# 1. Validate config
+# 2. Scan staged files for known secret prefixes
+
+# 1. Validate
+if ! cosinabox validate; then
+  echo "::error::cosinabox validate failed. Fix config errors before committing."
+  echo "::error::Run \`cosinabox validate\` to see details."
+  exit 1
+fi
+
+# 2. Secret scan on staged files
+SECRET_PREFIXES='(sk-ant-|xoxb-|xoxp-|AIza[0-9A-Za-z_-]{35}|ghp_[A-Za-z0-9]{36}|github_pat_)'
+LEAK_FOUND=0
+while IFS= read -r -d '' file; do
+  if grep -lE "$SECRET_PREFIXES" "$file" >/dev/null 2>&1; then
+    echo "::error::Possible secret detected in $file"
+    LEAK_FOUND=1
+  fi
+done < <(git diff --cached --name-only -z)
+
+if [ "$LEAK_FOUND" -ne 0 ]; then
+  echo "::error::Secret scan failed. Move secrets to .env and re-stage."
+  exit 1
+fi
+
+exit 0
