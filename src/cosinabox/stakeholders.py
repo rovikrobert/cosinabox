@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 from typing import Any
 
 import yaml
+
+logger = logging.getLogger(__name__)
 
 _attio_client: Any = None
 
@@ -34,7 +37,11 @@ def get_stakeholders(
             result: list[dict[str, Any]] = attio_people
             return result
         except Exception:
-            pass  # fall through to YAML
+            logger.warning(
+                "Attio CRM enabled but unreachable — falling back to "
+                "stakeholders.yaml. CRM search will be unavailable in DM.",
+                exc_info=True,
+            )
 
     path = config_dir / "stakeholders.yaml"
     if not path.exists():

@@ -24,7 +24,7 @@ class IdentityStep(Step):
     def prompt(self) -> str:
         return (
             "Step 1/10 — Identity. Tell me your name, role, company, and timezone "
-            "(comma-separated, e.g. 'Alex, Founder, Loop AI, America/Los_Angeles')."
+            "(comma-separated, e.g. 'Jamie, Founder, Acme Corp, America/Los_Angeles')."
         )
 
     def apply(self, answer: str, config_dir: Path) -> None:

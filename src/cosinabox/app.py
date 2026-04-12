@@ -106,22 +106,36 @@ class App:
                 )
 
         if integrations.get("fireflies", {}).get("enabled"):
-            try:
-                from cosinabox.tools.fireflies import FirefliesTool
+            api_key = os.getenv("FIREFLIES_API_KEY")
+            if not api_key:
+                logger.warning(
+                    "Fireflies enabled in integrations.yaml but FIREFLIES_API_KEY "
+                    "not set in .env — skipping. Meeting transcripts will be unavailable."
+                )
+            else:
+                try:
+                    from cosinabox.tools.fireflies import FirefliesTool
 
-                tools["fireflies"] = FirefliesTool()
-                logger.info("Fireflies tool loaded")
-            except Exception:
-                logger.warning("Fireflies unavailable", exc_info=True)
+                    tools["fireflies"] = FirefliesTool(api_key=api_key)
+                    logger.info("Fireflies tool loaded")
+                except Exception:
+                    logger.warning("Fireflies unavailable", exc_info=True)
 
         if integrations.get("web_search", {}).get("enabled"):
-            try:
-                from cosinabox.tools.web_search import WebSearchTool
+            api_key = os.getenv("SERPER_API_KEY")
+            if not api_key:
+                logger.warning(
+                    "Web search enabled in integrations.yaml but SERPER_API_KEY "
+                    "not set in .env — skipping. Web search will be unavailable."
+                )
+            else:
+                try:
+                    from cosinabox.tools.web_search import WebSearchTool
 
-                tools["web_search"] = WebSearchTool()
-                logger.info("Web search tool loaded")
-            except Exception:
-                logger.warning("Web search unavailable", exc_info=True)
+                    tools["web_search"] = WebSearchTool(api_key=api_key)
+                    logger.info("Web search tool loaded")
+                except Exception:
+                    logger.warning("Web search unavailable", exc_info=True)
 
         if integrations.get("attio", {}).get("enabled"):
             try:
