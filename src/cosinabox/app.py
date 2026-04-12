@@ -123,6 +123,15 @@ class App:
             except Exception:
                 logger.warning("Web search unavailable", exc_info=True)
 
+        if integrations.get("attio", {}).get("enabled"):
+            try:
+                from cosinabox.tools.attio import AttioClient
+
+                tools["attio"] = AttioClient()
+                logger.info("Attio CRM tool loaded")
+            except Exception:
+                logger.warning("Attio CRM unavailable", exc_info=True)
+
         return tools, {}
 
     # ------------------------------------------------------------------
@@ -275,6 +284,10 @@ class App:
 
         from anthropic import Anthropic
 
+        from cosinabox.tools.registry import build_tool_registry
+
+        tool_definitions, tool_handlers = build_tool_registry(tool_instances)
+
         loop = AgentLoop(
             anthropic_client=Anthropic(),
             router=Router(),
@@ -282,7 +295,8 @@ class App:
                 per_message_cap_usd=defaults.COST_PER_MESSAGE_CAP_USD,
                 daily_cap_usd=defaults.COST_DAILY_CAP_USD,
             ),
-            tools={},
+            tools=tool_handlers,
+            tool_definitions=tool_definitions,
             max_tool_iterations=defaults.MAX_TOOL_ITERATIONS,
             tool_iteration_delay_s=defaults.TOOL_ITERATION_DELAY_S,
             system_prompt=system_prompt,

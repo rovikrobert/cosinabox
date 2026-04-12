@@ -118,6 +118,7 @@ class AgentLoop:
         router: Router,
         cost_tracker: CostTracker,
         tools: dict[str, Callable[..., str]],
+        tool_definitions: list[dict[str, Any]] | None = None,
         max_tool_iterations: int = 8,
         tool_iteration_delay_s: float = 2.0,
         system_prompt: str = "",
@@ -126,6 +127,7 @@ class AgentLoop:
         self.router = router
         self.cost = cost_tracker
         self.tools = tools
+        self.tool_definitions = tool_definitions or []
         self.max_tool_iterations = max_tool_iterations
         self.tool_iteration_delay_s = tool_iteration_delay_s
         self.system_prompt = system_prompt
@@ -176,14 +178,17 @@ class AgentLoop:
                 if thinking:
                     call_kwargs["thinking"] = thinking
 
-                # Inject advisor tool if enabled
+                # Inject tools: advisor + user tools when advisor is active,
+                # just user tools otherwise
                 if use_advisor:
-                    call_kwargs["tools"] = [_ADVISOR_TOOL]
+                    call_kwargs["tools"] = [_ADVISOR_TOOL] + self.tool_definitions
                     response = self.client.beta.messages.create(
                         betas=[_ADVISOR_BETA],
                         **call_kwargs,
                     )
                 else:
+                    if self.tool_definitions:
+                        call_kwargs["tools"] = self.tool_definitions
                     response = self.client.messages.create(**call_kwargs)
 
                 # Reset circuit breaker on success
