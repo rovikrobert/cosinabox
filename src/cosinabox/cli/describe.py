@@ -26,14 +26,16 @@ def _load_yaml(path: Path) -> dict[str, Any]:
 
 
 def _build_data(config_dir: Path) -> dict[str, Any]:
+    from cosinabox.stakeholders import get_stakeholders
+
     personality = _parse_personality(config_dir / "personality.md")
-    stakeholders_doc = _load_yaml(config_dir / "stakeholders.yaml")
     jobs_doc = _load_yaml(config_dir / "jobs.yaml")
     integrations_doc = _load_yaml(config_dir / "integrations.yaml")
 
-    stakeholders = stakeholders_doc.get("stakeholders", [])
     jobs = jobs_doc.get("jobs", {})
     integrations = integrations_doc.get("integrations", {})
+
+    stakeholders = get_stakeholders(config_dir=config_dir, integrations=integrations)
 
     enabled_jobs = {k: v for k, v in jobs.items() if v.get("enabled")}
     enabled_integrations = [k for k, v in integrations.items() if v.get("enabled")]
@@ -49,7 +51,7 @@ def _build_data(config_dir: Path) -> dict[str, Any]:
                 "cadence": s.get("cadence"),
                 "last_contact": s.get("last_contact"),
             }
-            for s in stakeholders
+            for s in (stakeholders or [])
         ],
         "jobs": {
             name: {

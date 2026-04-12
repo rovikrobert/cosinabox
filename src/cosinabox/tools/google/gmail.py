@@ -13,7 +13,7 @@ except ImportError as e:
         "cosinabox[google] extra is required. Run: pip install 'cosinabox[google]'"
     ) from e
 
-from cosinabox.tools.google.auth import build_credentials
+from cosinabox.tools.google.auth import build_all_credentials
 
 
 @dataclass
@@ -32,64 +32,62 @@ def _header(payload: dict[str, Any], name: str) -> str:
     return ""
 
 
+def _fetch_messages(service: Resource, q: str, max_results: int) -> list[GmailMessage]:
+    resp = service.users().messages().list(userId="me", q=q, maxResults=max_results).execute()
+    out: list[GmailMessage] = []
+    for ref in resp.get("messages", []):
+        full = (
+            service.users().messages().get(userId="me", id=ref["id"], format="metadata").execute()
+        )
+        payload = full.get("payload", {})
+        out.append(
+            GmailMessage(
+                id=full["id"],
+                sender=_header(payload, "From"),
+                subject=_header(payload, "Subject"),
+                snippet=full.get("snippet", ""),
+                date=_header(payload, "Date"),
+            )
+        )
+    return out
+
+
 class GmailTool:
-    def __init__(self, *, service: Resource | None = None) -> None:
-        if service is None:
-            service = build("gmail", "v1", credentials=build_credentials())
-        self.service = service
+    def __init__(
+        self,
+        *,
+        service: Resource | None = None,
+        services: list[Resource] | None = None,
+    ) -> None:
+        if services is not None:
+            self._services = services
+        elif service is not None:
+            self._services = [service]
+        else:
+            self._services = [
+                build("gmail", "v1", credentials=cred) for cred in build_all_credentials()
+            ]
+        # Backwards compat: expose first service as .service
+        self.service = self._services[0]
 
     def list_recent(self, *, hours: int = 24, max_results: int = 25) -> list[GmailMessage]:
         after = (datetime.now(UTC) - timedelta(hours=hours)).strftime("%Y/%m/%d")
         query = f"after:{after}"
-        resp = (
-            self.service.users()
-            .messages()
-            .list(userId="me", q=query, maxResults=max_results)
-            .execute()
-        )
+        seen: set[str] = set()
         out: list[GmailMessage] = []
-        for ref in resp.get("messages", []):
-            full = (
-                self.service.users()
-                .messages()
-                .get(userId="me", id=ref["id"], format="metadata")
-                .execute()
-            )
-            payload = full.get("payload", {})
-            out.append(
-                GmailMessage(
-                    id=full["id"],
-                    sender=_header(payload, "From"),
-                    subject=_header(payload, "Subject"),
-                    snippet=full.get("snippet", ""),
-                    date=_header(payload, "Date"),
-                )
-            )
+        for svc in self._services:
+            for msg in _fetch_messages(svc, query, max_results):
+                if msg.id not in seen:
+                    seen.add(msg.id)
+                    out.append(msg)
         return out
 
     def search(self, query: str, *, max_results: int = 25) -> list[GmailMessage]:
-        resp = (
-            self.service.users()
-            .messages()
-            .list(userId="me", q=query, maxResults=max_results)
-            .execute()
-        )
+        seen: set[str] = set()
         out: list[GmailMessage] = []
-        for ref in resp.get("messages", []):
-            full = (
-                self.service.users()
-                .messages()
-                .get(userId="me", id=ref["id"], format="metadata")
-                .execute()
-            )
-            payload = full.get("payload", {})
-            out.append(
-                GmailMessage(
-                    id=full["id"],
-                    sender=_header(payload, "From"),
-                    subject=_header(payload, "Subject"),
-                    snippet=full.get("snippet", ""),
-                    date=_header(payload, "Date"),
-                )
-            )
+        for svc in self._services:
+            for msg in _fetch_messages(svc, query, max_results):
+                if msg.id not in seen:
+                    seen.add(msg.id)
+                    out.append(msg)
         return out
