@@ -9,7 +9,7 @@ import click
 try:
     from google_auth_oauthlib.flow import InstalledAppFlow
 except ImportError:
-    InstalledAppFlow = None  # type: ignore[assignment]
+    InstalledAppFlow = None  # type: ignore[assignment,unused-ignore]
 
 _SCOPES = [
     "https://www.googleapis.com/auth/gmail.readonly",

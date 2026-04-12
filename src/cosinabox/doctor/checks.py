@@ -215,8 +215,7 @@ class OAuthExpiringCheck(Check):
             return CheckResult(
                 self.name,
                 "fail",
-                f"OAuth token expires in {days_until} days; "
-                f"re-run `cosinabox auth google`",
+                f"OAuth token expires in {days_until} days; re-run `cosinabox auth google`",
             )
         return CheckResult(self.name, "pass", f"{days_until} days")
 

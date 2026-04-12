@@ -5,8 +5,17 @@ from __future__ import annotations
 import re
 from abc import ABC, abstractmethod
 from pathlib import Path
+from typing import Any
 
 import yaml
+
+
+def _load_yaml(path: Path, default: dict[str, Any]) -> dict[str, Any]:
+    """Load YAML file or return default, with explicit dict type."""
+    if not path.exists():
+        return dict(default)
+    result: dict[str, Any] = yaml.safe_load(path.read_text()) or dict(default)
+    return result
 
 
 class Step(ABC):
@@ -94,11 +103,7 @@ class StakeholdersStep(Step):
 
     def apply(self, answer: str, config_dir: Path) -> None:
         path = config_dir / "stakeholders.yaml"
-        existing = (
-            yaml.safe_load(path.read_text())
-            if path.exists()
-            else {"schema_version": 1, "stakeholders": []}
-        )
+        existing = _load_yaml(path, {"schema_version": 1, "stakeholders": []})
         for line in answer.splitlines():
             parts = [p.strip() for p in line.split(",", 3)]
             if len(parts) < 3:
@@ -128,9 +133,7 @@ class CalendarRealityStep(Step):
 
     def apply(self, answer: str, config_dir: Path) -> None:
         path = config_dir / "jobs.yaml"
-        data = (
-            yaml.safe_load(path.read_text()) if path.exists() else {"schema_version": 1, "jobs": {}}
-        )
+        data = _load_yaml(path, {"schema_version": 1, "jobs": {}})
         skips = (
             []
             if answer.strip().lower() == "none"
@@ -152,9 +155,7 @@ class JobStagingStep(Step):
 
     def apply(self, answer: str, config_dir: Path) -> None:
         path = config_dir / "jobs.yaml"
-        data = (
-            yaml.safe_load(path.read_text()) if path.exists() else {"schema_version": 1, "jobs": {}}
-        )
+        data = _load_yaml(path, {"schema_version": 1, "jobs": {}})
         for j in ("morning_briefing", "pre_meeting_prep"):
             data["jobs"].setdefault(j, {})
             data["jobs"][j]["enabled"] = True
