@@ -64,7 +64,7 @@ class _StubCalendar:
         return self._events
 
 
-def _load_fixture(fixture: str) -> tuple[_StubGmail, _StubCalendar, list[dict]]:
+def _load_fixture(fixture: str) -> tuple[_StubGmail, _StubCalendar, list[dict[str, Any]]]:
     fdir = FIXTURE_ROOT / fixture
     msgs_raw = json.loads((fdir / "emails.json").read_text())
     events_raw = json.loads((fdir / "calendar_events.json").read_text())

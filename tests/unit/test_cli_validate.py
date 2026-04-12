@@ -9,13 +9,15 @@ from cosinabox.cli.main import cli
 
 def _write_valid_repo(tmp: Path) -> None:
     (tmp / "personality.md").write_text(
-        "---\nschema_version: 1\nname: Alex\ntimezone: America/Los_Angeles\n---\n\n# Voice\nbe direct.\n"
+        "---\nschema_version: 1\nname: Alex\ntimezone: America/Los_Angeles\n---\n\n"
+        "# Voice\nbe direct.\n"
     )
     (tmp / "stakeholders.yaml").write_text(
         "schema_version: 1\nstakeholders:\n  - name: X\n    cadence: weekly\n"
     )
     (tmp / "jobs.yaml").write_text(
-        'schema_version: 1\njobs:\n  morning_briefing:\n    enabled: true\n    schedule: "0 8 * * *"\n'
+        "schema_version: 1\njobs:\n  morning_briefing:\n    enabled: true\n"
+        '    schedule: "0 8 * * *"\n'
     )
     (tmp / "integrations.yaml").write_text(
         "schema_version: 1\nintegrations:\n  google:\n    enabled: false\n"
