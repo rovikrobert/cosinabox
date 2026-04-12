@@ -352,6 +352,34 @@ class App:
                     json={"chat_id": chat_id, "text": text[i : i + 4000]},
                 )
 
+        # --- Register jobs that need send_telegram ---
+        for job_name, cfg in jobs_config.items():
+            if not cfg.get("enabled"):
+                continue
+            if job_name == "inbound_email_check":
+                from cosinabox.jobs.inbound_email_check import InboundEmailCheckJob
+
+                google_cfg = integrations.get("google", {})
+                job = InboundEmailCheckJob(
+                    gmail=gmail,
+                    db=memory,
+                    send_alert=send_telegram,
+                    urgent_senders=google_cfg.get("urgent_senders", []),
+                    poll_interval_minutes=google_cfg.get("poll_interval_minutes", 5),
+                )
+                cron = cfg.get("schedule", "*/5 * * * *")
+                scheduler.add_job(job, cron=cron)
+                logger.info("Registered %s at %s", job_name, cron)
+            elif job_name == "crm_email_sync":
+                from cosinabox.jobs.crm_email_sync import CrmEmailSyncJob
+
+                job = CrmEmailSyncJob(
+                    gmail=gmail, attio=tool_instances.get("attio"),
+                )
+                cron = cfg.get("schedule", "45 17 * * *")
+                scheduler.add_job(job, cron=cron)
+                logger.info("Registered %s at %s", job_name, cron)
+
         self._wire_telegram_output(scheduler, send_telegram)
 
         # --- Start scheduler ---
