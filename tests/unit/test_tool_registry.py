@@ -93,7 +93,9 @@ class TestBuildToolRegistry:
     def test_gmail_only(self) -> None:
         defs, handlers = build_tool_registry({"gmail": _make_gmail()})
         assert len(defs) == len(GMAIL_TOOL_DEFINITIONS)
-        assert set(handlers.keys()) == {"gmail_search", "gmail_list_recent"}
+        assert set(handlers.keys()) == {
+            "gmail_search", "gmail_list_recent", "gmail_compose", "gmail_send",
+        }
 
     def test_calendar_only(self) -> None:
         defs, handlers = build_tool_registry({"calendar": _make_calendar()})

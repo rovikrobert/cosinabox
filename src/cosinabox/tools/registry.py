@@ -67,6 +67,53 @@ GMAIL_TOOL_DEFINITIONS: list[dict[str, Any]] = [
             "required": [],
         },
     },
+    {
+        "name": "gmail_compose",
+        "description": (
+            "Create an email draft. Does NOT send — creates a draft for "
+            "the user to review in Gmail. Always confirm recipients and "
+            "content with the user before composing."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "to": {
+                    "type": "string",
+                    "description": "Recipient email address(es), comma-separated.",
+                },
+                "subject": {
+                    "type": "string",
+                    "description": "Email subject line.",
+                },
+                "body": {
+                    "type": "string",
+                    "description": "Email body text.",
+                },
+                "cc": {
+                    "type": "string",
+                    "description": "CC recipients, comma-separated (optional).",
+                },
+            },
+            "required": ["to", "subject", "body"],
+        },
+    },
+    {
+        "name": "gmail_send",
+        "description": (
+            "Send an existing draft by draft ID. Requires explicit user "
+            "approval — never send without the user confirming."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "draft_id": {
+                    "type": "string",
+                    "description": "Draft ID to send (from gmail_compose).",
+                },
+            },
+            "required": ["draft_id"],
+        },
+    },
 ]
 
 # ---------------------------------------------------------------------------
@@ -330,9 +377,21 @@ def _build_gmail_handlers(gmail: Any) -> dict[str, Callable[..., str]]:
         results = gmail.list_recent(hours=hours, max_results=max_results)
         return _serialize(results)
 
+    def gmail_compose(
+        to: str, subject: str, body: str, cc: str = "",
+    ) -> str:
+        result = gmail.compose_draft(to=to, subject=subject, body=body, cc=cc)
+        return _serialize(result)
+
+    def gmail_send(draft_id: str) -> str:
+        result = gmail.send_draft(draft_id=draft_id)
+        return _serialize(result)
+
     return {
         "gmail_search": gmail_search,
         "gmail_list_recent": gmail_list_recent,
+        "gmail_compose": gmail_compose,
+        "gmail_send": gmail_send,
     }
 
 

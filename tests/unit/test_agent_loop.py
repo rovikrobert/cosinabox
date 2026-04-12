@@ -14,6 +14,20 @@ def _no_sleep(monkeypatch):
     monkeypatch.setattr("cosinabox.agent.loop.time.sleep", lambda *_: None)
 
 
+@pytest.fixture(autouse=True)
+def _allow_all_tools():
+    """Override policy to allow all tools in agent loop tests."""
+    from cosinabox.agent import policy
+
+    policy.invalidate_cache()
+    # Force-load with a single rule that allows everything
+    policy._cached_rules = [
+        policy.PolicyRule("*", policy.Decision.ALLOW, priority=1, description="test: allow all"),
+    ]
+    yield
+    policy.invalidate_cache()
+
+
 def make_loop(anthropic_responses: list, tools: dict | None = None) -> AgentLoop:
     client = MagicMock()
     client.messages.create.side_effect = anthropic_responses

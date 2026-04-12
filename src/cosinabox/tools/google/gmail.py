@@ -104,3 +104,53 @@ class GmailTool:
                     seen.add(msg.id)
                     out.append(msg)
         return out
+
+    def compose_draft(
+        self,
+        *,
+        to: str,
+        subject: str,
+        body: str,
+        cc: str = "",
+        account_index: int = 0,
+    ) -> dict[str, str]:
+        """Create an email draft. Does NOT send — user reviews first.
+
+        Returns dict with draft_id and message.
+        """
+        from email.mime.text import MIMEText
+        import base64
+
+        msg = MIMEText(body)
+        msg["to"] = to
+        msg["subject"] = subject
+        if cc:
+            msg["cc"] = cc
+
+        raw = base64.urlsafe_b64encode(msg.as_bytes()).decode()
+        svc = self._services[min(account_index, len(self._services) - 1)]
+        draft = (
+            svc.users()
+            .drafts()
+            .create(userId="me", body={"message": {"raw": raw}})
+            .execute()
+        )
+        return {
+            "draft_id": draft["id"],
+            "message": f"Draft created (ID: {draft['id']}). Review in Gmail before sending.",
+        }
+
+    def send_draft(self, *, draft_id: str, account_index: int = 0) -> dict[str, str]:
+        """Send an existing draft by ID. Requires user approval."""
+        svc = self._services[min(account_index, len(self._services) - 1)]
+        result = (
+            svc.users()
+            .drafts()
+            .send(userId="me", body={"id": draft_id})
+            .execute()
+        )
+        msg_id = result.get("id", "unknown")
+        return {
+            "message_id": msg_id,
+            "message": f"Email sent (message ID: {msg_id}).",
+        }

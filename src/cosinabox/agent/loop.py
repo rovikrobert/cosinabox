@@ -280,16 +280,31 @@ class AgentLoop:
                 return result
 
             if response.stop_reason == "tool_use":
+                from cosinabox.agent.policy import Decision, evaluate
+
                 tool_blocks = [
                     b for b in response.content if b.type == "tool_use"
                 ]
                 tool_results: list[dict[str, Any]] = []
                 for block in tool_blocks:
-                    fn = self.tools.get(block.name)
-                    if fn is None:
-                        raw = f"Tool '{block.name}' not configured"
+                    # Policy gate: check before execution
+                    policy = evaluate(
+                        block.name, dict(block.input),
+                        session_id=session_id,
+                    )
+                    if policy.decision == Decision.DENY:
+                        raw = f"BLOCKED: {policy.description}"
+                    elif policy.decision == Decision.REQUIRE_APPROVAL:
+                        raw = (
+                            f"APPROVAL REQUIRED: {policy.description}. "
+                            f"Ask the user for permission before proceeding."
+                        )
                     else:
-                        raw = str(fn(**block.input))
+                        fn = self.tools.get(block.name)
+                        if fn is None:
+                            raw = f"Tool '{block.name}' not configured"
+                        else:
+                            raw = str(fn(**block.input))
                     wrapped = _wrap_untrusted(raw)
                     result.tool_calls.append(
                         ToolCall(
