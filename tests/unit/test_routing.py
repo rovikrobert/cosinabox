@@ -5,13 +5,21 @@ from cosinabox.agent.routing import Router
 
 def test_default_model_is_sonnet() -> None:
     router = Router()
-    assert router.choose_model("what time is my next meeting?") == "claude-sonnet-4-6"
+    model, thinking, use_advisor = router.choose_model("what time is my next meeting?")
+    assert model == "claude-sonnet-4-6"
+    assert thinking is None
+    assert use_advisor is False
 
 
-def test_strategic_keyword_routes_to_opus() -> None:
+def test_strategic_keyword_routes_to_advisor() -> None:
     router = Router()
-    assert router.choose_model("Help me think through our hiring strategy") == "claude-opus-4-6"
-    assert router.choose_model("Draft a board update") == "claude-opus-4-6"
+    model, thinking, use_advisor = router.choose_model("Help me think through our hiring strategy")
+    assert model == "claude-sonnet-4-6"
+    assert use_advisor is True
+
+    model, thinking, use_advisor = router.choose_model("Draft a board prep document")
+    assert model == "claude-sonnet-4-6"
+    assert use_advisor is True
 
 
 def test_dm_mode_allows_full_tool_set() -> None:
