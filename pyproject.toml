@@ -45,6 +45,9 @@ cosinabox = "cosinabox.cli.main:cli"
 [tool.hatch.build.targets.wheel]
 packages = ["src/cosinabox"]
 
+[tool.hatch.build.targets.wheel.force-include]
+"src/cosinabox/personas/founder.md" = "cosinabox/personas/founder.md"
+
 [tool.ruff]
 line-length = 100
 target-version = "py311"
