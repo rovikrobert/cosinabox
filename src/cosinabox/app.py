@@ -106,22 +106,45 @@ class App:
                 )
 
         if integrations.get("fireflies", {}).get("enabled"):
-            try:
-                from cosinabox.tools.fireflies import FirefliesTool
+            api_key = os.getenv("FIREFLIES_API_KEY")
+            if not api_key:
+                logger.warning(
+                    "Fireflies enabled in integrations.yaml but FIREFLIES_API_KEY "
+                    "not set in .env — skipping. Meeting transcripts will be unavailable."
+                )
+            else:
+                try:
+                    from cosinabox.tools.fireflies import FirefliesTool
 
-                tools["fireflies"] = FirefliesTool()
-                logger.info("Fireflies tool loaded")
-            except Exception:
-                logger.warning("Fireflies unavailable", exc_info=True)
+                    tools["fireflies"] = FirefliesTool(api_key=api_key)
+                    logger.info("Fireflies tool loaded")
+                except Exception:
+                    logger.warning("Fireflies unavailable", exc_info=True)
 
         if integrations.get("web_search", {}).get("enabled"):
-            try:
-                from cosinabox.tools.web_search import WebSearchTool
+            api_key = os.getenv("SERPER_API_KEY")
+            if not api_key:
+                logger.warning(
+                    "Web search enabled in integrations.yaml but SERPER_API_KEY "
+                    "not set in .env — skipping. Web search will be unavailable."
+                )
+            else:
+                try:
+                    from cosinabox.tools.web_search import WebSearchTool
 
-                tools["web_search"] = WebSearchTool()
-                logger.info("Web search tool loaded")
+                    tools["web_search"] = WebSearchTool(api_key=api_key)
+                    logger.info("Web search tool loaded")
+                except Exception:
+                    logger.warning("Web search unavailable", exc_info=True)
+
+        if integrations.get("attio", {}).get("enabled"):
+            try:
+                from cosinabox.tools.attio import AttioClient
+
+                tools["attio"] = AttioClient()
+                logger.info("Attio CRM tool loaded")
             except Exception:
-                logger.warning("Web search unavailable", exc_info=True)
+                logger.warning("Attio CRM unavailable", exc_info=True)
 
         return tools, {}
 
@@ -275,6 +298,16 @@ class App:
 
         from anthropic import Anthropic
 
+        from cosinabox.memory import Memory
+        from cosinabox.tools.registry import build_tool_registry
+
+        tool_definitions, tool_handlers = build_tool_registry(
+            tool_instances, timezone=timezone,
+        )
+
+        # Conversation memory (SQLite in user's config dir)
+        memory = Memory(db_path=self.config_dir / ".cosinabox" / "memory.db")
+
         loop = AgentLoop(
             anthropic_client=Anthropic(),
             router=Router(),
@@ -282,7 +315,9 @@ class App:
                 per_message_cap_usd=defaults.COST_PER_MESSAGE_CAP_USD,
                 daily_cap_usd=defaults.COST_DAILY_CAP_USD,
             ),
-            tools={},
+            tools=tool_handlers,
+            tool_definitions=tool_definitions,
+            memory=memory,
             max_tool_iterations=defaults.MAX_TOOL_ITERATIONS,
             tool_iteration_delay_s=defaults.TOOL_ITERATION_DELAY_S,
             system_prompt=system_prompt,
@@ -326,6 +361,14 @@ class App:
         from telegram import Update
         from telegram.ext import Application, MessageHandler, filters
 
+        # Track tools that are pending approval per session
+        _pending_tool: dict[str, str] = {}  # session_id → tool_name
+
+        _APPROVAL_PHRASES = {
+            "yes", "yep", "yeah", "go ahead", "approved", "do it",
+            "send it", "ok", "sure", "confirm", "approve",
+        }
+
         async def handle_message(update: Update, _ctx: Any) -> None:
             if update.message is None or update.message.text is None:
                 return
@@ -333,23 +376,62 @@ class App:
                 return
 
             user_text = update.message.text
+            session = f"dm-{update.effective_chat.id}"
             logger.info("DM: %s", user_text[:80])
 
+            # Check if this message is an approval for a pending tool
+            if session in _pending_tool and user_text.strip().lower() in _APPROVAL_PHRASES:
+                from cosinabox.agent.policy import grant_temporary_approval
+
+                tool_name = _pending_tool.pop(session)
+                grant_temporary_approval(session, tool_name)
+                logger.info("User approved %s in %s", tool_name, session)
+
             try:
-                result = loop.run(
-                    prompt=user_text,
-                    session_id=f"dm-{update.effective_chat.id}",
-                )
+                result = loop.run(prompt=user_text, session_id=session)
                 reply = result.final_text or "(no response)"
             except Exception:
                 logger.exception("Agent loop failed")
                 reply = "(error processing message)"
+
+            # Track if any tool call was blocked by REQUIRE_APPROVAL
+            for tc in result.tool_calls:
+                if "APPROVAL REQUIRED" in tc.result:
+                    _pending_tool[session] = tc.name
+                    break
 
             for i in range(0, len(reply), 4000):
                 await update.message.reply_text(reply[i : i + 4000])
 
         tg_app = Application.builder().token(bot_token).build()
         tg_app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
+
+        # --- Bot commands ---
+        from telegram.ext import CommandHandler
+
+        from cosinabox.bot.commands import (
+            build_brief_handler,
+            build_cost_handler,
+            build_status_handler,
+            cmd_help,
+        )
+
+        tg_app.add_handler(CommandHandler("help", cmd_help))
+        tg_app.add_handler(CommandHandler("start", cmd_help))
+        tg_app.add_handler(CommandHandler("status", build_status_handler(
+            name=name,
+            timezone=timezone,
+            tool_definitions=tool_definitions,
+            jobs_config=jobs_config,
+            stakeholder_count=len(stakeholders),
+        )))
+        tg_app.add_handler(CommandHandler("cost", build_cost_handler(
+            cost_tracker=loop.cost,
+        )))
+        tg_app.add_handler(CommandHandler("brief", build_brief_handler(
+            agent_loop=loop,
+            chat_id=chat_id,
+        )))
 
         logger.info(
             "cosinabox running: %s's CoS (%s)",

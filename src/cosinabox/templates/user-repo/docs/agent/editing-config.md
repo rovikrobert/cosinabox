@@ -40,7 +40,37 @@ This loads the `founder` template. To customize beyond the template, run the per
 
 ## Integrations
 
-Edit `integrations.yaml` directly. Set `enabled: true` for the integrations the user has set up. Never enable an integration without confirming the env var is set in `.env`.
+Each integration gives the CoS new capabilities. All are optional except Google (required for briefings). When a user asks "what can you do?" or "what integrations are available?", use this table.
+
+| Integration | What it enables | Without it | Env var needed |
+|-------------|----------------|------------|----------------|
+| **google** | Email search, calendar events, briefings, pre-meeting prep, find free time, create events | Briefings have no email/calendar data. DM can't search mail or schedule. | `GOOGLE_OAUTH_CLIENT_ID`, `GOOGLE_OAUTH_CLIENT_SECRET`, `GOOGLE_OAUTH_REFRESH_TOKEN_1` |
+| **attio** | CRM contact search, relationship profiles, stakeholder tracking synced with Attio | Falls back to `stakeholders.yaml` — static, manually maintained, no search in DM | `ATTIO_API_KEY` |
+| **fireflies** | Meeting transcript search, retrieve what was discussed | No meeting context — agent can't reference past conversations | `FIREFLIES_API_KEY` |
+| **web_search** | Google search during DM conversations | Agent can only use information already in context | `SERPER_API_KEY` |
+
+### Adding an integration
+
+1. Confirm the user has the API key (never guess or assume)
+2. Add the key to `.env`
+3. Set `enabled: true` in `integrations.yaml`
+4. Run `cosinabox validate` to check config
+5. Run `cosinabox describe` to confirm it appears in the summary
+
+Never enable an integration without confirming the env var is set in `.env`.
+
+## Setup & maintenance commands
+
+| Command | When to use |
+|---------|-------------|
+| `cosinabox init <dir>` | First-time setup — scaffolds a new user repo |
+| `cosinabox interview --start` | Walk through the 10-step persona interview |
+| `cosinabox auth google` | Set up Google OAuth (Gmail + Calendar) |
+| `cosinabox validate` | Check all config files for errors |
+| `cosinabox describe` | Show a human-readable summary of current config |
+| `cosinabox simulate <job>` | Dry-run a job locally (e.g., `simulate morning_briefing`) |
+| `cosinabox doctor` | Run 10 health checks (secrets, schema, OAuth, etc.) |
+| `cosinabox migrate` | Upgrade config files after a cosinabox version bump |
 
 ## After any edit
 

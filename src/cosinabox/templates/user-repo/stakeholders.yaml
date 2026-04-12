@@ -1,9 +1,22 @@
 schema_version: 1
+# Your top 5 stakeholders. Used in briefings, follow-up reminders,
+# and pre-meeting prep. If you enable the Attio CRM integration,
+# this file is used as the initial seed and then Attio becomes the
+# source of truth.
+#
+# Fields:
+#   name     — Full name (used to match calendar/email)
+#   role     — Title + org, e.g. "Lead Investor (Sequoia)" or "Co-founder"
+#   cadence  — How often to check in: daily | weekly | biweekly | monthly | quarterly
+#   notes    — Context that helps your CoS prepare (what they care about, what to avoid)
+#
+# Walk through docs/agent/persona-interview.md with Claude Code
+# to fill this in interactively instead of editing YAML directly.
 stakeholders:
   - name: Example Stakeholder (replace me)
-    role: Set this to a real role
+    role: Lead Investor (Example Ventures)
     cadence: weekly
     last_contact: "2026-01-01"
     notes: |
-      Edit or delete this entry. Walk through docs/agent/persona-interview.md
-      with Claude Code to fill in your top 5 stakeholders.
+      Delete this entry and add your real stakeholders. Use the interview
+      flow or tell Claude Code "add a stakeholder" to do it conversationally.

@@ -5,7 +5,9 @@ integrations:
     accounts:
       - email: <YOUR_EMAIL>
         scopes: [gmail, calendar]
+  attio:
+    enabled: false   # CRM — requires ATTIO_API_KEY in .env
   fireflies:
-    enabled: false
+    enabled: false   # Meeting transcripts — requires FIREFLIES_API_KEY in .env
   web_search:
-    enabled: false
+    enabled: false   # Google search via Serper.dev — requires SERPER_API_KEY in .env
