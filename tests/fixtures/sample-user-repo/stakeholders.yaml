@@ -1,0 +1,27 @@
+schema_version: 1
+stakeholders:
+  - name: Sarah Chen
+    role: Lead investor (Sequoia)
+    cadence: weekly
+    last_contact: "2026-04-08"
+    notes: Wants monthly metric updates. Replies fastest in mornings.
+  - name: David Park
+    role: Co-founder
+    cadence: daily
+    last_contact: "2026-04-12"
+    notes: We sync constantly — don't surface 1:1s.
+  - name: Jamie Kim
+    role: Head of product
+    cadence: weekly
+    last_contact: "2026-03-20"
+    notes: Owns Q3 roadmap.
+  - name: Mira Allen
+    role: Strategic partner contact at Partner Co
+    cadence: biweekly
+    last_contact: "2026-04-01"
+    notes: Slow to reply but high-signal.
+  - name: Alex's Mom
+    role: Family
+    cadence: weekly
+    last_contact: "2026-03-15"
+    notes: Call her.
