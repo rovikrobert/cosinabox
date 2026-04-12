@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "integrations.yaml",
+  "type": "object",
+  "required": ["schema_version", "integrations"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "integrations": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "required": ["enabled"],
+        "properties": {
+          "enabled": {"type": "boolean"},
+          "accounts": {"type": "array"}
+        }
+      }
+    }
+  }
+}
