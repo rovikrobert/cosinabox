@@ -1,13 +1,14 @@
 """Model routing and per-channel tool subsets.
 
 When ADVISOR_ENABLED, strategic prompts route to Sonnet + Opus advisor
-instead of direct Opus. The advisor is a beta API feature where Sonnet
-calls out to an Opus instance server-side for reasoning.
+instead of direct Opus. Includes conversation escalation — if the last
+4 messages are all strategic, escalate even if the current message isn't.
 """
 
 from __future__ import annotations
 
 import re
+from typing import Any
 
 from cosinabox import defaults
 
@@ -41,6 +42,25 @@ OPUS_MODEL_ID = defaults.OPUS_MODEL_ID
 THINKING_ADAPTIVE = {"type": "adaptive"}
 
 
+def _conversation_is_strategic(context: list[dict[str, Any]]) -> bool:
+    """Check if the recent conversation is strategically dense.
+
+    If 3+ of the last 4 messages match OPUS_SIGNALS, escalate —
+    even if the current message alone wouldn't trigger it.
+    """
+    recent = context[-4:] if len(context) >= 4 else context
+    strategic_count = 0
+    for msg in recent:
+        content = msg.get("content", "")
+        if not isinstance(content, str):
+            continue
+        for pattern in OPUS_SIGNALS:
+            if re.search(pattern, content, re.IGNORECASE):
+                strategic_count += 1
+                break
+    return strategic_count >= 3
+
+
 class Router:
     def __init__(
         self,
@@ -49,7 +69,11 @@ class Router:
     ) -> None:
         self.available_tools = available_tools or set()
 
-    def choose_model(self, prompt: str) -> tuple[str, dict[str, str] | None, bool]:
+    def choose_model(
+        self,
+        prompt: str,
+        conversation_context: list[dict[str, Any]] | None = None,
+    ) -> tuple[str, dict[str, str] | None, bool]:
         """Route to model. Returns (model, thinking_config, use_advisor).
 
         When advisor is enabled, strategic prompts use Sonnet + advisor
@@ -75,6 +99,14 @@ class Router:
                 if defaults.ADVISOR_ENABLED:
                     return SONNET_MODEL_ID, None, True
                 return SONNET_MODEL_ID, THINKING_ADAPTIVE, False
+
+        # Conversation escalation — if recent context is strategically dense
+        if conversation_context and _conversation_is_strategic(
+            conversation_context
+        ):
+            if defaults.ADVISOR_ENABLED:
+                return SONNET_MODEL_ID, None, True
+            return OPUS_MODEL_ID, THINKING_ADAPTIVE, False
 
         # Default: Sonnet, no thinking, no advisor
         return SONNET_MODEL_ID, None, False
