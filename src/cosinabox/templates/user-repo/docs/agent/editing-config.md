@@ -48,6 +48,7 @@ Each integration gives the CoS new capabilities. All are optional except Google 
 | **attio** | CRM contact search, relationship profiles, stakeholder tracking synced with Attio | Falls back to `stakeholders.yaml` — static, manually maintained, no search in DM | `ATTIO_API_KEY` |
 | **fireflies** | Meeting transcript search, retrieve what was discussed | No meeting context — agent can't reference past conversations | `FIREFLIES_API_KEY` |
 | **web_search** | Google search during DM conversations | Agent can only use information already in context | `SERPER_API_KEY` |
+| **memory service** | Semantic recall, durable fact storage, extraction pipeline | Falls back to local SQLite with keyword search — works for <10k memories | `MEMORY_SERVICE_URL`, `MEMORY_API_KEY` |
 
 ### Adding an integration
 

@@ -5,6 +5,10 @@ integrations:
     accounts:
       - email: <YOUR_EMAIL>
         scopes: [gmail, calendar]
+    # urgent_senders:           # Uncomment to enable Gmail polling alerts
+    #   - "@yourcompany.com"    # domain match (right-of-@)
+    #   - "investor@vc.com"     # exact email match
+    # poll_interval_minutes: 5
   attio:
     enabled: false   # CRM — requires ATTIO_API_KEY in .env
   fireflies:

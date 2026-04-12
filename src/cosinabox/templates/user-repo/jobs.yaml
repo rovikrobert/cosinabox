@@ -14,3 +14,9 @@ jobs:
     enabled: false
   followup_reminder:
     enabled: false
+  inbound_email_check:
+    enabled: false
+    schedule: "*/5 * * * *"   # every 5 minutes — alerts on urgent inbound email
+  crm_email_sync:
+    enabled: false
+    schedule: "45 17 * * *"   # 5:45 PM — syncs sent email timestamps to CRM

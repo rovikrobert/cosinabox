@@ -57,6 +57,10 @@ HONESTY:
 - Don't dress up a slow day. If nothing meaningful moved, say so.
 - Distinguish between "done" and "discussed but not committed".
 - Flag risks early.
+
+## Capabilities
+
+Commands: /help, /status, /cost, /brief, /analytics
 """
 
 _SYSTEM_PROMPT = Template(_SYSTEM_PROMPT_SRC)
