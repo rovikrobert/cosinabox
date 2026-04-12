@@ -13,6 +13,7 @@ from typing import Any
 import yaml
 
 from cosinabox import defaults
+from cosinabox.stakeholders import get_stakeholders
 
 
 @dataclass
@@ -54,11 +55,14 @@ class StakeholdersEmptyCheck(Check):
     name = "stakeholders_empty"
 
     def run(self, *, config_dir: Path, history: dict[str, Any]) -> CheckResult:
-        path = config_dir / "stakeholders.yaml"
-        if not path.exists():
-            return CheckResult(self.name, "fail", "stakeholders.yaml missing")
-        data = yaml.safe_load(path.read_text()) or {}
-        count = len(data.get("stakeholders", []))
+        integrations_path = config_dir / "integrations.yaml"
+        integrations = (
+            yaml.safe_load(integrations_path.read_text()).get("integrations", {})
+            if integrations_path.exists()
+            else {}
+        )
+        stakeholders = get_stakeholders(config_dir=config_dir, integrations=integrations)
+        count = len(stakeholders)
         installed = history.get("installed_date")
         if installed is None:
             return CheckResult(self.name, "warn", "no install date in history")
@@ -180,13 +184,24 @@ class StaleFollowupsCheck(Check):
     name = "stale_followups"
 
     def run(self, *, config_dir: Path, history: dict[str, Any]) -> CheckResult:
-        path = config_dir / "stakeholders.yaml"
-        if not path.exists():
-            return CheckResult(self.name, "warn", "no stakeholders.yaml")
-        data = yaml.safe_load(path.read_text()) or {}
-        cadence_days = {"daily": 1, "weekly": 7, "biweekly": 14, "monthly": 30, "quarterly": 90}
+        integrations_path = config_dir / "integrations.yaml"
+        integrations = (
+            yaml.safe_load(integrations_path.read_text()).get("integrations", {})
+            if integrations_path.exists()
+            else {}
+        )
+        stakeholders = get_stakeholders(config_dir=config_dir, integrations=integrations)
+        if not stakeholders:
+            return CheckResult(self.name, "warn", "no stakeholders")
+        cadence_days = {
+            "daily": 1,
+            "weekly": 7,
+            "biweekly": 14,
+            "monthly": 30,
+            "quarterly": 90,
+        }
         stale = 0
-        for s in data.get("stakeholders", []):
+        for s in stakeholders:
             lc = s.get("last_contact")
             if not lc:
                 continue

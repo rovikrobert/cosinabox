@@ -10,6 +10,8 @@ from typing import Any
 import click
 import yaml
 
+from cosinabox.stakeholders import get_stakeholders
+
 
 def _parse_personality(path: Path) -> dict[str, Any]:
     text = path.read_text()
@@ -27,13 +29,12 @@ def _load_yaml(path: Path) -> dict[str, Any]:
 
 def _build_data(config_dir: Path) -> dict[str, Any]:
     personality = _parse_personality(config_dir / "personality.md")
-    stakeholders_doc = _load_yaml(config_dir / "stakeholders.yaml")
     jobs_doc = _load_yaml(config_dir / "jobs.yaml")
     integrations_doc = _load_yaml(config_dir / "integrations.yaml")
-
-    stakeholders = stakeholders_doc.get("stakeholders", [])
-    jobs = jobs_doc.get("jobs", {})
     integrations = integrations_doc.get("integrations", {})
+
+    stakeholders = get_stakeholders(config_dir=config_dir, integrations=integrations)
+    jobs = jobs_doc.get("jobs", {})
 
     enabled_jobs = {k: v for k, v in jobs.items() if v.get("enabled")}
     enabled_integrations = [k for k, v in integrations.items() if v.get("enabled")]
