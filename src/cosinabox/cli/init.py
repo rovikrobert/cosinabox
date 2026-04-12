@@ -7,9 +7,7 @@ from pathlib import Path
 
 import click
 
-TEMPLATE_ROOT = (
-    Path(__file__).resolve().parents[1] / "templates" / "user-repo"
-)
+TEMPLATE_ROOT = Path(__file__).resolve().parents[1] / "templates" / "user-repo"
 
 
 @click.command("init")

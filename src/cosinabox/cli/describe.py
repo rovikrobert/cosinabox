@@ -113,7 +113,9 @@ def _format_english(data: dict[str, Any]) -> str:
 
 
 @click.command("describe")
-@click.option("--json", "as_json", is_flag=True, default=False, help="Output JSON instead of prose.")
+@click.option(
+    "--json", "as_json", is_flag=True, default=False, help="Output JSON instead of prose."
+)
 @click.pass_context
 def describe_cmd(ctx: click.Context, as_json: bool) -> None:
     """Print a summary of the current user repo configuration."""

@@ -1,10 +1,14 @@
 """Interview state machine — owns the 10-step interview."""
+
 from __future__ import annotations
+
 import json
 from pathlib import Path
+
 from cosinabox.interview.steps import STEPS
 
 STATE_FILENAME = ".cosinabox/interview-state.json"
+
 
 class InterviewMachine:
     def __init__(self, *, config_dir: Path) -> None:
@@ -41,7 +45,7 @@ class InterviewMachine:
         path.write_text(json.dumps({"index": self.current_step_index, "complete": self._completed}))
 
     @classmethod
-    def resume(cls, *, config_dir: Path) -> "InterviewMachine":
+    def resume(cls, *, config_dir: Path) -> InterviewMachine:
         m = cls(config_dir=config_dir)
         path = config_dir / STATE_FILENAME
         if path.exists():

@@ -1,8 +1,13 @@
 """`cosinabox interview` — drive the 10-step interview."""
+
 from __future__ import annotations
+
 from pathlib import Path
+
 import click
+
 from cosinabox.interview.state_machine import InterviewMachine
+
 
 @click.command("interview")
 @click.option("--start", is_flag=True, help="Begin a new interview.")

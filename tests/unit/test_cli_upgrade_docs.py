@@ -1,11 +1,15 @@
 from __future__ import annotations
+
 import shutil
 from pathlib import Path
+
 from click.testing import CliRunner
+
 from cosinabox.cli.main import cli
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 TEMPLATE = REPO_ROOT / "src" / "cosinabox" / "templates" / "user-repo"
+
 
 def test_upgrade_docs_refreshes_subdocs(tmp_path: Path) -> None:
     shutil.copytree(TEMPLATE, tmp_path / "cos")

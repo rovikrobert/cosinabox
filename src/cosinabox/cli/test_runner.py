@@ -1,10 +1,14 @@
 """`cosinabox test` — wraps pytest with custom_jobs/ on the path."""
+
 from __future__ import annotations
+
 import os
 import subprocess
 import sys
 from pathlib import Path
+
 import click
+
 
 @click.command("test")
 @click.argument("pytest_args", nargs=-1, type=click.UNPROCESSED)

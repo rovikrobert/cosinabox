@@ -7,7 +7,6 @@ from pathlib import Path
 
 import click
 
-
 ROLE_CHOICES = click.Choice(["founder"])
 
 
@@ -21,9 +20,7 @@ def set_persona_cmd(ctx: click.Context, role: str, force: bool) -> None:
     dest = config_dir / "personality.md"
 
     if dest.exists() and not force:
-        raise click.ClickException(
-            "personality.md already exists. Use --force to overwrite."
-        )
+        raise click.ClickException("personality.md already exists. Use --force to overwrite.")
 
     template_text: str = files("cosinabox.personas").joinpath(f"{role}.md").read_text()
     dest.write_text(template_text)

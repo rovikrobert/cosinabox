@@ -1,7 +1,11 @@
 from __future__ import annotations
+
 from pathlib import Path
+
 import yaml
+
 from cosinabox.interview.state_machine import InterviewMachine
+
 
 def test_machine_starts_at_step_1(tmp_path: Path) -> None:
     m = InterviewMachine(config_dir=tmp_path)
@@ -10,6 +14,7 @@ def test_machine_starts_at_step_1(tmp_path: Path) -> None:
     assert "name" in q.lower() or "identity" in q.lower()
     assert m.current_step_index == 0
 
+
 def test_step_1_writes_personality_frontmatter(tmp_path: Path) -> None:
     m = InterviewMachine(config_dir=tmp_path)
     m.start()
@@ -17,6 +22,7 @@ def test_step_1_writes_personality_frontmatter(tmp_path: Path) -> None:
     text = (tmp_path / "personality.md").read_text()
     assert "Alex Smith" in text
     assert "America/Los_Angeles" in text
+
 
 def test_machine_completes_after_10_steps(tmp_path: Path) -> None:
     m = InterviewMachine(config_dir=tmp_path)

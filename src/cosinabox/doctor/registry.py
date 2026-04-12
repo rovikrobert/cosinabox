@@ -1,10 +1,19 @@
 """Doctor check registry."""
+
 from __future__ import annotations
+
 from cosinabox.doctor.checks import (
-    Check, PersonalityThinCheck, StakeholdersEmptyCheck, CostRunawayCheck,
-    ToolLoopExcessCheck, PrepNoiseCheck, BriefingDriftCheck,
-    SecretInTrackedFileCheck, StaleFollowupsCheck, OAuthExpiringCheck,
+    BriefingDriftCheck,
+    Check,
+    CostRunawayCheck,
+    OAuthExpiringCheck,
+    PersonalityThinCheck,
+    PrepNoiseCheck,
     SchemaOutdatedCheck,
+    SecretInTrackedFileCheck,
+    StakeholdersEmptyCheck,
+    StaleFollowupsCheck,
+    ToolLoopExcessCheck,
 )
 
 REGISTRY: list[Check] = [

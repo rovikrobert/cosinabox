@@ -1,6 +1,8 @@
 """Migration registry: maps (file, from_version) -> migration callable."""
+
 from __future__ import annotations
-from typing import Callable
+
+from collections.abc import Callable
 
 CURRENT_SCHEMA_VERSION = 1
 

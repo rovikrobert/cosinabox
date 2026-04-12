@@ -36,8 +36,7 @@ def auth_google_cmd() -> None:
 
     if InstalledAppFlow is None:
         raise click.ClickException(
-            "google-auth-oauthlib is not installed. "
-            "Run: pip install google-auth-oauthlib"
+            "google-auth-oauthlib is not installed. Run: pip install google-auth-oauthlib"
         )
 
     client_config = {

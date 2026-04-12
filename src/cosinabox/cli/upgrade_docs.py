@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import shutil
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 import click
@@ -31,7 +31,7 @@ def upgrade_docs_cmd(ctx: click.Context) -> None:
     """Re-sync docs and .cosinabox/ files from engine template."""
     config_dir: Path = ctx.obj["config_dir"]
 
-    timestamp = datetime.now(tz=timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    timestamp = datetime.now(tz=UTC).strftime("%Y%m%dT%H%M%SZ")
     backup_dir = config_dir / ".cosinabox" / f"backup-{timestamp}"
     backed_up: list[str] = []
 

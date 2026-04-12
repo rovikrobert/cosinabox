@@ -1,6 +1,9 @@
 from __future__ import annotations
+
 from pathlib import Path
+
 from click.testing import CliRunner
+
 from cosinabox.cli.main import cli
 
 
@@ -23,6 +26,8 @@ def test_set_persona_refuses_overwrite_without_force(tmp_path: Path) -> None:
 def test_set_persona_force_overwrites(tmp_path: Path) -> None:
     (tmp_path / "personality.md").write_text("existing content")
     runner = CliRunner()
-    result = runner.invoke(cli, ["-C", str(tmp_path), "set-persona", "--role", "founder", "--force"])
+    result = runner.invoke(
+        cli, ["-C", str(tmp_path), "set-persona", "--role", "founder", "--force"]
+    )
     assert result.exit_code == 0
     assert "schema_version: 1" in (tmp_path / "personality.md").read_text()

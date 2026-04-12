@@ -1,6 +1,7 @@
 from __future__ import annotations
-from pathlib import Path
+
 from click.testing import CliRunner
+
 from cosinabox.cli.main import cli
 
 
@@ -18,9 +19,9 @@ def test_init_then_interview_then_doctor(tmp_path, monkeypatch) -> None:
     assert r.exit_code == 0
     canned = [
         "Alex, Founder, Loop AI, America/Los_Angeles",
-        "Closing a Series A in 6 weeks. Every conversation either moves us toward signed term sheets or it doesn't.",
+        "Closing a Series A in 6 weeks.",
         "blunt",
-        "Sarah Chen, Lead investor at Sequoia, weekly, replies in mornings\nDavid Park, Co-founder, daily, sync constantly",
+        "Sarah Chen, Sequoia, weekly, replies in mornings",
         "lunch, focus block",
         "yes",
         "done",
@@ -35,5 +36,6 @@ def test_init_then_interview_then_doctor(tmp_path, monkeypatch) -> None:
     # 3. Doctor
     r = runner.invoke(cli, ["-C", str(target), "doctor", "--json"])
     import json
+
     data = json.loads(r.output)
     assert len(data) == 10
