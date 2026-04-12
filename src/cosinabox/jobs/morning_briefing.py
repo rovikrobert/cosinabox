@@ -40,16 +40,14 @@ class MorningBriefingJob(Job):
         cal_summary = "(calendar not configured)"
         if self.calendar is not None:
             events = self.calendar.list_events(start=now, end=end)
-            cal_summary = "\n".join(
-                f"- {e.summary}" for e in events
-            ) or "(no events today)"
+            cal_summary = "\n".join(f"- {e.summary}" for e in events) or "(no events today)"
 
         email_summary = "(email not configured)"
         if self.gmail is not None:
             msgs = self.gmail.list_recent(hours=24, max_results=15)
-            email_summary = "\n".join(
-                f"- {m.sender}: {m.subject}" for m in msgs
-            ) or "(no recent email)"
+            email_summary = (
+                "\n".join(f"- {m.sender}: {m.subject}" for m in msgs) or "(no recent email)"
+            )
 
         prompt = render_briefing_prompt(
             personality=self.personality,

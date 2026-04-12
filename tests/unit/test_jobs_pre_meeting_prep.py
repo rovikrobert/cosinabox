@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from unittest.mock import MagicMock
 
 from cosinabox.jobs.base import JobContext
@@ -8,18 +8,16 @@ from cosinabox.jobs.pre_meeting_prep import PreMeetingPrepJob
 
 
 def _evt(summary: str, minutes_out: int):
-    start = datetime.now(timezone.utc) + timedelta(minutes=minutes_out)
-    return MagicMock(
-        id=summary, summary=summary, start=start, end=start + timedelta(minutes=30)
-    )
+    start = datetime.now(UTC) + timedelta(minutes=minutes_out)
+    return MagicMock(id=summary, summary=summary, start=start, end=start + timedelta(minutes=30))
 
 
 def test_fires_only_for_events_in_window() -> None:
     cal = MagicMock()
     cal.list_events.return_value = [
-        _evt("Soon", 10),       # too soon
-        _evt("Window", 30),     # in window (25-35)
-        _evt("Later", 60),      # too far
+        _evt("Soon", 10),  # too soon
+        _evt("Window", 30),  # in window (25-35)
+        _evt("Later", 60),  # too far
     ]
     fake_loop = MagicMock()
     fake_loop.run.return_value.final_text = "prep brief"

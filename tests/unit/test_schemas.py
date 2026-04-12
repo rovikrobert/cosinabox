@@ -17,9 +17,7 @@ def test_stakeholders_valid() -> None:
     validate(
         instance={
             "schema_version": 1,
-            "stakeholders": [
-                {"name": "X", "cadence": "weekly", "last_contact": "2026-01-01"}
-            ],
+            "stakeholders": [{"name": "X", "cadence": "weekly", "last_contact": "2026-01-01"}],
         },
         schema=schema,
     )

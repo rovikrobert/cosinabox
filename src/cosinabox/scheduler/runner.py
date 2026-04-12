@@ -1,4 +1,5 @@
 """Scheduler runner — wraps APScheduler with cosinabox conventions."""
+# mypy: disable-error-code="import-untyped"
 
 from __future__ import annotations
 
@@ -10,7 +11,9 @@ from cosinabox.jobs.base import Job, JobContext
 class SchedulerRunner:
     def __init__(self, *, scheduler: Any | None = None) -> None:
         if scheduler is None:
-            from apscheduler.schedulers.background import BackgroundScheduler  # type: ignore[import-untyped]
+            from apscheduler.schedulers.background import (
+                BackgroundScheduler,
+            )
 
             scheduler = BackgroundScheduler()
         self._scheduler = scheduler
@@ -19,7 +22,7 @@ class SchedulerRunner:
     def add_job(self, job: Job, *, cron: str) -> None:
         self._jobs[job.name] = job
         if hasattr(self._scheduler, "add_job"):
-            from apscheduler.triggers.cron import CronTrigger  # type: ignore[import-untyped]
+            from apscheduler.triggers.cron import CronTrigger
 
             self._scheduler.add_job(
                 lambda j=job: j.run(JobContext()),
