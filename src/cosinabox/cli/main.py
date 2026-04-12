@@ -7,6 +7,7 @@ from pathlib import Path
 
 import click
 
+from cosinabox.cli.add_stakeholder import add_stakeholder_cmd
 from cosinabox.cli.describe import describe_cmd
 from cosinabox.cli.init import init_cmd
 from cosinabox.cli.simulate import simulate_cmd
@@ -33,6 +34,7 @@ cli.add_command(init_cmd)
 cli.add_command(validate_cmd)
 cli.add_command(simulate_cmd)
 cli.add_command(describe_cmd)
+cli.add_command(add_stakeholder_cmd)
 
 
 if __name__ == "__main__":
