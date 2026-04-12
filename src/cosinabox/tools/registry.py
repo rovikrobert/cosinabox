@@ -305,7 +305,10 @@ def _serialize(obj: Any) -> str:
         items = [_serialize_item(item) for item in obj]
         return json.dumps(items, default=str)
     if isinstance(obj, dict):
-        return json.dumps(obj, default=str)
+        normalized = {k: _serialize_item(v) for k, v in obj.items()}
+        return json.dumps(normalized, default=str)
+    if hasattr(obj, "__dataclass_fields__"):
+        return json.dumps(_serialize_item(obj), default=str)
     return str(obj)
 
 
@@ -333,7 +336,9 @@ def _build_gmail_handlers(gmail: Any) -> dict[str, Callable[..., str]]:
     }
 
 
-def _build_calendar_handlers(calendar: Any) -> dict[str, Callable[..., str]]:
+def _build_calendar_handlers(
+    calendar: Any, *, timezone: str = "UTC",
+) -> dict[str, Callable[..., str]]:
     """Build handler dict from a CalendarTool instance."""
 
     def calendar_list_events(start: str, end: str) -> str:
@@ -385,12 +390,10 @@ def _build_calendar_handlers(calendar: Any) -> dict[str, Callable[..., str]]:
     ) -> str:
         from zoneinfo import ZoneInfo
 
-        # Parse date string into a timezone-aware datetime.
-        # Use the calendar's first service timezone, or UTC as fallback.
+        # Parse date string and attach the user's configured timezone
+        # so time windows (morning=9-12, etc.) align with their local clock.
         day = datetime.strptime(date, "%Y-%m-%d")
-        # Attach timezone — use UTC if none available; the CalendarTool
-        # will use all configured services regardless.
-        day = day.replace(tzinfo=ZoneInfo("UTC"))
+        day = day.replace(tzinfo=ZoneInfo(timezone))
 
         slots = calendar.find_free_time(
             date=day,
@@ -476,12 +479,16 @@ def _build_web_search_handlers(web_search: Any) -> dict[str, Callable[..., str]]
 
 def build_tool_registry(
     tool_instances: dict[str, Any],
+    *,
+    timezone: str = "UTC",
 ) -> tuple[list[dict[str, Any]], dict[str, Callable[..., str]]]:
     """Build Claude API tool definitions and handler dict from tool instances.
 
     Args:
         tool_instances: Dict from App._build_tools(), e.g.
             {"gmail": GmailTool, "calendar": CalendarTool, ...}
+        timezone: User's IANA timezone (e.g. "Asia/Singapore"). Used by
+            calendar handlers so time windows align with the user's local clock.
 
     Returns:
         (tool_definitions, tool_handlers) where:
@@ -498,7 +505,9 @@ def build_tool_registry(
 
     if "calendar" in tool_instances:
         definitions.extend(CALENDAR_TOOL_DEFINITIONS)
-        handlers.update(_build_calendar_handlers(tool_instances["calendar"]))
+        handlers.update(
+            _build_calendar_handlers(tool_instances["calendar"], timezone=timezone)
+        )
         logger.info("Registered %d Calendar tools", len(CALENDAR_TOOL_DEFINITIONS))
 
     if "attio" in tool_instances:

@@ -286,7 +286,9 @@ class App:
 
         from cosinabox.tools.registry import build_tool_registry
 
-        tool_definitions, tool_handlers = build_tool_registry(tool_instances)
+        tool_definitions, tool_handlers = build_tool_registry(
+            tool_instances, timezone=timezone,
+        )
 
         loop = AgentLoop(
             anthropic_client=Anthropic(),

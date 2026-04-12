@@ -13,6 +13,7 @@ from cosinabox.tools.registry import (
     FIREFLIES_TOOL_DEFINITIONS,
     GMAIL_TOOL_DEFINITIONS,
     WEB_SEARCH_TOOL_DEFINITIONS,
+    _serialize,
     build_tool_registry,
 )
 
@@ -393,3 +394,85 @@ class TestAgentLoopToolDefinitions:
 
         call_kwargs = mock_client.messages.create.call_args.kwargs
         assert "tools" not in call_kwargs
+
+
+# ---------------------------------------------------------------------------
+# Timezone handling tests
+# ---------------------------------------------------------------------------
+
+class TestTimezoneHandling:
+    def test_find_free_time_uses_configured_timezone(self) -> None:
+        """Handler uses the timezone passed to build_tool_registry, not UTC."""
+        from zoneinfo import ZoneInfo
+
+        cal = _make_calendar()
+        cal.find_free_time.return_value = [
+            (
+                datetime(2026, 4, 14, 9, 0, tzinfo=ZoneInfo("Asia/Singapore")),
+                datetime(2026, 4, 14, 12, 0, tzinfo=ZoneInfo("Asia/Singapore")),
+            ),
+        ]
+        _, handlers = build_tool_registry(
+            {"calendar": cal}, timezone="Asia/Singapore",
+        )
+        handlers["calendar_find_free_time"](
+            date="2026-04-14", duration_minutes=30,
+        )
+        # Verify the datetime passed to CalendarTool has SGT timezone
+        call_args = cal.find_free_time.call_args
+        passed_date = call_args.kwargs["date"]
+        assert passed_date.tzinfo is not None
+        assert str(passed_date.tzinfo) == "Asia/Singapore"
+
+    def test_find_free_time_defaults_to_utc(self) -> None:
+        """Without explicit timezone, handler uses UTC."""
+        from zoneinfo import ZoneInfo
+
+        cal = _make_calendar()
+        cal.find_free_time.return_value = []
+        _, handlers = build_tool_registry({"calendar": cal})
+        handlers["calendar_find_free_time"](
+            date="2026-04-14", duration_minutes=30,
+        )
+        call_args = cal.find_free_time.call_args
+        passed_date = call_args.kwargs["date"]
+        assert str(passed_date.tzinfo) == "UTC"
+
+
+# ---------------------------------------------------------------------------
+# _serialize edge case tests
+# ---------------------------------------------------------------------------
+
+class TestSerializeEdgeCases:
+    def test_serialize_empty_list(self) -> None:
+        assert _serialize([]) == "[]"
+
+    def test_serialize_empty_dict(self) -> None:
+        assert _serialize({}) == "{}"
+
+    def test_serialize_string_passthrough(self) -> None:
+        assert _serialize("hello") == "hello"
+
+    def test_serialize_none_in_list(self) -> None:
+        result = _serialize([None, "foo"])
+        assert "null" in result
+        assert "foo" in result
+
+    def test_serialize_dataclass_in_dict_values(self) -> None:
+        """Dataclass values in dicts are properly serialized, not repr'd."""
+        result = _serialize({"event": FakeEvent(
+            "e1", "Standup",
+            datetime(2026, 4, 12, 9, 0, tzinfo=timezone.utc),
+            datetime(2026, 4, 12, 9, 30, tzinfo=timezone.utc),
+        )})
+        assert "Standup" in result
+        assert "FakeEvent" not in result  # Should not be repr()
+
+    def test_serialize_single_dataclass(self) -> None:
+        result = _serialize(FakeEvent(
+            "e1", "Standup",
+            datetime(2026, 4, 12, 9, 0, tzinfo=timezone.utc),
+            datetime(2026, 4, 12, 9, 30, tzinfo=timezone.utc),
+        ))
+        assert "Standup" in result
+        assert "e1" in result
