@@ -59,6 +59,19 @@ Each integration gives the CoS new capabilities. All are optional except Google 
 
 Never enable an integration without confirming the env var is set in `.env`.
 
+## Setup & maintenance commands
+
+| Command | When to use |
+|---------|-------------|
+| `cosinabox init <dir>` | First-time setup — scaffolds a new user repo |
+| `cosinabox interview --start` | Walk through the 10-step persona interview |
+| `cosinabox auth google` | Set up Google OAuth (Gmail + Calendar) |
+| `cosinabox validate` | Check all config files for errors |
+| `cosinabox describe` | Show a human-readable summary of current config |
+| `cosinabox simulate <job>` | Dry-run a job locally (e.g., `simulate morning_briefing`) |
+| `cosinabox doctor` | Run 10 health checks (secrets, schema, OAuth, etc.) |
+| `cosinabox migrate` | Upgrade config files after a cosinabox version bump |
+
 ## After any edit
 
 ```bash

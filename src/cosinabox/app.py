@@ -381,6 +381,33 @@ class App:
         tg_app = Application.builder().token(bot_token).build()
         tg_app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 
+        # --- Bot commands ---
+        from telegram.ext import CommandHandler
+
+        from cosinabox.bot.commands import (
+            build_brief_handler,
+            build_cost_handler,
+            build_status_handler,
+            cmd_help,
+        )
+
+        tg_app.add_handler(CommandHandler("help", cmd_help))
+        tg_app.add_handler(CommandHandler("start", cmd_help))
+        tg_app.add_handler(CommandHandler("status", build_status_handler(
+            name=name,
+            timezone=timezone,
+            tool_definitions=tool_definitions,
+            jobs_config=jobs_config,
+            stakeholder_count=len(stakeholders),
+        )))
+        tg_app.add_handler(CommandHandler("cost", build_cost_handler(
+            cost_tracker=loop.cost,
+        )))
+        tg_app.add_handler(CommandHandler("brief", build_brief_handler(
+            agent_loop=loop,
+            chat_id=chat_id,
+        )))
+
         logger.info(
             "cosinabox running: %s's CoS (%s)",
             name,

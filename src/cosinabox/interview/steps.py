@@ -183,8 +183,10 @@ class BudgetStep(Step):
 
     def prompt(self) -> str:
         return (
-            "Step 8/10 — Budget caps. Default daily cap is $15. Want to change? "
-            "(say 'yes default cap' or give a number like '$25')"
+            "Step 8/10 — Budget caps. Default daily cap is $15/day "
+            "(covers ~5 briefings + 20 DM messages). Light usage runs ~$3-5/day, "
+            "heavy usage ~$10-15/day. Want to change? "
+            "(say 'keep default' or give a number like '$25')"
         )
 
     def apply(self, answer: str, config_dir: Path) -> None:

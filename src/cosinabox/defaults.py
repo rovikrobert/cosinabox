@@ -7,6 +7,10 @@ chosen, per spec Layer 1. Revisit annually.
 from __future__ import annotations
 
 # Cost runaways are real. Per-message + daily caps are forcing functions.
+# $0.75/message handles most DM queries including multi-tool chains.
+# $15/day covers ~5 briefings + 20 DM messages + pre-meeting preps.
+# Light users (few DMs, just briefings): ~$3-5/day.
+# Heavy users (active DM, all jobs enabled): ~$10-15/day.
 # Chosen 2026-04-11 from cos-agent's empirical spend.
 COST_PER_MESSAGE_CAP_USD: float = 0.75
 COST_DAILY_CAP_USD: float = 15.00
