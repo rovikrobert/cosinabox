@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import pytest
+from unittest.mock import MagicMock, patch
 
 from cosinabox.memory.client import LocalMemoryClient
 
@@ -52,3 +53,40 @@ class TestLocalMemoryClient:
             client.store(text=f"Memory {i}", metadata={}, namespace="default")
         results = client.recall(query="memory", namespace="default", limit=3)
         assert len(results) == 3
+
+
+class TestRemoteMemoryClient:
+    def test_store_calls_api(self):
+        from cosinabox.memory.client import RemoteMemoryClient
+        client = RemoteMemoryClient(base_url="https://mem.example.com", api_key="key123")
+        with patch("cosinabox.memory.client.httpx") as mock_httpx:
+            mock_resp = MagicMock()
+            mock_resp.json.return_value = {"id": "remote-id-1"}
+            mock_resp.raise_for_status = MagicMock()
+            mock_httpx.post.return_value = mock_resp
+
+            mid = client.store(text="fact", metadata={"k": "v"}, namespace="ns")
+            assert mid == "remote-id-1"
+            mock_httpx.post.assert_called_once()
+
+    def test_recall_returns_empty_on_failure(self):
+        from cosinabox.memory.client import RemoteMemoryClient
+        client = RemoteMemoryClient(base_url="https://mem.example.com", api_key="key123")
+        with patch("cosinabox.memory.client.httpx") as mock_httpx:
+            mock_httpx.post.side_effect = Exception("Network error")
+            results = client.recall(query="test", namespace="ns")
+            assert results == []
+
+
+class TestResolveMemoryClient:
+    def test_returns_local_when_no_url(self, tmp_path):
+        from cosinabox.memory.client import resolve_memory_client
+        client = resolve_memory_client(db_path=tmp_path / "mem.db")
+        assert isinstance(client, LocalMemoryClient)
+
+    def test_returns_remote_when_url_set(self, monkeypatch):
+        from cosinabox.memory.client import RemoteMemoryClient, resolve_memory_client
+        monkeypatch.setenv("MEMORY_SERVICE_URL", "https://mem.example.com")
+        monkeypatch.setenv("MEMORY_API_KEY", "key123")
+        client = resolve_memory_client(db_path="/tmp/unused.db")
+        assert isinstance(client, RemoteMemoryClient)

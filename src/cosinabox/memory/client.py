@@ -9,11 +9,17 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import sqlite3
 import uuid
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Protocol
+
+try:
+    import httpx
+except ImportError:
+    httpx = None  # type: ignore[assignment]
 
 logger = logging.getLogger(__name__)
 
@@ -100,3 +106,77 @@ class LocalMemoryClient:
 
     def close(self) -> None:
         self._conn.close()
+
+
+class RemoteMemoryClient:
+    """HTTP client to an external memory service (e.g., Railway-hosted)."""
+
+    def __init__(self, *, base_url: str, api_key: str) -> None:
+        self.base_url = base_url.rstrip("/")
+        self._headers = {
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
+        }
+
+    def _post(self, path: str, body: dict[str, Any]) -> Any:
+        resp = httpx.post(
+            f"{self.base_url}{path}",
+            headers=self._headers,
+            json=body,
+            timeout=5.0,
+        )
+        resp.raise_for_status()
+        return resp.json()
+
+    def store(self, *, text: str, metadata: dict[str, Any], namespace: str) -> str:
+        try:
+            data = self._post("/memories", {
+                "text": text, "metadata": metadata, "namespace": namespace,
+            })
+            return str(data.get("id", ""))
+        except Exception:
+            logger.warning("Memory service store failed", exc_info=True)
+            return ""
+
+    def recall(self, *, query: str, namespace: str, limit: int = 5) -> list[dict[str, Any]]:
+        try:
+            data = self._post("/recall", {
+                "query": query, "namespace": namespace, "limit": limit,
+            })
+            return data if isinstance(data, list) else data.get("results", [])
+        except Exception:
+            logger.warning("Memory service recall failed", exc_info=True)
+            return []
+
+    def search(self, *, query: str, namespace: str) -> list[dict[str, Any]]:
+        try:
+            data = self._post("/search", {
+                "query": query, "namespace": namespace,
+            })
+            return data if isinstance(data, list) else data.get("results", [])
+        except Exception:
+            logger.warning("Memory service search failed", exc_info=True)
+            return []
+
+    def delete(self, *, memory_id: str) -> bool:
+        try:
+            httpx.delete(
+                f"{self.base_url}/memories/{memory_id}",
+                headers=self._headers,
+                timeout=5.0,
+            )
+            return True
+        except Exception:
+            logger.warning("Memory service delete failed", exc_info=True)
+            return False
+
+
+def resolve_memory_client(*, db_path: str | Path) -> LocalMemoryClient | RemoteMemoryClient:
+    """Pick local or remote memory client based on env vars."""
+    url = os.getenv("MEMORY_SERVICE_URL")
+    if url:
+        api_key = os.getenv("MEMORY_API_KEY", "")
+        logger.info("Using remote memory service: %s", url)
+        return RemoteMemoryClient(base_url=url, api_key=api_key)
+    logger.info("Using local memory (SQLite keyword search)")
+    return LocalMemoryClient(db_path=db_path)
