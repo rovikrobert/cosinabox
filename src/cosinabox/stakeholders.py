@@ -36,7 +36,8 @@ def _load_yaml(config_dir: Path) -> list[dict[str, Any]]:
     data = yaml.safe_load(path.read_text())
     if not isinstance(data, dict):
         return []
-    return data.get("stakeholders", [])
+    result: list[dict[str, Any]] = data.get("stakeholders", [])
+    return result
 
 
 def get_stakeholders(
@@ -59,7 +60,8 @@ def get_stakeholders(
         return _load_yaml(config_dir)
 
     try:
-        return client.list_people(limit=50)
+        result: list[dict[str, Any]] = client.list_people(limit=50)
+        return result
     except Exception:
         logger.warning(
             "Attio API call failed, falling back to stakeholders.yaml",

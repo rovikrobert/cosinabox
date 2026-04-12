@@ -71,7 +71,8 @@ class AttioClient:
             json={"data": {"values": fields}},
         )
         resp.raise_for_status()
-        return resp.json().get("data", {})
+        result: dict[str, Any] = resp.json().get("data", {})
+        return result
 
     def create_person(self, fields: dict[str, Any]) -> dict[str, Any]:
         """Create a new person record."""
@@ -80,7 +81,8 @@ class AttioClient:
             json={"data": {"values": fields}},
         )
         resp.raise_for_status()
-        return resp.json().get("data", {})
+        result: dict[str, Any] = resp.json().get("data", {})
+        return result
 
     @staticmethod
     def _normalize(record: dict[str, Any]) -> dict[str, Any]:
