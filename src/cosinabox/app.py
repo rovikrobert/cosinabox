@@ -422,6 +422,7 @@ class App:
         from telegram.ext import CommandHandler
 
         from cosinabox.bot.commands import (
+            build_analytics_handler,
             build_brief_handler,
             build_cost_handler,
             build_status_handler,
@@ -443,6 +444,9 @@ class App:
         tg_app.add_handler(CommandHandler("brief", build_brief_handler(
             agent_loop=loop,
             chat_id=chat_id,
+        )))
+        tg_app.add_handler(CommandHandler("analytics", build_analytics_handler(
+            db=memory,
         )))
 
         logger.info(

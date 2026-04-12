@@ -23,7 +23,8 @@ async def cmd_help(update: Update, _ctx: Any) -> None:
         "/help — This message\n"
         "/status — Enabled integrations, jobs, and stakeholder count\n"
         "/cost — Today's API spend vs. daily cap\n"
-        "/brief — On-demand briefing (runs the morning briefing prompt)"
+        "/brief — On-demand briefing (runs the morning briefing prompt)\n"
+        "/analytics — Operational metrics (cost, tools, job health)"
     )
     if update.message:
         await update.message.reply_text(text)
@@ -117,3 +118,44 @@ def build_brief_handler(
                 await update.message.reply_text(reply[i : i + 4000])
 
     return cmd_brief
+
+
+def build_analytics_handler(*, db: Any) -> Any:
+    """Build a /analytics handler with access to the logging DB."""
+
+    async def cmd_analytics(update: Update, _ctx: Any) -> None:
+        from cosinabox.agent.analytics import (
+            get_cost_summary,
+            get_error_summary,
+            get_job_health,
+            get_tool_stats,
+        )
+
+        cost = get_cost_summary(db)
+        tools = get_tool_stats(db)
+        jobs = get_job_health(db)
+        errors = get_error_summary(db)
+
+        lines = [
+            f"Cost: ${cost['today']:.2f} today, ${cost['week_avg']:.2f}/day avg ({cost['days']}d)",
+            f"Jobs: {jobs['runs_today']} runs today",
+        ]
+        if jobs["failing_jobs"]:
+            lines.append("Failing: " + ", ".join(
+                f"{j['name']} ({j['failures']}x)" for j in jobs["failing_jobs"]
+            ))
+        if tools["tools"]:
+            lines.append("Top tools: " + ", ".join(
+                f"{t['name']} ({t['calls']})" for t in tools["tools"][:3]
+            ))
+        if errors["errors"]:
+            lines.append("Errors (24h): " + ", ".join(
+                f"{e['type']} ({e['count']})" for e in errors["errors"]
+            ))
+        else:
+            lines.append("Errors (24h): none")
+
+        if update.message:
+            await update.message.reply_text("\n".join(lines))
+
+    return cmd_analytics
