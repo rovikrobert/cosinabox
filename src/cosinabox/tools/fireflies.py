@@ -9,8 +9,7 @@ try:
     import httpx
 except ImportError as e:
     raise ImportError(
-        "cosinabox[fireflies] extra is required. "
-        "Run: pip install 'cosinabox[fireflies]'"
+        "cosinabox[fireflies] extra is required. Run: pip install 'cosinabox[fireflies]'"
     ) from e
 
 FIREFLIES_GRAPHQL_URL = "https://api.fireflies.ai/graphql"

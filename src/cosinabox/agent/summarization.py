@@ -21,9 +21,7 @@ def maybe_summarize(
         return messages
     to_summarize = messages[: len(messages) - keep_recent]
     transcript = "\n".join(
-        f"{m['role']}: {m['content']}"
-        for m in to_summarize
-        if isinstance(m.get("content"), str)
+        f"{m['role']}: {m['content']}" for m in to_summarize if isinstance(m.get("content"), str)
     )
     response = client.messages.create(
         model=SUMMARIZE_MODEL,
@@ -33,8 +31,7 @@ def maybe_summarize(
                 "role": "user",
                 "content": (
                     "Summarize the following conversation in <=200 words. "
-                    "Preserve names, decisions, and open commitments.\n\n"
-                    + transcript
+                    "Preserve names, decisions, and open commitments.\n\n" + transcript
                 ),
             }
         ],

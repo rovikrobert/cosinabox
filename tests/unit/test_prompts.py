@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from cosinabox.prompts.core import render_system_prompt
 from cosinabox.prompts.briefing import render_briefing_prompt
+from cosinabox.prompts.core import render_system_prompt
 
 
 def test_system_prompt_substitutes_personality() -> None:

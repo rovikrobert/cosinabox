@@ -62,9 +62,7 @@ class Memory:
         )
         self._conn.commit()
 
-    def recent_messages(
-        self, *, session_id: str, limit: int = 50
-    ) -> list[dict[str, Any]]:
+    def recent_messages(self, *, session_id: str, limit: int = 50) -> list[dict[str, Any]]:
         cur = self._conn.execute(
             "SELECT role, content, timestamp FROM messages "
             "WHERE session_id = ? ORDER BY id ASC LIMIT ?",
@@ -73,12 +71,8 @@ class Memory:
         return [dict(row) for row in cur.fetchall()]
 
     def clear_old(self, *, older_than_days: int) -> int:
-        cutoff = (
-            datetime.now(UTC) - timedelta(days=older_than_days)
-        ).isoformat()
-        cur = self._conn.execute(
-            "DELETE FROM messages WHERE timestamp < ?", (cutoff,)
-        )
+        cutoff = (datetime.now(UTC) - timedelta(days=older_than_days)).isoformat()
+        cur = self._conn.execute("DELETE FROM messages WHERE timestamp < ?", (cutoff,))
         self._conn.commit()
         return cur.rowcount
 

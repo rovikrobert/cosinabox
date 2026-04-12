@@ -38,9 +38,7 @@ class GmailTool:
             service = build("gmail", "v1", credentials=build_credentials())
         self.service = service
 
-    def list_recent(
-        self, *, hours: int = 24, max_results: int = 25
-    ) -> list[GmailMessage]:
+    def list_recent(self, *, hours: int = 24, max_results: int = 25) -> list[GmailMessage]:
         after = (datetime.now(UTC) - timedelta(hours=hours)).strftime("%Y/%m/%d")
         query = f"after:{after}"
         resp = (

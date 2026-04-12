@@ -71,9 +71,7 @@ class CalendarTool:
             for item in resp.get("items", [])
         ]
 
-    def find_conflicts(
-        self, *, start: datetime, end: datetime
-    ) -> list[CalendarEvent]:
+    def find_conflicts(self, *, start: datetime, end: datetime) -> list[CalendarEvent]:
         existing = self.list_events(start=start, end=end)
         return [e for e in existing if e.start < end and e.end > start]
 
@@ -97,11 +95,7 @@ class CalendarTool:
         }
         if attendees:
             body["attendees"] = [{"email": a} for a in attendees]
-        resp = (
-            self.service.events()
-            .insert(calendarId=self.calendar_id, body=body)
-            .execute()
-        )
+        resp = self.service.events().insert(calendarId=self.calendar_id, body=body).execute()
         return CalendarEvent(
             id=resp["id"],
             summary=resp.get("summary", ""),

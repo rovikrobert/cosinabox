@@ -37,11 +37,7 @@ def _wrap_untrusted(data: str) -> str:
 
     Layer 1: tool results need prompt-injection defense.
     """
-    return (
-        "<untrusted_tool_output>\n"
-        + data
-        + "\n</untrusted_tool_output>"
-    )
+    return "<untrusted_tool_output>\n" + data + "\n</untrusted_tool_output>"
 
 
 class AgentLoop:

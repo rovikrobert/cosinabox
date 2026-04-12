@@ -32,8 +32,7 @@ class CostTracker:
     def check_message_cost(self, estimated_usd: float) -> None:
         if estimated_usd > self.per_message_cap_usd:
             raise CostExceeded(
-                f"per-message cost ${estimated_usd:.4f} exceeds cap "
-                f"${self.per_message_cap_usd:.4f}"
+                f"per-message cost ${estimated_usd:.4f} exceeds cap ${self.per_message_cap_usd:.4f}"
             )
 
     def record(self, actual_usd: float, *, on_date: date | None = None) -> None:

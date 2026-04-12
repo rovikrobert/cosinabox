@@ -20,6 +20,4 @@ _SYSTEM_PROMPT = Template(_SYSTEM_PROMPT_SRC)
 
 
 def render_system_prompt(*, personality: str, name: str, timezone: str) -> str:
-    return _SYSTEM_PROMPT.render(
-        personality=personality, name=name, timezone=timezone
-    )
+    return _SYSTEM_PROMPT.render(personality=personality, name=name, timezone=timezone)

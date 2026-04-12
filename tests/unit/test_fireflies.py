@@ -11,9 +11,7 @@ def test_list_recent_parses_graphql_response() -> None:
         MockClient.return_value.__enter__.return_value = client
         client.post.return_value.json.return_value = {
             "data": {
-                "transcripts": [
-                    {"id": "t1", "title": "Standup", "date": "2026-04-12T10:00:00Z"}
-                ]
+                "transcripts": [{"id": "t1", "title": "Standup", "date": "2026-04-12T10:00:00Z"}]
             }
         }
         tool = FirefliesTool(api_key="fake")

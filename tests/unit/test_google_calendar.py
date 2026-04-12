@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from unittest.mock import MagicMock
 
 import pytest
@@ -34,7 +34,7 @@ def test_find_conflicts_returns_overlapping_events() -> None:
         }
     ]
     tool = CalendarTool(service=_fake_service(existing))
-    start = datetime(2026, 4, 12, 10, 15, tzinfo=timezone.utc)
+    start = datetime(2026, 4, 12, 10, 15, tzinfo=UTC)
     end = start + timedelta(minutes=30)
     conflicts = tool.find_conflicts(start=start, end=end)
     assert len(conflicts) == 1
@@ -54,8 +54,8 @@ def test_create_event_blocks_when_conflict_present() -> None:
     with pytest.raises(CalendarConflict):
         tool.create_event(
             summary="Coffee",
-            start=datetime(2026, 4, 12, 10, 15, tzinfo=timezone.utc),
-            end=datetime(2026, 4, 12, 10, 45, tzinfo=timezone.utc),
+            start=datetime(2026, 4, 12, 10, 15, tzinfo=UTC),
+            end=datetime(2026, 4, 12, 10, 45, tzinfo=UTC),
         )
 
 
@@ -71,8 +71,8 @@ def test_create_event_with_override_succeeds() -> None:
     tool = CalendarTool(service=_fake_service(existing))
     evt = tool.create_event(
         summary="Coffee",
-        start=datetime(2026, 4, 12, 10, 15, tzinfo=timezone.utc),
-        end=datetime(2026, 4, 12, 10, 45, tzinfo=timezone.utc),
+        start=datetime(2026, 4, 12, 10, 15, tzinfo=UTC),
+        end=datetime(2026, 4, 12, 10, 45, tzinfo=UTC),
         allow_conflict=True,
     )
     assert evt.id == "new-evt"
