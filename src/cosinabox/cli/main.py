@@ -13,6 +13,7 @@ from cosinabox.cli.disable_job import disable_job_cmd
 from cosinabox.cli.enable_job import enable_job_cmd
 from cosinabox.cli.init import init_cmd
 from cosinabox.cli.set_job_schedule import set_job_schedule_cmd
+from cosinabox.cli.set_persona import set_persona_cmd
 from cosinabox.cli.simulate import simulate_cmd
 from cosinabox.cli.validate import validate_cmd
 
@@ -41,6 +42,7 @@ cli.add_command(add_stakeholder_cmd)
 cli.add_command(set_job_schedule_cmd)
 cli.add_command(enable_job_cmd)
 cli.add_command(disable_job_cmd)
+cli.add_command(set_persona_cmd)
 
 
 if __name__ == "__main__":
