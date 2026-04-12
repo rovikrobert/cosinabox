@@ -39,3 +39,10 @@ def test_clear_old(memory: Memory) -> None:
     msgs = memory.recent_messages(session_id="s1")
     assert len(msgs) == 1
     assert msgs[0]["content"] == "fresh"
+
+
+def test_memory_uses_wal_mode(tmp_path):
+    mem = Memory(db_path=tmp_path / "test.db")
+    cur = mem._conn.execute("PRAGMA journal_mode")
+    assert cur.fetchone()[0] == "wal"
+    mem.close()
