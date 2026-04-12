@@ -314,6 +314,7 @@ class App:
             cost_tracker=CostTracker(
                 per_message_cap_usd=defaults.COST_PER_MESSAGE_CAP_USD,
                 daily_cap_usd=defaults.COST_DAILY_CAP_USD,
+                db=memory,
             ),
             tools=tool_handlers,
             tool_definitions=tool_definitions,

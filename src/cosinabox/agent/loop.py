@@ -133,6 +133,10 @@ class AgentLoop:
         self.max_tool_iterations = max_tool_iterations
         self.tool_iteration_delay_s = tool_iteration_delay_s
         self.system_prompt = system_prompt
+        self._tool_logger = None
+        if self.memory is not None:
+            from cosinabox.agent.logging import ToolLogger
+            self._tool_logger = ToolLogger(db=self.memory)
 
     def run(self, *, prompt: str, session_id: str) -> LoopResult:
         global _consecutive_failures
@@ -322,7 +326,22 @@ class AgentLoop:
                         if fn is None:
                             raw = f"Tool '{block.name}' not configured"
                         else:
-                            raw = str(fn(**block.input))
+                            import time as _time
+                            _t0 = _time.monotonic()
+                            _tool_error: Exception | None = None
+                            try:
+                                raw = str(fn(**block.input))
+                            except Exception as exc:
+                                _tool_error = exc
+                                raw = f"Tool error: {exc}"
+                            _duration = int((_time.monotonic() - _t0) * 1000)
+                            if self._tool_logger:
+                                self._tool_logger.log(
+                                    session_id=session_id,
+                                    tool_name=block.name,
+                                    duration_ms=_duration,
+                                    error=_tool_error,
+                                )
                     wrapped = _wrap_untrusted(raw)
                     result.tool_calls.append(
                         ToolCall(
