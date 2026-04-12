@@ -13,6 +13,7 @@ from cosinabox.cli.disable_job import disable_job_cmd
 from cosinabox.cli.enable_job import enable_job_cmd
 from cosinabox.cli.init import init_cmd
 from cosinabox.cli.interview import interview_cmd
+from cosinabox.cli.test_runner import test_cmd
 from cosinabox.cli.migrate import migrate_cmd
 from cosinabox.cli.set_job_schedule import set_job_schedule_cmd
 from cosinabox.cli.upgrade_docs import upgrade_docs_cmd
@@ -48,6 +49,7 @@ cli.add_command(enable_job_cmd)
 cli.add_command(disable_job_cmd)
 cli.add_command(set_persona_cmd)
 cli.add_command(interview_cmd)
+cli.add_command(test_cmd)
 cli.add_command(upgrade_docs_cmd)
 
 
