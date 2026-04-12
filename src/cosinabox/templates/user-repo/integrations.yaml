@@ -1,0 +1,11 @@
+schema_version: 1
+integrations:
+  google:
+    enabled: true
+    accounts:
+      - email: <YOUR_EMAIL>
+        scopes: [gmail, calendar]
+  fireflies:
+    enabled: false
+  web_search:
+    enabled: false

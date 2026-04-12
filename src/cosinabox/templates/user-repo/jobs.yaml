@@ -1,0 +1,16 @@
+schema_version: 1
+jobs:
+  morning_briefing:
+    enabled: true
+    schedule: "0 8 * * *"
+    timezone: <YOUR_TIMEZONE>
+  pre_meeting_prep:
+    enabled: true
+    minutes_before: 30
+    skip_if_calendar_title_matches: ["focus block", "lunch"]
+  evening_wrap:
+    enabled: false
+  weekly_review:
+    enabled: false
+  followup_reminder:
+    enabled: false

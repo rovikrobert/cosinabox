@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "stakeholders.yaml",
+  "type": "object",
+  "required": ["schema_version", "stakeholders"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "stakeholders": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name", "cadence"],
+        "properties": {
+          "name": {"type": "string"},
+          "role": {"type": "string"},
+          "cadence": {"enum": ["daily", "weekly", "biweekly", "monthly", "quarterly"]},
+          "last_contact": {"type": "string", "format": "date"},
+          "notes": {"type": "string"}
+        }
+      }
+    }
+  }
+}
