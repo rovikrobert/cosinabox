@@ -12,6 +12,66 @@ from __future__ import annotations
 
 from collections import defaultdict
 from datetime import UTC, date, datetime
+from typing import Any
+
+PRICING = {
+    "claude-opus-4-6": {
+        "input": 15.0,
+        "output": 75.0,
+        "cache_write": 18.75,
+        "cache_read": 1.50,
+    },
+    "claude-sonnet-4-6": {
+        "input": 3.0,
+        "output": 15.0,
+        "cache_write": 3.75,
+        "cache_read": 0.30,
+    },
+    "claude-haiku-4-5-20251001": {
+        "input": 0.80,
+        "output": 4.0,
+        "cache_write": 1.00,
+        "cache_read": 0.08,
+    },
+}
+
+
+def estimate_cost(
+    model: str,
+    input_tokens: int,
+    output_tokens: int,
+    cache_creation_tokens: int = 0,
+    cache_read_tokens: int = 0,
+) -> float:
+    """Estimate cost in USD for a single API call."""
+    prices = PRICING.get(model, PRICING["claude-sonnet-4-6"])
+    input_cost = (input_tokens / 1_000_000) * prices["input"]
+    output_cost = (output_tokens / 1_000_000) * prices["output"]
+    cache_write_cost = (cache_creation_tokens / 1_000_000) * prices["cache_write"]
+    cache_read_cost = (cache_read_tokens / 1_000_000) * prices["cache_read"]
+    return input_cost + output_cost + cache_write_cost + cache_read_cost
+
+
+def estimate_cost_with_advisor(
+    executor_model: str,
+    iterations: list[dict[str, Any]],
+) -> float:
+    """Estimate cost from usage.iterations array (advisor-enabled calls).
+
+    "message" iterations bill at executor rates.
+    "advisor_message" iterations bill at the iteration's own model rates.
+    """
+    total = 0.0
+    for it in iterations:
+        model = it["model"] if it["type"] == "advisor_message" else executor_model
+        total += estimate_cost(
+            model,
+            it.get("input_tokens", 0),
+            it.get("output_tokens", 0),
+            cache_creation_tokens=it.get("cache_creation_input_tokens", 0) or 0,
+            cache_read_tokens=it.get("cache_read_input_tokens", 0) or 0,
+        )
+    return total
 
 
 class CostExceeded(Exception):
