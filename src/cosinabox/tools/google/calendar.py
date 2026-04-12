@@ -17,8 +17,6 @@ except ImportError as e:
         "cosinabox[google] extra is required. Run: pip install 'cosinabox[google]'"
     ) from e
 
-from cosinabox.tools.google.auth import build_credentials
-
 
 class CalendarConflict(Exception):
     """Raised when create_event would overlap an existing event."""
@@ -43,33 +41,52 @@ def _parse_dt(value: dict[str, Any]) -> datetime:
 
 
 class CalendarTool:
-    def __init__(self, *, service: Resource | None = None, calendar_id: str = "primary") -> None:
-        if service is None:
-            service = build("calendar", "v3", credentials=build_credentials())
-        self.service = service
+    def __init__(
+        self,
+        *,
+        service: Resource | None = None,
+        services: list[Resource] | None = None,
+        calendar_id: str = "primary",
+    ) -> None:
+        if services:
+            self._services = services
+        elif service:
+            self._services = [service]
+        else:
+            from cosinabox.tools.google.auth import build_all_credentials
+
+            creds_list = build_all_credentials()
+            self._services = [build("calendar", "v3", credentials=c) for c in creds_list]
         self.calendar_id = calendar_id
 
     def list_events(self, *, start: datetime, end: datetime) -> list[CalendarEvent]:
-        resp = (
-            self.service.events()
-            .list(
-                calendarId=self.calendar_id,
-                timeMin=start.isoformat(),
-                timeMax=end.isoformat(),
-                singleEvents=True,
-                orderBy="startTime",
+        all_events: list[CalendarEvent] = []
+        seen_ids: set[str] = set()
+        for svc in self._services:
+            resp = (
+                svc.events()
+                .list(
+                    calendarId=self.calendar_id,
+                    timeMin=start.isoformat(),
+                    timeMax=end.isoformat(),
+                    singleEvents=True,
+                    orderBy="startTime",
+                )
+                .execute()
             )
-            .execute()
-        )
-        return [
-            CalendarEvent(
-                id=item["id"],
-                summary=item.get("summary", ""),
-                start=_parse_dt(item["start"]),
-                end=_parse_dt(item["end"]),
-            )
-            for item in resp.get("items", [])
-        ]
+            for item in resp.get("items", []):
+                if item["id"] in seen_ids:
+                    continue
+                seen_ids.add(item["id"])
+                all_events.append(
+                    CalendarEvent(
+                        id=item["id"],
+                        summary=item.get("summary", ""),
+                        start=_parse_dt(item["start"]),
+                        end=_parse_dt(item["end"]),
+                    )
+                )
+        return all_events
 
     def find_conflicts(self, *, start: datetime, end: datetime) -> list[CalendarEvent]:
         existing = self.list_events(start=start, end=end)
@@ -95,7 +112,8 @@ class CalendarTool:
         }
         if attendees:
             body["attendees"] = [{"email": a} for a in attendees]
-        resp = self.service.events().insert(calendarId=self.calendar_id, body=body).execute()
+        # Write only to the first account's service
+        resp = self._services[0].events().insert(calendarId=self.calendar_id, body=body).execute()
         return CalendarEvent(
             id=resp["id"],
             summary=resp.get("summary", ""),

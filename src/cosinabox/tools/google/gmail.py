@@ -13,8 +13,6 @@ except ImportError as e:
         "cosinabox[google] extra is required. Run: pip install 'cosinabox[google]'"
     ) from e
 
-from cosinabox.tools.google.auth import build_credentials
-
 
 @dataclass
 class GmailMessage:
@@ -33,63 +31,78 @@ def _header(payload: dict[str, Any], name: str) -> str:
 
 
 class GmailTool:
-    def __init__(self, *, service: Resource | None = None) -> None:
-        if service is None:
-            service = build("gmail", "v1", credentials=build_credentials())
-        self.service = service
+    def __init__(
+        self,
+        *,
+        service: Resource | None = None,
+        services: list[Resource] | None = None,
+    ) -> None:
+        if services:
+            self._services = services
+        elif service:
+            self._services = [service]
+        else:
+            from cosinabox.tools.google.auth import build_all_credentials
+
+            creds_list = build_all_credentials()
+            self._services = [build("gmail", "v1", credentials=c) for c in creds_list]
 
     def list_recent(self, *, hours: int = 24, max_results: int = 25) -> list[GmailMessage]:
         after = (datetime.now(UTC) - timedelta(hours=hours)).strftime("%Y/%m/%d")
         query = f"after:{after}"
-        resp = (
-            self.service.users()
-            .messages()
-            .list(userId="me", q=query, maxResults=max_results)
-            .execute()
-        )
-        out: list[GmailMessage] = []
-        for ref in resp.get("messages", []):
-            full = (
-                self.service.users()
-                .messages()
-                .get(userId="me", id=ref["id"], format="metadata")
-                .execute()
+        all_msgs: list[GmailMessage] = []
+        seen_ids: set[str] = set()
+        for svc in self._services:
+            resp = (
+                svc.users().messages().list(userId="me", q=query, maxResults=max_results).execute()
             )
-            payload = full.get("payload", {})
-            out.append(
-                GmailMessage(
-                    id=full["id"],
-                    sender=_header(payload, "From"),
-                    subject=_header(payload, "Subject"),
-                    snippet=full.get("snippet", ""),
-                    date=_header(payload, "Date"),
+            for ref in resp.get("messages", []):
+                if ref["id"] in seen_ids:
+                    continue
+                seen_ids.add(ref["id"])
+                full = (
+                    svc.users()
+                    .messages()
+                    .get(userId="me", id=ref["id"], format="metadata")
+                    .execute()
                 )
-            )
-        return out
+                payload = full.get("payload", {})
+                all_msgs.append(
+                    GmailMessage(
+                        id=full["id"],
+                        sender=_header(payload, "From"),
+                        subject=_header(payload, "Subject"),
+                        snippet=full.get("snippet", ""),
+                        date=_header(payload, "Date"),
+                    )
+                )
+        return all_msgs[:max_results]
 
     def search(self, query: str, *, max_results: int = 25) -> list[GmailMessage]:
-        resp = (
-            self.service.users()
-            .messages()
-            .list(userId="me", q=query, maxResults=max_results)
-            .execute()
-        )
-        out: list[GmailMessage] = []
-        for ref in resp.get("messages", []):
-            full = (
-                self.service.users()
-                .messages()
-                .get(userId="me", id=ref["id"], format="metadata")
-                .execute()
+        all_msgs: list[GmailMessage] = []
+        seen_ids: set[str] = set()
+        for svc in self._services:
+            resp = (
+                svc.users().messages().list(userId="me", q=query, maxResults=max_results).execute()
             )
-            payload = full.get("payload", {})
-            out.append(
-                GmailMessage(
-                    id=full["id"],
-                    sender=_header(payload, "From"),
-                    subject=_header(payload, "Subject"),
-                    snippet=full.get("snippet", ""),
-                    date=_header(payload, "Date"),
+            for ref in resp.get("messages", []):
+                if ref["id"] in seen_ids:
+                    continue
+                seen_ids.add(ref["id"])
+                full = (
+                    svc.users()
+                    .messages()
+                    .get(userId="me", id=ref["id"], format="metadata")
+                    .execute()
                 )
-            )
-        return out
+                payload = full.get("payload", {})
+                all_msgs.append(
+                    GmailMessage(
+                        id=full["id"],
+                        sender=_header(payload, "From"),
+                        subject=_header(payload, "Subject"),
+                        snippet=full.get("snippet", ""),
+                        date=_header(payload, "Date"),
+                    )
+                )
+        return all_msgs[:max_results]

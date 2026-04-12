@@ -48,3 +48,44 @@ def build_credentials() -> Credentials:
         client_secret=secret,
         scopes=list(GOOGLE_DEFAULT_SCOPES),
     )
+
+
+def build_all_credentials() -> list[Credentials]:
+    """Build credentials for all configured Google accounts.
+
+    Looks for GOOGLE_OAUTH_REFRESH_TOKEN_1, _2, _3, etc.
+    Falls back to single GOOGLE_OAUTH_REFRESH_TOKEN if no numbered ones found.
+    """
+    cid = os.getenv("GOOGLE_OAUTH_CLIENT_ID")
+    secret = os.getenv("GOOGLE_OAUTH_CLIENT_SECRET")
+    if not cid or not secret:
+        raise GoogleAuthError("GOOGLE_OAUTH_CLIENT_ID and GOOGLE_OAUTH_CLIENT_SECRET required.")
+
+    tokens: list[str] = []
+    i = 1
+    while True:
+        tok = os.getenv(f"GOOGLE_OAUTH_REFRESH_TOKEN_{i}")
+        if tok is None:
+            break
+        tokens.append(tok)
+        i += 1
+
+    if not tokens:
+        single = os.getenv("GOOGLE_OAUTH_REFRESH_TOKEN")
+        if single:
+            tokens.append(single)
+
+    if not tokens:
+        raise GoogleAuthError("No GOOGLE_OAUTH_REFRESH_TOKEN found.")
+
+    return [
+        Credentials(  # type: ignore[no-untyped-call]
+            token=None,
+            refresh_token=tok,
+            token_uri=GOOGLE_TOKEN_URI,
+            client_id=cid,
+            client_secret=secret,
+            scopes=list(GOOGLE_DEFAULT_SCOPES),
+        )
+        for tok in tokens
+    ]
