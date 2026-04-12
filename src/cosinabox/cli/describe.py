@@ -39,6 +39,7 @@ def _build_data(config_dir: Path) -> dict[str, Any]:
 
     enabled_jobs = {k: v for k, v in jobs.items() if v.get("enabled")}
     enabled_integrations = [k for k, v in integrations.items() if v.get("enabled")]
+    disabled_integrations = [k for k, v in integrations.items() if not v.get("enabled")]
 
     return {
         "name": personality.get("name", "Unknown"),
@@ -61,6 +62,7 @@ def _build_data(config_dir: Path) -> dict[str, Any]:
             for name, cfg in enabled_jobs.items()
         },
         "integrations": enabled_integrations,
+        "disabled_integrations": disabled_integrations,
     }
 
 
@@ -110,6 +112,17 @@ def _format_english(data: dict[str, Any]) -> str:
         lines.append("Enabled integrations: " + ", ".join(integrations))
     else:
         lines.append("Enabled integrations: none")
+
+    disabled = data.get("disabled_integrations", [])
+    if disabled:
+        fallbacks = {
+            "google": "no email/calendar in briefings or DM",
+            "attio": "using stakeholders.yaml instead of CRM",
+            "fireflies": "no meeting transcript access",
+            "web_search": "no web search in DM",
+        }
+        parts = [f"{k} ({fallbacks.get(k, 'disabled')})" for k in disabled]
+        lines.append("Disabled integrations: " + ", ".join(parts))
 
     return "\n".join(lines)
 

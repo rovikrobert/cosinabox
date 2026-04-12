@@ -86,6 +86,24 @@ These are strong defaults. Breaking them requires a one-line justification in th
 
 5. **PRs are auto-merged with `--auto` flag.** `gh pr create ... && gh pr merge --auto --squash`. Avoids race conditions with concurrent sessions. See feedback memory `feedback_auto_merge.md`.
 
+## OSS-user perspective (mandatory for all edits)
+
+Every line of code, config, and documentation in this engine will be read by someone who didn't write it. Adopt the perspective of a founder who just ran `cosinabox init` and is setting up their CoS for the first time via Claude Code.
+
+1. **No hardcoded names, orgs, or domains.** Descriptions, prompts, and tool schemas must be generic. "Search emails matching a query" not "Search Rovik's Gmail." If you see a hardcoded name in a schema or prompt, fix it.
+
+2. **Every capability must be discoverable.** If a feature exists but can only be found by reading source code, it doesn't exist for OSS users. Agent-facing docs (`docs/agent/`) are the discovery surface — update them when adding or changing features.
+
+3. **Show tradeoffs, not just switches.** When a feature is optional, the user needs to know what they gain by enabling it AND what they lose by not enabling it. A toggle with no explanation is a dark pattern.
+
+4. **Fallbacks must be explicit.** If integration X is disabled, the system must either (a) work without it and explain the fallback, or (b) tell the user clearly what's degraded. Silent degradation is a bug.
+
+5. **Configuration is a conversation.** Users interact with config through Claude Code, not by editing YAML directly. Agent-facing docs, `describe` output, and error messages are the UX — treat them as first-class code.
+
+6. **Defaults must be safe for strangers.** Every default in `defaults.py` should make sense for someone you've never met. If a default only makes sense for a specific user, it belongs in user config, not in the engine.
+
+7. **The template is the first impression.** `cosinabox init` output is the first thing users see. Every file in `src/cosinabox/templates/user-repo/` should be self-explanatory with inline comments. If a user needs to read docs to understand the template, the template is incomplete.
+
 ## Proactive suggestions (things to watch for and surface)
 
 These aren't rules — they're patterns the agent should notice and surface to Rovik without being asked.
