@@ -60,3 +60,41 @@ class TestToolLogger:
     def test_empty_logs_query(self, mem):
         cur = mem._conn.execute("SELECT COUNT(*) FROM tool_logs")
         assert cur.fetchone()[0] == 0
+
+
+from cosinabox.agent.cost import CostTracker
+
+
+class TestCostTrackerPersistence:
+    def test_record_persists_to_db(self, mem):
+        tracker = CostTracker(per_message_cap_usd=1.0, daily_cap_usd=15.0, db=mem)
+        tracker.record(2.50)
+        cur = mem._conn.execute("SELECT total_cost FROM daily_costs")
+        row = cur.fetchone()
+        assert row is not None
+        assert abs(row["total_cost"] - 2.50) < 0.01
+
+    def test_record_atomic_increment(self, mem):
+        tracker = CostTracker(per_message_cap_usd=1.0, daily_cap_usd=15.0, db=mem)
+        tracker.record(1.00)
+        tracker.record(0.50)
+        cur = mem._conn.execute("SELECT total_cost FROM daily_costs")
+        assert abs(cur.fetchone()["total_cost"] - 1.50) < 0.01
+
+    def test_loads_existing_spend_on_init(self, mem):
+        from datetime import UTC, datetime
+        today = datetime.now(UTC).date().isoformat()
+        mem._conn.execute(
+            "INSERT INTO daily_costs (date, total_cost, opus_calls, sonnet_calls, tool_calls) "
+            "VALUES (?, ?, 0, 0, 0)", (today, 5.0),
+        )
+        mem._conn.commit()
+
+        tracker = CostTracker(per_message_cap_usd=1.0, daily_cap_usd=15.0, db=mem)
+        assert tracker.spend_on(datetime.now(UTC).date()) == 5.0
+
+    def test_backward_compat_without_db(self):
+        tracker = CostTracker(per_message_cap_usd=1.0, daily_cap_usd=15.0)
+        tracker.record(0.50)
+        from datetime import UTC, datetime
+        assert tracker.spend_on(datetime.now(UTC).date()) == 0.50
