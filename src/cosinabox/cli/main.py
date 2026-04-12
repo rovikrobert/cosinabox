@@ -21,6 +21,7 @@ from cosinabox.cli.upgrade_docs import upgrade_docs_cmd
 from cosinabox.cli.set_persona import set_persona_cmd
 from cosinabox.cli.simulate import simulate_cmd
 from cosinabox.cli.validate import validate_cmd
+from cosinabox.cli.doctor import doctor_cmd
 
 
 @click.group()
@@ -53,6 +54,7 @@ cli.add_command(interview_cmd)
 cli.add_command(test_cmd)
 cli.add_command(upgrade_docs_cmd)
 cli.add_command(auth_cmd)
+cli.add_command(doctor_cmd)
 
 
 if __name__ == "__main__":
