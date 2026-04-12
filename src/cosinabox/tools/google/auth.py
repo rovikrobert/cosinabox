@@ -48,3 +48,40 @@ def build_credentials() -> Credentials:
         client_secret=secret,
         scopes=list(GOOGLE_DEFAULT_SCOPES),
     )
+
+
+def build_all_credentials() -> list[Credentials]:
+    """Build credentials for all numbered GOOGLE_OAUTH_REFRESH_TOKEN_N env vars.
+
+    Scans GOOGLE_OAUTH_REFRESH_TOKEN_1, _2, _3 etc. Falls back to single
+    GOOGLE_OAUTH_REFRESH_TOKEN if no numbered tokens are found.
+    """
+    cid = os.getenv("GOOGLE_OAUTH_CLIENT_ID")
+    secret = os.getenv("GOOGLE_OAUTH_CLIENT_SECRET")
+    if not cid or not secret:
+        raise GoogleAuthError(
+            "Missing GOOGLE_OAUTH_CLIENT_ID or GOOGLE_OAUTH_CLIENT_SECRET. "
+            "Run `cosinabox auth google` to configure."
+        )
+
+    creds: list[Credentials] = []
+    for i in range(1, 10):
+        token = os.getenv(f"GOOGLE_OAUTH_REFRESH_TOKEN_{i}")
+        if not token:
+            break
+        creds.append(
+            Credentials(  # type: ignore[no-untyped-call]
+                token=None,
+                refresh_token=token,
+                token_uri=GOOGLE_TOKEN_URI,
+                client_id=cid,
+                client_secret=secret,
+                scopes=list(GOOGLE_DEFAULT_SCOPES),
+            )
+        )
+
+    if not creds:
+        # Fall back to single token
+        creds.append(build_credentials())
+
+    return creds
