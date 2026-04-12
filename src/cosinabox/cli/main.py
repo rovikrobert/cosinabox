@@ -15,6 +15,7 @@ from cosinabox.cli.init import init_cmd
 from cosinabox.cli.interview import interview_cmd
 from cosinabox.cli.migrate import migrate_cmd
 from cosinabox.cli.set_job_schedule import set_job_schedule_cmd
+from cosinabox.cli.upgrade_docs import upgrade_docs_cmd
 from cosinabox.cli.set_persona import set_persona_cmd
 from cosinabox.cli.simulate import simulate_cmd
 from cosinabox.cli.validate import validate_cmd
@@ -47,6 +48,7 @@ cli.add_command(enable_job_cmd)
 cli.add_command(disable_job_cmd)
 cli.add_command(set_persona_cmd)
 cli.add_command(interview_cmd)
+cli.add_command(upgrade_docs_cmd)
 
 
 if __name__ == "__main__":
