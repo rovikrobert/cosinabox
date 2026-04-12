@@ -9,6 +9,8 @@ import click
 
 from cosinabox.cli.add_stakeholder import add_stakeholder_cmd
 from cosinabox.cli.describe import describe_cmd
+from cosinabox.cli.disable_job import disable_job_cmd
+from cosinabox.cli.enable_job import enable_job_cmd
 from cosinabox.cli.init import init_cmd
 from cosinabox.cli.set_job_schedule import set_job_schedule_cmd
 from cosinabox.cli.simulate import simulate_cmd
@@ -37,6 +39,8 @@ cli.add_command(simulate_cmd)
 cli.add_command(describe_cmd)
 cli.add_command(add_stakeholder_cmd)
 cli.add_command(set_job_schedule_cmd)
+cli.add_command(enable_job_cmd)
+cli.add_command(disable_job_cmd)
 
 
 if __name__ == "__main__":
