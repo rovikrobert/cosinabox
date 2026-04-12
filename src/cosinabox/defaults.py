@@ -45,6 +45,10 @@ DOCTOR_PREP_NOISE_PER_DAY: int = 8
 DOCTOR_STALE_FOLLOWUP_COUNT: int = 20
 DOCTOR_OAUTH_EXPIRY_WARN_DAYS: int = 14
 
+# Default timezone. Overridden by personality.md frontmatter or runtime /timezone command.
+# (2026-04-12)
+DEFAULT_TIMEZONE: str = "UTC"
+
 # Default model IDs (re-exported from agent.routing for convenience).
 SONNET_MODEL_ID: str = "claude-sonnet-4-6"
 OPUS_MODEL_ID: str = "claude-opus-4-6"
