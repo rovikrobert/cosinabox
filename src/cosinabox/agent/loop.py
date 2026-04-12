@@ -285,19 +285,37 @@ class AgentLoop:
                 tool_blocks = [
                     b for b in response.content if b.type == "tool_use"
                 ]
-                tool_results: list[dict[str, Any]] = []
-                for block in tool_blocks:
-                    # Policy gate: check before execution
-                    policy = evaluate(
+
+                # Pre-flight: evaluate ALL tools before executing ANY.
+                # If any tool is DENY or REQUIRE_APPROVAL, none execute.
+                policies = [
+                    (block, evaluate(
                         block.name, dict(block.input),
                         session_id=session_id,
-                    )
+                    ))
+                    for block in tool_blocks
+                ]
+
+                any_blocked = any(
+                    p.decision in (Decision.DENY, Decision.REQUIRE_APPROVAL)
+                    for _, p in policies
+                )
+
+                tool_results: list[dict[str, Any]] = []
+                for block, policy in policies:
                     if policy.decision == Decision.DENY:
                         raw = f"BLOCKED: {policy.description}"
-                    elif policy.decision == Decision.REQUIRE_APPROVAL:
+                    elif any_blocked and policy.decision == Decision.REQUIRE_APPROVAL:
                         raw = (
                             f"APPROVAL REQUIRED: {policy.description}. "
                             f"Ask the user for permission before proceeding."
+                        )
+                    elif any_blocked:
+                        # Another tool in this batch needs approval —
+                        # hold this one too, even if it's ALLOW.
+                        raw = (
+                            "HELD: Another tool in this request requires "
+                            "approval. No tools were executed."
                         )
                     else:
                         fn = self.tools.get(block.name)

@@ -361,13 +361,23 @@ class App:
         from telegram import Update
         from telegram.ext import Application, MessageHandler, filters
 
-        # Track tools that are pending approval per session
-        _pending_tool: dict[str, str] = {}  # session_id → tool_name
+        # Track tools pending approval per session (may be multiple)
+        _pending_tools: dict[str, list[str]] = {}  # session_id → [tool_names]
 
         _APPROVAL_PHRASES = {
-            "yes", "yep", "yeah", "go ahead", "approved", "do it",
-            "send it", "ok", "sure", "confirm", "approve",
+            "yes", "yep", "yeah", "y", "go ahead", "approved", "do it",
+            "send it", "ok", "k", "sure", "confirm", "approve",
+            "absolutely", "definitely",
         }
+
+        def _is_approval(text: str) -> bool:
+            """Check if user text is an approval (exact match or common prefix)."""
+            normalized = text.strip().lower()
+            if normalized in _APPROVAL_PHRASES:
+                return True
+            # Handle phrases like "yes please", "ok thanks", "sure thing"
+            first_word = normalized.split()[0] if normalized else ""
+            return first_word in _APPROVAL_PHRASES
 
         async def handle_message(update: Update, _ctx: Any) -> None:
             if update.message is None or update.message.text is None:
@@ -379,26 +389,27 @@ class App:
             session = f"dm-{update.effective_chat.id}"
             logger.info("DM: %s", user_text[:80])
 
-            # Check if this message is an approval for a pending tool
-            if session in _pending_tool and user_text.strip().lower() in _APPROVAL_PHRASES:
+            # Check if this message is an approval for pending tools
+            if session in _pending_tools and _is_approval(user_text):
                 from cosinabox.agent.policy import grant_temporary_approval
 
-                tool_name = _pending_tool.pop(session)
-                grant_temporary_approval(session, tool_name)
-                logger.info("User approved %s in %s", tool_name, session)
+                for tool_name in _pending_tools.pop(session):
+                    grant_temporary_approval(session, tool_name)
+                    logger.info("User approved %s in %s", tool_name, session)
 
+            blocked: list[str] = []
             try:
                 result = loop.run(prompt=user_text, session_id=session)
                 reply = result.final_text or "(no response)"
+                blocked = [
+                    tc.name for tc in result.tool_calls
+                    if "APPROVAL REQUIRED" in tc.result
+                ]
             except Exception:
                 logger.exception("Agent loop failed")
                 reply = "(error processing message)"
-
-            # Track if any tool call was blocked by REQUIRE_APPROVAL
-            for tc in result.tool_calls:
-                if "APPROVAL REQUIRED" in tc.result:
-                    _pending_tool[session] = tc.name
-                    break
+            if blocked:
+                _pending_tools[session] = blocked
 
             for i in range(0, len(reply), 4000):
                 await update.message.reply_text(reply[i : i + 4000])

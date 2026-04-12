@@ -271,3 +271,72 @@ class TestPolicyInAgentLoop:
         result = loop.run(prompt="send the email", session_id="test")
         # The tool should NOT have been executed
         assert "APPROVAL REQUIRED" in result.tool_calls[0].result
+
+    def test_multi_tool_response_holds_all_if_any_blocked(self) -> None:
+        """If Claude sends compose (ALLOW) + send (REQUIRE_APPROVAL),
+        NEITHER should execute."""
+        from unittest.mock import MagicMock
+
+        from cosinabox.agent.cost import CostTracker
+        from cosinabox.agent.loop import AgentLoop
+        from cosinabox.agent.routing import Router
+
+        mock_client = MagicMock()
+
+        # Response with TWO tool_use blocks: compose (ALLOW) + send (REQUIRE_APPROVAL)
+        tool_response = MagicMock()
+        tool_response.stop_reason = "tool_use"
+        tool_response.usage.input_tokens = 100
+        tool_response.usage.output_tokens = 50
+
+        compose_block = MagicMock()
+        compose_block.type = "tool_use"
+        compose_block.name = "gmail_compose"
+        compose_block.input = {"to": "a@b.com", "subject": "Hi", "body": "Hey"}
+        compose_block.id = "t1"
+
+        send_block = MagicMock()
+        send_block.type = "tool_use"
+        send_block.name = "gmail_send"
+        send_block.input = {"draft_id": "d1"}
+        send_block.id = "t2"
+
+        tool_response.content = [compose_block, send_block]
+
+        end_response = MagicMock()
+        end_response.stop_reason = "end_turn"
+        end_response.usage.input_tokens = 200
+        end_response.usage.output_tokens = 100
+        text_block = MagicMock()
+        text_block.type = "text"
+        text_block.text = "I need approval."
+        end_response.content = [text_block]
+
+        mock_client.messages.create.side_effect = [tool_response, end_response]
+
+        compose_called = []
+        send_called = []
+
+        loop = AgentLoop(
+            anthropic_client=mock_client,
+            router=Router(),
+            cost_tracker=CostTracker(per_message_cap_usd=1.0, daily_cap_usd=10.0),
+            tools={
+                "gmail_compose": lambda **kw: compose_called.append(1) or "drafted",
+                "gmail_send": lambda **kw: send_called.append(1) or "sent",
+            },
+            tool_definitions=[
+                {"name": "gmail_compose", "description": "test", "input_schema": {"type": "object", "properties": {}, "required": []}},
+                {"name": "gmail_send", "description": "test", "input_schema": {"type": "object", "properties": {}, "required": []}},
+            ],
+            system_prompt="Test",
+        )
+
+        result = loop.run(prompt="compose and send", session_id="test")
+
+        # NEITHER tool should have executed
+        assert compose_called == [], "gmail_compose should NOT execute when batch has blocked tools"
+        assert send_called == [], "gmail_send should NOT execute"
+        # compose should be HELD, send should be APPROVAL REQUIRED
+        assert "HELD" in result.tool_calls[0].result
+        assert "APPROVAL REQUIRED" in result.tool_calls[1].result
