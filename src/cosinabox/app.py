@@ -271,6 +271,12 @@ class App:
         jobs_config = self._load_jobs()
         integrations = self._load_integrations()
 
+        # Set runtime timezone from personality.md — scheduler uses this
+        from cosinabox.timezone import set_timezone
+
+        set_timezone(timezone)
+        logger.info("Timezone set to %s", timezone)
+
         bot_token = os.environ.get("TELEGRAM_BOT_TOKEN")
         chat_id = os.environ.get("TELEGRAM_CHAT_ID")
         if not bot_token or not chat_id:
