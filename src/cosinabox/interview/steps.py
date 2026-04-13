@@ -28,10 +28,13 @@ class IdentityStep(Step):
         )
 
     def apply(self, answer: str, config_dir: Path) -> None:
+        from cosinabox.timezone import resolve_timezone
+
         parts = [p.strip() for p in answer.split(",", 3)]
         while len(parts) < 4:
             parts.append("")
-        name, role, company, tz = parts
+        name, role, company, tz_raw = parts
+        tz = resolve_timezone(tz_raw) or tz_raw
         text = (
             f"---\nschema_version: 1\nname: {name}\n"
             f"role: {role} at {company}\ntimezone: {tz}\n---\n\n"

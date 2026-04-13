@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from zoneinfo import ZoneInfo
+from zoneinfo import ZoneInfo, available_timezones
 
 from cosinabox import defaults
 
@@ -16,6 +16,47 @@ _timezone: str = defaults.DEFAULT_TIMEZONE
 def get_timezone() -> str:
     """Return the current operating timezone (IANA string)."""
     return _timezone
+
+
+def resolve_timezone(raw: str) -> str | None:
+    """Resolve a user-provided timezone string to a valid IANA timezone.
+
+    Handles exact IANA names, underscore normalisation (spaces to _),
+    and fuzzy city-name search against the IANA database.
+    Returns None if no unambiguous match is found.
+    """
+    # 1. Exact match
+    try:
+        ZoneInfo(raw)
+        return raw
+    except (KeyError, ValueError):
+        pass
+
+    # 2. Replace spaces with underscores (e.g. "US/New York" → "US/New_York")
+    normalised = raw.replace(" ", "_")
+    try:
+        ZoneInfo(normalised)
+        return normalised
+    except (KeyError, ValueError):
+        pass
+
+    # 3. Fuzzy search: match city portion case-insensitively
+    query = normalised.lower()
+    all_tz = available_timezones()
+    matches = [tz for tz in all_tz if query in tz.lower()]
+
+    if len(matches) == 1:
+        return matches[0]
+
+    # Prefer matches where the city part (after /) matches exactly
+    city_matches = [
+        tz for tz in matches
+        if tz.rsplit("/", 1)[-1].lower() == query.rsplit("/", 1)[-1].lower()
+    ]
+    if len(city_matches) == 1:
+        return city_matches[0]
+
+    return None
 
 
 def set_timezone(tz: str) -> str:
