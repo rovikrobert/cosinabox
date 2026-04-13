@@ -8,6 +8,7 @@ schema_version: 1
 #   name     — Full name (used to match calendar/email)
 #   role     — Title + org, e.g. "Lead Investor (Sequoia)" or "Co-founder"
 #   cadence  — How often to check in: daily | weekly | biweekly | monthly | quarterly
+#   email    — Email address (optional, needed for Gmail extraction)
 #   notes    — Context that helps your CoS prepare (what they care about, what to avoid)
 #
 # Walk through docs/agent/persona-interview.md with Claude Code
@@ -16,6 +17,7 @@ stakeholders:
   - name: Example Stakeholder (replace me)
     role: Lead Investor (Example Ventures)
     cadence: weekly
+    email: stakeholder@example.com
     last_contact: "2026-01-01"
     notes: |
       Delete this entry and add your real stakeholders. Use the interview
