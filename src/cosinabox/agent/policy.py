@@ -98,6 +98,7 @@ DEFAULT_RULES: list[PolicyRule] = [
     PolicyRule("crm_*", Decision.ALLOW, priority=200, description="CRM read is safe"),
     PolicyRule("fireflies_*", Decision.ALLOW, priority=200, description="Transcript access is read-only"),
     PolicyRule("web_search", Decision.ALLOW, priority=200, description="Web search is read-only"),
+    PolicyRule("rela_query", Decision.ALLOW, priority=200, description="Sub-agent query is read-only"),
 
     # Drafts are safe (user reviews before sending)
     PolicyRule("gmail_compose", Decision.ALLOW, priority=100, description="Drafts don't send — user reviews"),
