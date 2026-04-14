@@ -48,14 +48,25 @@ _APPROVAL_TTL_S = 120  # 2 minutes
 _pending_approvals: dict[tuple[str, str], float] = {}
 
 
+def _sweep_expired_approvals() -> None:
+    """Evict approval tokens past their TTL. Prevents unbounded dict growth
+    from abandoned sessions that never approve/reject."""
+    now = time.time()
+    expired = [k for k, ts in _pending_approvals.items() if now - ts > _APPROVAL_TTL_S]
+    for k in expired:
+        del _pending_approvals[k]
+
+
 def grant_temporary_approval(session_id: str, tool_name: str) -> None:
     """Grant a one-shot approval for a specific tool in a session."""
+    _sweep_expired_approvals()
     _pending_approvals[(session_id, tool_name)] = time.time()
     logger.info("Granted temporary approval: %s in %s", tool_name, session_id)
 
 
 def _check_temporary_approval(session_id: str, tool_name: str) -> bool:
     """Check and consume a temporary approval token."""
+    _sweep_expired_approvals()
     key = (session_id, tool_name)
     granted_at = _pending_approvals.get(key)
     if granted_at is None:
@@ -76,40 +87,80 @@ def clear_approvals() -> None:
 # Default rules
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class PolicyRule:
-    tool_pattern: str          # fnmatch pattern, e.g. "gmail_*"
+    tool_pattern: str  # fnmatch pattern, e.g. "gmail_*"
     action: Decision
     condition_field: str = ""  # optional: field in tool_input to check
-    condition_op: str = ""     # contains, not_contains, eq
+    condition_op: str = ""  # contains, not_contains, eq
     condition_value: str = ""  # operand
-    priority: int = 100        # lower = higher priority
+    priority: int = 100  # lower = higher priority
     description: str = ""
 
 
 # Rules are evaluated in priority order (lower first). First match wins.
 DEFAULT_RULES: list[PolicyRule] = [
     # Read-only tools — always safe
-    PolicyRule("gmail_search", Decision.ALLOW, priority=200, description="Email search is read-only"),
-    PolicyRule("gmail_list_recent", Decision.ALLOW, priority=200, description="Email listing is read-only"),
-    PolicyRule("calendar_list_events", Decision.ALLOW, priority=200, description="Calendar read is safe"),
-    PolicyRule("calendar_find_conflicts", Decision.ALLOW, priority=200, description="Conflict check is read-only"),
-    PolicyRule("calendar_find_free_time", Decision.ALLOW, priority=200, description="Free time check is read-only"),
+    PolicyRule(
+        "gmail_search", Decision.ALLOW, priority=200, description="Email search is read-only"
+    ),
+    PolicyRule(
+        "gmail_list_recent", Decision.ALLOW, priority=200, description="Email listing is read-only"
+    ),
+    PolicyRule(
+        "calendar_list_events", Decision.ALLOW, priority=200, description="Calendar read is safe"
+    ),
+    PolicyRule(
+        "calendar_find_conflicts",
+        Decision.ALLOW,
+        priority=200,
+        description="Conflict check is read-only",
+    ),
+    PolicyRule(
+        "calendar_find_free_time",
+        Decision.ALLOW,
+        priority=200,
+        description="Free time check is read-only",
+    ),
     PolicyRule("crm_*", Decision.ALLOW, priority=200, description="CRM read is safe"),
-    PolicyRule("fireflies_*", Decision.ALLOW, priority=200, description="Transcript access is read-only"),
+    PolicyRule(
+        "fireflies_*", Decision.ALLOW, priority=200, description="Transcript access is read-only"
+    ),
     PolicyRule("web_search", Decision.ALLOW, priority=200, description="Web search is read-only"),
-    PolicyRule("rela_query", Decision.ALLOW, priority=200, description="Sub-agent query is read-only"),
-
+    PolicyRule(
+        "rela_query",
+        Decision.ALLOW,
+        priority=200,
+        description="Sub-agent query is read-only",
+    ),
     # Drafts are safe (user reviews before sending)
-    PolicyRule("gmail_compose", Decision.ALLOW, priority=100, description="Drafts don't send — user reviews"),
-    PolicyRule("gmail_draft_reply", Decision.ALLOW, priority=100, description="Draft replies don't send"),
-
+    PolicyRule(
+        "gmail_compose",
+        Decision.ALLOW,
+        priority=100,
+        description="Drafts don't send — user reviews",
+    ),
+    PolicyRule(
+        "gmail_draft_reply", Decision.ALLOW, priority=100, description="Draft replies don't send"
+    ),
     # Write operations — require approval
-    PolicyRule("gmail_send", Decision.REQUIRE_APPROVAL, priority=60, description="Sending email requires approval"),
-    PolicyRule("calendar_create_event", Decision.REQUIRE_APPROVAL, priority=60, description="Creating events requires approval"),
-
+    PolicyRule(
+        "gmail_send",
+        Decision.REQUIRE_APPROVAL,
+        priority=60,
+        description="Sending email requires approval",
+    ),
+    PolicyRule(
+        "calendar_create_event",
+        Decision.REQUIRE_APPROVAL,
+        priority=60,
+        description="Creating events requires approval",
+    ),
     # Catch-all — unknown tools require approval (safe default)
-    PolicyRule("*", Decision.REQUIRE_APPROVAL, priority=999, description="Unknown tool requires approval"),
+    PolicyRule(
+        "*", Decision.REQUIRE_APPROVAL, priority=999, description="Unknown tool requires approval"
+    ),
 ]
 
 
@@ -121,15 +172,17 @@ def _load_rules(
 
     if custom_rules:
         for r in custom_rules:
-            rules.append(PolicyRule(
-                tool_pattern=r["tool_pattern"],
-                action=Decision(r["action"]),
-                condition_field=r.get("condition_field", ""),
-                condition_op=r.get("condition_op", ""),
-                condition_value=r.get("condition_value", ""),
-                priority=r.get("priority", 50),
-                description=r.get("description", ""),
-            ))
+            rules.append(
+                PolicyRule(
+                    tool_pattern=r["tool_pattern"],
+                    action=Decision(r["action"]),
+                    condition_field=r.get("condition_field", ""),
+                    condition_op=r.get("condition_op", ""),
+                    condition_value=r.get("condition_value", ""),
+                    priority=r.get("priority", 50),
+                    description=r.get("description", ""),
+                )
+            )
 
     rules.sort(key=lambda r: r.priority)
     return rules
@@ -138,6 +191,7 @@ def _load_rules(
 # ---------------------------------------------------------------------------
 # Condition evaluation
 # ---------------------------------------------------------------------------
+
 
 def _check_condition(rule: PolicyRule, tool_input: dict[str, Any]) -> bool:
     """Check if a rule's condition matches the tool input."""

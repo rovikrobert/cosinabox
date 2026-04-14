@@ -6,6 +6,7 @@ from cosinabox.timezone import (
     get_timezone,
     load_timezone_override,
     persist_timezone,
+    resolve_timezone,
     set_timezone,
 )
 
@@ -35,6 +36,23 @@ def test_set_timezone_rejects_invalid() -> None:
 
     with pytest.raises(KeyError):
         set_timezone("Not/A/Timezone")
+
+
+def test_resolve_timezone_exact() -> None:
+    assert resolve_timezone("America/New_York") == "America/New_York"
+    assert resolve_timezone("US/Eastern") == "US/Eastern"
+    assert resolve_timezone("Asia/Singapore") == "Asia/Singapore"
+
+
+def test_resolve_timezone_fuzzy_city() -> None:
+    assert resolve_timezone("New York") == "America/New_York"
+    assert resolve_timezone("new york") == "America/New_York"
+    assert resolve_timezone("Tokyo") == "Asia/Tokyo"
+
+
+def test_resolve_timezone_no_match() -> None:
+    assert resolve_timezone("Fake/Zone") is None
+    assert resolve_timezone("nonsense") is None
 
 
 def test_persist_and_load_roundtrip(tmp_path: Path) -> None:

@@ -42,6 +42,7 @@ def _build_data(config_dir: Path) -> dict[str, Any]:
     disabled_integrations = [k for k, v in integrations.items() if not v.get("enabled")]
 
     import os
+
     memory_backend = "remote" if os.getenv("MEMORY_SERVICE_URL") else "local"
 
     return {

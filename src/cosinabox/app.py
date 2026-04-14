@@ -319,7 +319,8 @@ class App:
 
         # Initial tool registry (without rela_query — loop not yet created)
         tool_definitions, tool_handlers = build_tool_registry(
-            tool_instances, timezone=timezone,
+            tool_instances,
+            timezone=timezone,
         )
 
         loop = AgentLoop(
@@ -356,6 +357,20 @@ class App:
         loop.tool_definitions = tool_definitions
 
         # --- Scheduler ---
+        # Set the operating timezone from personality.md BEFORE creating
+        # the scheduler, so cron expressions fire in the user's local time.
+        from cosinabox.timezone import set_timezone
+
+        try:
+            set_timezone(timezone)
+            logger.info("Scheduler timezone set to %s", timezone)
+        except KeyError:
+            logger.warning(
+                "Invalid timezone %r in personality.md — falling back to %s",
+                timezone,
+                defaults.DEFAULT_TIMEZONE,
+            )
+
         scheduler = SchedulerRunner()
         gmail = tool_instances.get("gmail")
         calendar = tool_instances.get("calendar")
@@ -446,7 +461,8 @@ class App:
                     db=memory,
                     send_fn=send_telegram,
                     skip_titles=jobs_config.get("pre_meeting_prep", {}).get(
-                        "skip_if_calendar_title_matches", [],
+                        "skip_if_calendar_title_matches",
+                        [],
                     ),
                     rela=rela_agent,
                 )
@@ -470,16 +486,43 @@ class App:
         scheduler.start()
 
         # --- Telegram DM polling ---
+        # Track tools that are pending approval per session, with timestamps
+        # so we can evict stale entries (user walked away without responding).
+        import time as _time
+
         from telegram import Update
         from telegram.ext import Application, MessageHandler, filters
 
-        # Track tools pending approval per session (may be multiple)
-        _pending_tools: dict[str, list[str]] = {}  # session_id → [tool_names]
+        # Track tools pending approval per session (may be multiple).
+        # Value is (list_of_tool_names, timestamp) so we can evict stale
+        # entries from abandoned sessions.
+        _pending_tools: dict[str, tuple[list[str], float]] = {}
+        _PENDING_TOOL_TTL_S = 300  # 5 minutes
+
+        def _sweep_pending_tools() -> None:
+            now = _time.time()
+            expired = [
+                sid for sid, (_, ts) in _pending_tools.items() if now - ts > _PENDING_TOOL_TTL_S
+            ]
+            for sid in expired:
+                del _pending_tools[sid]
 
         _APPROVAL_PHRASES = {
-            "yes", "yep", "yeah", "y", "go ahead", "approved", "do it",
-            "send it", "ok", "k", "sure", "confirm", "approve",
-            "absolutely", "definitely",
+            "yes",
+            "yep",
+            "yeah",
+            "y",
+            "go ahead",
+            "approved",
+            "do it",
+            "send it",
+            "ok",
+            "k",
+            "sure",
+            "confirm",
+            "approve",
+            "absolutely",
+            "definitely",
         }
 
         def _is_approval(text: str) -> bool:
@@ -501,11 +544,14 @@ class App:
             session = f"dm-{update.effective_chat.id}"
             logger.info("DM: %s", user_text[:80])
 
+            _sweep_pending_tools()
+
             # Check if this message is an approval for pending tools
             if session in _pending_tools and _is_approval(user_text):
                 from cosinabox.agent.policy import grant_temporary_approval
 
-                for tool_name in _pending_tools.pop(session):
+                tool_names, _ts = _pending_tools.pop(session)
+                for tool_name in tool_names:
                     grant_temporary_approval(session, tool_name)
                     logger.info("User approved %s in %s", tool_name, session)
 
@@ -514,14 +560,15 @@ class App:
                 result = loop.run(prompt=user_text, session_id=session)
                 reply = result.final_text or "(no response)"
                 blocked = [
-                    tc.name for tc in result.tool_calls
+                    tc.name
+                    for tc in result.tool_calls
                     if "APPROVAL REQUIRED" in tc.result
                 ]
             except Exception:
                 logger.exception("Agent loop failed")
                 reply = "(error processing message)"
             if blocked:
-                _pending_tools[session] = blocked
+                _pending_tools[session] = (blocked, _time.time())
 
             for i in range(0, len(reply), 4000):
                 await update.message.reply_text(reply[i : i + 4000])
@@ -542,23 +589,43 @@ class App:
 
         tg_app.add_handler(CommandHandler("help", cmd_help))
         tg_app.add_handler(CommandHandler("start", cmd_help))
-        tg_app.add_handler(CommandHandler("status", build_status_handler(
-            name=name,
-            timezone=timezone,
-            tool_definitions=tool_definitions,
-            jobs_config=jobs_config,
-            stakeholder_count=len(stakeholders),
-        )))
-        tg_app.add_handler(CommandHandler("cost", build_cost_handler(
-            cost_tracker=loop.cost,
-        )))
-        tg_app.add_handler(CommandHandler("brief", build_brief_handler(
-            agent_loop=loop,
-            chat_id=chat_id,
-        )))
-        tg_app.add_handler(CommandHandler("analytics", build_analytics_handler(
-            db=memory,
-        )))
+        tg_app.add_handler(
+            CommandHandler(
+                "status",
+                build_status_handler(
+                    name=name,
+                    timezone=timezone,
+                    tool_definitions=tool_definitions,
+                    jobs_config=jobs_config,
+                    stakeholder_count=len(stakeholders),
+                ),
+            )
+        )
+        tg_app.add_handler(
+            CommandHandler(
+                "cost",
+                build_cost_handler(
+                    cost_tracker=loop.cost,
+                ),
+            )
+        )
+        tg_app.add_handler(
+            CommandHandler(
+                "brief",
+                build_brief_handler(
+                    agent_loop=loop,
+                    chat_id=chat_id,
+                ),
+            )
+        )
+        tg_app.add_handler(
+            CommandHandler(
+                "analytics",
+                build_analytics_handler(
+                    db=memory,
+                ),
+            )
+        )
 
         logger.info(
             "cosinabox running: %s's CoS (%s)",
