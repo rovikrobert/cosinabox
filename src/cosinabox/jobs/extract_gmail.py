@@ -33,12 +33,22 @@ def build_stakeholder_query(stakeholders: list[dict[str, Any]]) -> str:
 class ExtractGmailJob(Job):
     name = "extract_gmail"
 
-    def __init__(self, *, gmail: Any | None, memory_client: Any, db: Any, anthropic_client: Any, stakeholders: list[dict[str, Any]]) -> None:
+    def __init__(
+        self,
+        *,
+        gmail: Any | None,
+        memory_client: Any,
+        db: Any,
+        anthropic_client: Any,
+        stakeholders: list[dict[str, Any]],
+        cost_tracker: Any | None = None,
+    ) -> None:
         self.gmail = gmail
         self.memory_client = memory_client
         self.db = db
         self.anthropic = anthropic_client
         self.stakeholders = stakeholders
+        self.cost_tracker = cost_tracker
 
     def run(self, context: Any = None) -> str:
         if self.gmail is None:
@@ -66,6 +76,17 @@ class ExtractGmailJob(Job):
                     messages=[{"role": "user", "content": EXTRACTION_PROMPT.format(content=content)}],
                 )
                 resp_text = "\n".join(b.text for b in response.content if b.type == "text")
+                # Track cost
+                if self.cost_tracker is not None:
+                    from cosinabox.agent.cost import estimate_cost
+                    try:
+                        self.cost_tracker.record(estimate_cost(
+                            SONNET_MODEL_ID,
+                            response.usage.input_tokens,
+                            response.usage.output_tokens,
+                        ))
+                    except Exception:
+                        pass
                 facts = parse_extraction_response(resp_text)
             except Exception:
                 logger.warning("Extraction failed for email %s", msg.id, exc_info=True)

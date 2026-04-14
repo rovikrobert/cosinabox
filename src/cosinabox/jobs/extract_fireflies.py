@@ -26,11 +26,20 @@ def _is_stub(transcript: dict[str, Any]) -> bool:
 class ExtractFirefliesJob(Job):
     name = "extract_fireflies"
 
-    def __init__(self, *, fireflies: Any | None, memory_client: Any, db: Any, anthropic_client: Any) -> None:
+    def __init__(
+        self,
+        *,
+        fireflies: Any | None,
+        memory_client: Any,
+        db: Any,
+        anthropic_client: Any,
+        cost_tracker: Any | None = None,
+    ) -> None:
         self.fireflies = fireflies
         self.memory_client = memory_client
         self.db = db
         self.anthropic = anthropic_client
+        self.cost_tracker = cost_tracker
 
     def run(self, context: Any = None) -> str:
         if self.fireflies is None:
@@ -68,6 +77,17 @@ class ExtractFirefliesJob(Job):
                     messages=[{"role": "user", "content": EXTRACTION_PROMPT.format(content=content)}],
                 )
                 resp_text = "\n".join(b.text for b in response.content if b.type == "text")
+                # Track cost
+                if self.cost_tracker is not None:
+                    from cosinabox.agent.cost import estimate_cost
+                    try:
+                        self.cost_tracker.record(estimate_cost(
+                            SONNET_MODEL_ID,
+                            response.usage.input_tokens,
+                            response.usage.output_tokens,
+                        ))
+                    except Exception:
+                        pass
                 facts = parse_extraction_response(resp_text)
             except Exception:
                 logger.warning("Extraction failed for transcript %s", mid, exc_info=True)
