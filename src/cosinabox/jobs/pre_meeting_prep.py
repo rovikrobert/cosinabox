@@ -28,16 +28,28 @@ class PreMeetingPrepJob(Job):
         self.minutes_before = minutes_before
         self.window = window_minutes
         self.skip_titles = [t.lower() for t in (skip_titles or [])]
-        self._prepped: set[str] = set()
+        # Track which events we've already prepped, with timestamps so we
+        # can evict entries older than the prep window * 2. Prevents
+        # unbounded memory growth on long-running deployments.
+        self._prepped: dict[str, datetime] = {}
+
+    def _evict_stale_prepped(self, now: datetime) -> None:
+        """Remove prepped entries older than 2x prep window (safe margin)."""
+        cutoff = now - timedelta(hours=1)
+        stale = [eid for eid, ts in self._prepped.items() if ts < cutoff]
+        for eid in stale:
+            del self._prepped[eid]
 
     def _find_upcoming(self) -> list[Any]:
         """Find events starting within the prep window."""
         now = datetime.now(UTC)
+        self._evict_stale_prepped(now)
         window_start = now + timedelta(minutes=self.minutes_before - self.window)
         window_end = now + timedelta(minutes=self.minutes_before + self.window)
         events = self.calendar.list_events(start=window_start, end=window_end)
         return [
-            e for e in events
+            e
+            for e in events
             if e.id not in self._prepped
             and window_start <= e.start <= window_end
             and not any(skip in e.summary.lower() for skip in self.skip_titles)
@@ -49,8 +61,9 @@ class PreMeetingPrepJob(Job):
             return ""  # Empty = no message sent
 
         results: list[str] = []
+        now = datetime.now(UTC)
         for event in upcoming:
-            self._prepped.add(event.id)
+            self._prepped[event.id] = now
             prompt = (
                 f"Prepare a brief for this upcoming meeting:\n"
                 f"- Title: {event.summary}\n"
@@ -63,9 +76,7 @@ class PreMeetingPrepJob(Job):
             )
             result = self.agent_loop.run(prompt=prompt, session_id=context.session_id)
             if result.final_text:
-                time_str = event.start.strftime('%H:%M')
-                results.append(
-                    f"Meeting: {event.summary} at {time_str}\n{result.final_text}"
-                )
+                time_str = event.start.strftime("%H:%M")
+                results.append(f"Meeting: {event.summary} at {time_str}\n{result.final_text}")
 
         return "\n\n---\n\n".join(results) if results else ""

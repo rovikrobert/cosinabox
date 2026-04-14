@@ -35,9 +35,30 @@ _ADVISOR_BETA = "advisor-tool-2026-03-01"
 # Budget warning at 70% of per-message cap
 _BUDGET_WARNING_RATIO = 0.70
 
-# Circuit breaker: stop after N consecutive API failures
+# Circuit breaker: stop after N consecutive API failures.
+# Auto-resets after _CIRCUIT_BREAKER_COOLDOWN_S so transient API outages
+# don't permanently disable the bot.
 _CIRCUIT_BREAKER_THRESHOLD = 5
+_CIRCUIT_BREAKER_COOLDOWN_S = 600  # 10 minutes
 _consecutive_failures = 0
+_last_failure_at: float = 0.0
+
+
+def _circuit_breaker_tripped() -> bool:
+    """Check the circuit breaker with auto-reset after cooldown."""
+    global _consecutive_failures, _last_failure_at
+    if _consecutive_failures < _CIRCUIT_BREAKER_THRESHOLD:
+        return False
+    # Auto-reset if cooldown elapsed
+    if time.time() - _last_failure_at > _CIRCUIT_BREAKER_COOLDOWN_S:
+        logger.info(
+            "Circuit breaker cooldown elapsed (%ds) — resetting",
+            _CIRCUIT_BREAKER_COOLDOWN_S,
+        )
+        _consecutive_failures = 0
+        _last_failure_at = 0.0
+        return False
+    return True
 
 
 class AnthropicClient(Protocol):
@@ -85,8 +106,7 @@ def _strip_advisor_blocks(messages: list[dict[str, Any]]) -> list[dict[str, Any]
                     and b.get("type") in ("server_tool_use", "advisor_tool_result")
                 )
                 and not (
-                    hasattr(b, "type")
-                    and b.type in ("server_tool_use", "advisor_tool_result")
+                    hasattr(b, "type") and b.type in ("server_tool_use", "advisor_tool_result")
                 )
             ]
             if filtered:
@@ -139,10 +159,10 @@ class AgentLoop:
             self._tool_logger = ToolLogger(db=self.memory)
 
     def run(self, *, prompt: str, session_id: str) -> LoopResult:
-        global _consecutive_failures
+        global _consecutive_failures, _last_failure_at
 
-        # Circuit breaker check
-        if _consecutive_failures >= _CIRCUIT_BREAKER_THRESHOLD:
+        # Circuit breaker check (with auto-reset after cooldown)
+        if _circuit_breaker_tripped():
             logger.error(
                 "Circuit breaker open: %d consecutive API failures",
                 _consecutive_failures,
@@ -186,7 +206,9 @@ class AgentLoop:
                 messages.append({"role": msg["role"], "content": msg["content"]})
             # Store the incoming user message
             self.memory.store_message(
-                role="user", content=prompt, session_id=session_id,
+                role="user",
+                content=prompt,
+                session_id=session_id,
             )
 
         messages.append({"role": "user", "content": prompt})
@@ -195,9 +217,7 @@ class AgentLoop:
 
         for iteration in range(self.max_tool_iterations):
             # Strip advisor blocks if not using advisor this iteration
-            call_messages = (
-                messages if use_advisor else _strip_advisor_blocks(messages)
-            )
+            call_messages = messages if use_advisor else _strip_advisor_blocks(messages)
 
             # Budget gate: check BEFORE the call, not after
             estimated = estimate_cost(model, 2000, 1000)  # rough estimate
@@ -242,6 +262,7 @@ class AgentLoop:
                 return result
             except Exception as exc:
                 _consecutive_failures += 1
+                _last_failure_at = time.time()
                 logger.warning(
                     "API call failed (attempt %d): %s",
                     _consecutive_failures,
@@ -267,9 +288,7 @@ class AgentLoop:
             session_cost += call_cost
 
             if response.stop_reason == "end_turn":
-                text_blocks = [
-                    b.text for b in response.content if b.type == "text"
-                ]
+                text_blocks = [b.text for b in response.content if b.type == "text"]
                 result.final_text = "\n".join(text_blocks)
                 # Store assistant response in memory
                 if self.memory is not None and result.final_text:
@@ -286,17 +305,19 @@ class AgentLoop:
             if response.stop_reason == "tool_use":
                 from cosinabox.agent.policy import Decision, evaluate
 
-                tool_blocks = [
-                    b for b in response.content if b.type == "tool_use"
-                ]
+                tool_blocks = [b for b in response.content if b.type == "tool_use"]
 
                 # Pre-flight: evaluate ALL tools before executing ANY.
                 # If any tool is DENY or REQUIRE_APPROVAL, none execute.
                 policies = [
-                    (block, evaluate(
-                        block.name, dict(block.input),
-                        session_id=session_id,
-                    ))
+                    (
+                        block,
+                        evaluate(
+                            block.name,
+                            dict(block.input),
+                            session_id=session_id,
+                        ),
+                    )
                     for block in tool_blocks
                 ]
 
@@ -309,7 +330,7 @@ class AgentLoop:
                 for block, policy in policies:
                     if policy.decision == Decision.DENY:
                         raw = f"BLOCKED: {policy.description}"
-                    elif any_blocked and policy.decision == Decision.REQUIRE_APPROVAL:
+                    elif policy.decision == Decision.REQUIRE_APPROVAL:
                         raw = (
                             f"APPROVAL REQUIRED: {policy.description}. "
                             f"Ask the user for permission before proceeding."
@@ -327,6 +348,7 @@ class AgentLoop:
                             raw = f"Tool '{block.name}' not configured"
                         else:
                             import time as _time
+
                             _t0 = _time.monotonic()
                             _tool_error: Exception | None = None
                             try:
@@ -358,14 +380,10 @@ class AgentLoop:
                             "content": wrapped,
                         }
                     )
-                messages.append(
-                    {"role": "assistant", "content": response.content}
-                )
+                messages.append({"role": "assistant", "content": response.content})
 
                 # Budget warning: inject wrap-up hint at 70%
-                warning_threshold = (
-                    self.cost.per_message_cap_usd * _BUDGET_WARNING_RATIO
-                )
+                warning_threshold = self.cost.per_message_cap_usd * _BUDGET_WARNING_RATIO
                 if session_cost > warning_threshold:
                     tool_results.append(
                         {
