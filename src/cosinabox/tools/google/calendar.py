@@ -6,8 +6,8 @@ runs `find_conflicts` first.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from datetime import datetime, timedelta
+from dataclasses import dataclass, field
+from datetime import UTC, datetime, time, timedelta
 from typing import Any
 
 try:
@@ -35,11 +35,17 @@ class CalendarEvent:
     summary: str
     start: datetime
     end: datetime
+    attendees: list[str] = field(default_factory=list)
 
 
 def _parse_dt(value: dict[str, Any]) -> datetime:
     raw = value.get("dateTime") or value.get("date")
-    return datetime.fromisoformat(str(raw).replace("Z", "+00:00"))
+    dt = datetime.fromisoformat(str(raw).replace("Z", "+00:00"))
+    # All-day events produce naive datetimes (just a date). Normalize to UTC.
+    if dt.tzinfo is None:
+        # Use midnight UTC for all-day events
+        dt = datetime.combine(dt.date(), time(0, 0), tzinfo=UTC)
+    return dt
 
 
 def _list_events_for_service(
@@ -62,6 +68,7 @@ def _list_events_for_service(
             summary=item.get("summary", ""),
             start=_parse_dt(item["start"]),
             end=_parse_dt(item["end"]),
+            attendees=[a.get("email", "") for a in item.get("attendees", []) if a.get("email")],
         )
         for item in resp.get("items", [])
     ]
@@ -196,4 +203,5 @@ class CalendarTool:
             summary=resp.get("summary", ""),
             start=_parse_dt(resp["start"]),
             end=_parse_dt(resp["end"]),
+            attendees=[a.get("email", "") for a in resp.get("attendees", []) if a.get("email")],
         )
