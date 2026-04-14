@@ -61,6 +61,7 @@ HONESTY:
 ## Capabilities
 
 Commands: /help, /status, /cost, /brief, /analytics
+Rela: ask about relationship health (e.g., "how's my relationship with Alice?")
 """
 
 _SYSTEM_PROMPT = Template(_SYSTEM_PROMPT_SRC)

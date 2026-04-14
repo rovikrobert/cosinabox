@@ -11,6 +11,10 @@ Your CoS runs background jobs on a schedule. Enable or disable them in `jobs.yam
 | followup_reminder | disabled | 9:30 AM | Surfaces stale stakeholder contacts |
 | inbound_email_check | disabled | every 5 min | Alerts on urgent inbound email |
 | crm_email_sync | disabled | 5:45 PM | Updates CRM from today's sent emails |
+| extract_fireflies | disabled | 7:00 AM | Extract facts from meeting transcripts |
+| extract_gmail | disabled | 7:15 AM | Extract facts from stakeholder emails |
+| post_meeting_debrief | disabled | every 5 min | Sends summary after meetings end |
+| rela_daily_scan | disabled | 7:50 AM | Check relationship health |
 
 ## Enabling a job
 

@@ -128,6 +128,12 @@ DEFAULT_RULES: list[PolicyRule] = [
         "fireflies_*", Decision.ALLOW, priority=200, description="Transcript access is read-only"
     ),
     PolicyRule("web_search", Decision.ALLOW, priority=200, description="Web search is read-only"),
+    PolicyRule(
+        "rela_query",
+        Decision.ALLOW,
+        priority=200,
+        description="Sub-agent query is read-only",
+    ),
     # Drafts are safe (user reviews before sending)
     PolicyRule(
         "gmail_compose",

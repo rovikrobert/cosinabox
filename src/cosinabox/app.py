@@ -302,21 +302,29 @@ class App:
             timezone=timezone,
         )
 
-        from anthropic import Anthropic
+        from anthropic import Anthropic as _Anthropic
 
         from cosinabox.memory import Memory
         from cosinabox.tools.registry import build_tool_registry
 
+        # Conversation memory (SQLite in user's config dir)
+        memory = Memory(db_path=self.config_dir / ".cosinabox" / "memory.db")
+
+        # --- Memory client (for extraction + Rela) ---
+        from cosinabox.memory.client import resolve_memory_client
+
+        memory_client = resolve_memory_client(
+            db_path=self.config_dir / ".cosinabox" / "memory.db",
+        )
+
+        # Initial tool registry (without rela_query — loop not yet created)
         tool_definitions, tool_handlers = build_tool_registry(
             tool_instances,
             timezone=timezone,
         )
 
-        # Conversation memory (SQLite in user's config dir)
-        memory = Memory(db_path=self.config_dir / ".cosinabox" / "memory.db")
-
         loop = AgentLoop(
-            anthropic_client=Anthropic(),
+            anthropic_client=_Anthropic(),
             router=Router(),
             cost_tracker=CostTracker(
                 per_message_cap_usd=defaults.COST_PER_MESSAGE_CAP_USD,
@@ -330,6 +338,23 @@ class App:
             tool_iteration_delay_s=defaults.TOOL_ITERATION_DELAY_S,
             system_prompt=system_prompt,
         )
+
+        # Rela agent (created after loop so it can use it; needs to be wired
+        # back into the loop's tool registry so rela_query is available in DMs)
+        rela_agent = None
+        if any(jobs_config.get(j, {}).get("enabled") for j in ("post_meeting_debrief", "rela_daily_scan")):
+            from cosinabox.agent.rela import create_rela_agent
+
+            rela_agent = create_rela_agent(
+                agent_loop=loop, memory_client=memory_client,
+            )
+
+        tool_definitions, tool_handlers = build_tool_registry(
+            tool_instances, timezone=timezone, rela_agent=rela_agent,
+        )
+        # Patch updated registry into the already-constructed loop
+        loop.tools = tool_handlers
+        loop.tool_definitions = tool_definitions
 
         # --- Scheduler ---
         # Set the operating timezone from personality.md BEFORE creating
@@ -398,6 +423,59 @@ class App:
                     gmail=gmail, attio=tool_instances.get("attio"),
                 )
                 cron = cfg.get("schedule", "45 17 * * *")
+                scheduler.add_job(job, cron=cron)
+                logger.info("Registered %s at %s", job_name, cron)
+            elif job_name == "extract_fireflies":
+                from cosinabox.jobs.extract_fireflies import ExtractFirefliesJob
+
+                job = ExtractFirefliesJob(
+                    fireflies=tool_instances.get("fireflies"),
+                    memory_client=memory_client,
+                    db=memory,
+                    anthropic_client=_Anthropic(),
+                    cost_tracker=loop.cost,
+                )
+                cron = cfg.get("schedule", "0 7 * * *")
+                scheduler.add_job(job, cron=cron)
+                logger.info("Registered %s at %s", job_name, cron)
+            elif job_name == "extract_gmail":
+                from cosinabox.jobs.extract_gmail import ExtractGmailJob
+
+                job = ExtractGmailJob(
+                    gmail=gmail,
+                    memory_client=memory_client,
+                    db=memory,
+                    anthropic_client=_Anthropic(),
+                    stakeholders=stakeholders,
+                    cost_tracker=loop.cost,
+                )
+                cron = cfg.get("schedule", "15 7 * * *")
+                scheduler.add_job(job, cron=cron)
+                logger.info("Registered %s at %s", job_name, cron)
+            elif job_name == "post_meeting_debrief":
+                from cosinabox.jobs.post_meeting_debrief import PostMeetingDebriefJob
+
+                job = PostMeetingDebriefJob(
+                    calendar=calendar,
+                    fireflies=tool_instances.get("fireflies"),
+                    db=memory,
+                    send_fn=send_telegram,
+                    skip_titles=jobs_config.get("pre_meeting_prep", {}).get(
+                        "skip_if_calendar_title_matches",
+                        [],
+                    ),
+                    rela=rela_agent,
+                )
+                scheduler.add_job(job, cron="*/5 * * * *")
+                logger.info("Registered %s (every 5 min)", job_name)
+            elif job_name == "rela_daily_scan":
+                from cosinabox.jobs.rela_daily_scan import RelaDailyScanJob
+
+                job = RelaDailyScanJob(
+                    rela=rela_agent,
+                    stakeholders=stakeholders,
+                )
+                cron = cfg.get("schedule", "50 7 * * *")
                 scheduler.add_job(job, cron=cron)
                 logger.info("Registered %s at %s", job_name, cron)
 
@@ -490,7 +568,6 @@ class App:
             except Exception:
                 logger.exception("Agent loop failed")
                 reply = "(error processing message)"
-
             if blocked:
                 _pending_tools[session] = (blocked, _time.time())
 

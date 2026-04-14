@@ -78,6 +78,16 @@ CREATE TABLE IF NOT EXISTS processed_message_ids (
     message_id TEXT PRIMARY KEY,
     created_at TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS extraction_state (
+    key TEXT PRIMARY KEY,
+    processed_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS debrief_state (
+    ical_uid TEXT PRIMARY KEY,
+    debriefed_at TEXT NOT NULL
+);
 """
 
 
