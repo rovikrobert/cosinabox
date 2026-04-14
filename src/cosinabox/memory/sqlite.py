@@ -98,7 +98,7 @@ CREATE TABLE IF NOT EXISTS scheduling_requests (
     date_range_end TEXT NOT NULL,
     status TEXT NOT NULL DEFAULT 'proposing'
         CHECK(status IN (
-            'proposing', 'rovik_review', 'polling', 'backchannel',
+            'proposing', 'owner_review', 'polling', 'backchannel',
             'converged', 'booked', 'cancelled', 'expired'
         )),
     preferred_timezone TEXT DEFAULT 'UTC',
@@ -179,6 +179,7 @@ class Memory:
             check_same_thread=False,  # APScheduler + Telegram use different threads
         )
         self._conn.execute("PRAGMA journal_mode=WAL")
+        self._conn.execute("PRAGMA foreign_keys=ON")  # enforce REFERENCES constraints
         self._conn.row_factory = sqlite3.Row
         self._conn.executescript(_SCHEMA)
         self._conn.commit()

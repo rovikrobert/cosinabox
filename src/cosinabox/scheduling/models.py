@@ -14,13 +14,17 @@ class SchedulingStatus(str, Enum):
     """Status values for a scheduling request state machine."""
 
     PROPOSING = "proposing"
-    ROVIK_REVIEW = "rovik_review"  # Name kept for DB schema compatibility; means "owner_review"
+    OWNER_REVIEW = "owner_review"
     POLLING = "polling"
     CONVERGED = "converged"
     BOOKED = "booked"
     CANCELLED = "cancelled"
     EXPIRED = "expired"
     BACKCHANNEL = "backchannel"
+
+
+class SchedulingStateError(Exception):
+    """Raised when a DB integrity constraint is violated (bad status, FK, etc.)."""
 
 
 @dataclass
@@ -58,7 +62,7 @@ class SchedulingRequest:
     participants: list[Participant] = field(default_factory=list)
     date_range_start: date = field(default_factory=date.today)
     date_range_end: date = field(default_factory=date.today)
-    status: str = SchedulingStatus.PROPOSING
+    status: str = SchedulingStatus.PROPOSING.value
     preferred_timezone: str = "UTC"
     notes: str | None = None
     slots: list[TimeSlot] = field(default_factory=list)

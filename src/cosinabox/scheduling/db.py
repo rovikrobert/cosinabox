@@ -11,9 +11,12 @@ import uuid
 from datetime import UTC, date, datetime
 from typing import Any
 
+import sqlite3
+
 from cosinabox.scheduling.models import (
     Participant,
     SchedulingRequest,
+    SchedulingStateError,
     SchedulingStatus,
     TimeSlot,
 )
@@ -84,13 +87,16 @@ def get_request(db: Any, request_id: str) -> SchedulingRequest | None:
 
 
 def update_request_status(db: Any, request_id: str, status: str) -> None:
-    """Transition a request to a new status."""
+    """Transition a request to a new status. Raises SchedulingStateError on bad status."""
     now = datetime.now(UTC).isoformat()
-    db._conn.execute(
-        "UPDATE scheduling_requests SET status = ?, updated_at = ? WHERE id = ?",
-        (status, now, request_id),
-    )
-    db._conn.commit()
+    try:
+        db._conn.execute(
+            "UPDATE scheduling_requests SET status = ?, updated_at = ? WHERE id = ?",
+            (status, now, request_id),
+        )
+        db._conn.commit()
+    except sqlite3.IntegrityError as exc:
+        raise SchedulingStateError(f"Invalid status '{status}': {exc}") from exc
 
 
 def get_active_requests(

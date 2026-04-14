@@ -168,6 +168,28 @@ class TestResponses:
             )
 
 
+class TestIntegrityConstraints:
+    def test_invalid_status_raises_scheduling_error(self, mem, sample_request):
+        from cosinabox.scheduling.models import SchedulingStateError
+
+        rid = sched_db.create_request(mem, sample_request)
+        with pytest.raises(SchedulingStateError):
+            sched_db.update_request_status(mem, rid, "not_a_real_status")
+
+    def test_foreign_key_enforcement(self, mem):
+        import sqlite3
+        # Try to insert a participant referencing a nonexistent request
+        with pytest.raises(sqlite3.IntegrityError):
+            mem._conn.execute(
+                """INSERT INTO scheduling_participants
+                   (request_id, name, timezone, channel, status, created_at)
+                   VALUES (?, ?, ?, ?, ?, ?)""",
+                ("nonexistent-req", "Ghost", "UTC", "gmail", "pending",
+                 datetime.now(UTC).isoformat()),
+            )
+            mem._conn.commit()
+
+
 class TestMoves:
     def test_record_and_undo_move(self, mem, sample_request):
         rid = sched_db.create_request(mem, sample_request)
