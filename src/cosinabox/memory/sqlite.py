@@ -88,6 +88,78 @@ CREATE TABLE IF NOT EXISTS debrief_state (
     ical_uid TEXT PRIMARY KEY,
     debriefed_at TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS scheduling_requests (
+    id TEXT PRIMARY KEY,
+    title TEXT NOT NULL,
+    duration_minutes INTEGER NOT NULL,
+    requested_by TEXT NOT NULL DEFAULT 'owner',
+    date_range_start TEXT NOT NULL,
+    date_range_end TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'proposing'
+        CHECK(status IN (
+            'proposing', 'rovik_review', 'polling', 'backchannel',
+            'converged', 'booked', 'cancelled', 'expired'
+        )),
+    preferred_timezone TEXT DEFAULT 'UTC',
+    notes TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_scheduling_requests_status ON scheduling_requests(status);
+
+CREATE TABLE IF NOT EXISTS scheduling_participants (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    request_id TEXT NOT NULL REFERENCES scheduling_requests(id),
+    name TEXT NOT NULL,
+    email TEXT,
+    telegram_id TEXT,
+    timezone TEXT NOT NULL DEFAULT 'UTC',
+    channel TEXT NOT NULL DEFAULT 'gmail'
+        CHECK(channel IN ('telegram', 'gmail')),
+    status TEXT NOT NULL DEFAULT 'pending'
+        CHECK(status IN ('pending', 'sent', 'responded', 'nudged', 'no_response')),
+    gmail_thread_id TEXT,
+    gmail_draft_id TEXT,
+    outreach_sent_at TEXT,
+    created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_scheduling_participants_request ON scheduling_participants(request_id);
+
+CREATE TABLE IF NOT EXISTS scheduling_slots (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    request_id TEXT NOT NULL REFERENCES scheduling_requests(id),
+    start_time TEXT NOT NULL,
+    end_time TEXT NOT NULL,
+    score REAL DEFAULT 0.0,
+    requires_move TEXT,
+    move_approved INTEGER DEFAULT 0,
+    created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_scheduling_slots_request ON scheduling_slots(request_id);
+
+CREATE TABLE IF NOT EXISTS scheduling_responses (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    request_id TEXT NOT NULL REFERENCES scheduling_requests(id),
+    participant_id INTEGER NOT NULL REFERENCES scheduling_participants(id),
+    slot_id INTEGER NOT NULL REFERENCES scheduling_slots(id),
+    response TEXT NOT NULL CHECK(response IN ('yes', 'if_needed', 'no')),
+    responded_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_scheduling_responses_request ON scheduling_responses(request_id);
+
+CREATE TABLE IF NOT EXISTS scheduling_moves (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    request_id TEXT NOT NULL REFERENCES scheduling_requests(id),
+    event_id TEXT NOT NULL,
+    original_start TEXT NOT NULL,
+    original_end TEXT NOT NULL,
+    new_start TEXT NOT NULL,
+    new_end TEXT NOT NULL,
+    undone INTEGER DEFAULT 0,
+    created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_scheduling_moves_request ON scheduling_moves(request_id);
 """
 
 
