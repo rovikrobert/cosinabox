@@ -540,6 +540,7 @@ def build_tool_registry(
     tool_instances: dict[str, Any],
     *,
     timezone: str = "UTC",
+    rela_agent: Any | None = None,
 ) -> tuple[list[dict[str, Any]], dict[str, Callable[..., str]]]:
     """Build Claude API tool definitions and handler dict from tool instances.
 
@@ -583,6 +584,14 @@ def build_tool_registry(
         definitions.extend(WEB_SEARCH_TOOL_DEFINITIONS)
         handlers.update(_build_web_search_handlers(tool_instances["web_search"]))
         logger.info("Registered %d web search tools", len(WEB_SEARCH_TOOL_DEFINITIONS))
+
+    # Rela query tool (registered if rela agent is available)
+    if rela_agent is not None:
+        from cosinabox.tools.rela_tool import RELA_QUERY_DEFINITION, rela_query_handler
+
+        definitions.append(RELA_QUERY_DEFINITION)
+        handlers["rela_query"] = rela_query_handler(rela_agent)
+        logger.info("Registered rela_query tool")
 
     # Consistency check: every definition has a matching handler
     def_names = {d["name"] for d in definitions}

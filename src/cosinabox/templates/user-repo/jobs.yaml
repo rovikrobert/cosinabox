@@ -20,3 +20,14 @@ jobs:
   crm_email_sync:
     enabled: false
     schedule: "45 17 * * *"   # 5:45 PM — syncs sent email timestamps to CRM
+  extract_fireflies:
+    enabled: false
+    schedule: "0 7 * * *"      # 7:00 AM — extract facts from meeting transcripts
+  extract_gmail:
+    enabled: false
+    schedule: "15 7 * * *"     # 7:15 AM — extract facts from stakeholder emails
+  post_meeting_debrief:
+    enabled: false               # sends summary after meetings end
+  rela_daily_scan:
+    enabled: false
+    schedule: "50 7 * * *"     # 7:50 AM — check relationship health
