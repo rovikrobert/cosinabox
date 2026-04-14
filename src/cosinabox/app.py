@@ -373,11 +373,23 @@ class App:
         scheduler.start()
 
         # --- Telegram DM polling ---
+        # Track tools that are pending approval per session, with timestamps
+        # so we can evict stale entries (user walked away without responding).
+        import time as _time
+
         from telegram import Update
         from telegram.ext import Application, MessageHandler, filters
 
-        # Track tools that are pending approval per session
-        _pending_tool: dict[str, str] = {}  # session_id → tool_name
+        _pending_tool: dict[str, tuple[str, float]] = {}
+        _PENDING_TOOL_TTL_S = 300  # 5 minutes
+
+        def _sweep_pending_tools() -> None:
+            now = _time.time()
+            expired = [
+                sid for sid, (_, ts) in _pending_tool.items() if now - ts > _PENDING_TOOL_TTL_S
+            ]
+            for sid in expired:
+                del _pending_tool[sid]
 
         _APPROVAL_PHRASES = {
             "yes",
@@ -403,11 +415,13 @@ class App:
             session = f"dm-{update.effective_chat.id}"
             logger.info("DM: %s", user_text[:80])
 
+            _sweep_pending_tools()
+
             # Check if this message is an approval for a pending tool
             if session in _pending_tool and user_text.strip().lower() in _APPROVAL_PHRASES:
                 from cosinabox.agent.policy import grant_temporary_approval
 
-                tool_name = _pending_tool.pop(session)
+                tool_name, _ = _pending_tool.pop(session)
                 grant_temporary_approval(session, tool_name)
                 logger.info("User approved %s in %s", tool_name, session)
 
@@ -421,7 +435,7 @@ class App:
             # Track if any tool call was blocked by REQUIRE_APPROVAL
             for tc in result.tool_calls:
                 if "APPROVAL REQUIRED" in tc.result:
-                    _pending_tool[session] = tc.name
+                    _pending_tool[session] = (tc.name, _time.time())
                     break
 
             for i in range(0, len(reply), 4000):
