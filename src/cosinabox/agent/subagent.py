@@ -53,17 +53,22 @@ class SubAgent:
         def _run() -> None:
             try:
                 session = f"{self.name}-ingest-{uuid.uuid4().hex[:8]}"
-                self._loop.run(prompt=content, session_id=session)
+                self._loop.run(
+                    prompt=content, session_id=session,
+                    system_prompt_override=self.system_prompt,
+                )
             except Exception:
                 logger.warning("SubAgent %s ingest failed", self.name, exc_info=True)
-
         thread = threading.Thread(target=_run, daemon=True)
         thread.start()
 
     def query(self, question: str) -> str:
         """Synchronous query — blocks until response is ready."""
         session = f"{self.name}-query"
-        result = self._loop.run(prompt=question, session_id=session)
+        result = self._loop.run(
+            prompt=question, session_id=session,
+            system_prompt_override=self.system_prompt,
+        )
         return result.final_text or "(no response)"
 
 

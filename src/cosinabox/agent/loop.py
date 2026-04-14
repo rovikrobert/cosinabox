@@ -138,7 +138,7 @@ class AgentLoop:
             from cosinabox.agent.logging import ToolLogger
             self._tool_logger = ToolLogger(db=self.memory)
 
-    def run(self, *, prompt: str, session_id: str) -> LoopResult:
+    def run(self, *, prompt: str, session_id: str, system_prompt_override: str | None = None) -> LoopResult:
         global _consecutive_failures
 
         # Circuit breaker check
@@ -155,7 +155,7 @@ class AgentLoop:
 
         # Load conversation history from memory (if available)
         messages: list[dict[str, Any]] = []
-        effective_system = self.system_prompt
+        effective_system = system_prompt_override if system_prompt_override is not None else self.system_prompt
         if self.memory is not None:
             # Compact old messages before loading (runs Sonnet if threshold exceeded)
             from cosinabox.agent.summarize import maybe_summarize
