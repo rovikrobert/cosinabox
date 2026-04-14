@@ -302,7 +302,8 @@ class App:
         from cosinabox.tools.registry import build_tool_registry
 
         tool_definitions, tool_handlers = build_tool_registry(
-            tool_instances, timezone=timezone,
+            tool_instances,
+            timezone=timezone,
         )
 
         # Conversation memory (SQLite in user's config dir)
@@ -324,6 +325,20 @@ class App:
         )
 
         # --- Scheduler ---
+        # Set the operating timezone from personality.md BEFORE creating
+        # the scheduler, so cron expressions fire in the user's local time.
+        from cosinabox.timezone import set_timezone
+
+        try:
+            set_timezone(timezone)
+            logger.info("Scheduler timezone set to %s", timezone)
+        except KeyError:
+            logger.warning(
+                "Invalid timezone %r in personality.md — falling back to %s",
+                timezone,
+                defaults.DEFAULT_TIMEZONE,
+            )
+
         scheduler = SchedulerRunner()
         gmail = tool_instances.get("gmail")
         calendar = tool_instances.get("calendar")
@@ -365,8 +380,17 @@ class App:
         _pending_tool: dict[str, str] = {}  # session_id → tool_name
 
         _APPROVAL_PHRASES = {
-            "yes", "yep", "yeah", "go ahead", "approved", "do it",
-            "send it", "ok", "sure", "confirm", "approve",
+            "yes",
+            "yep",
+            "yeah",
+            "go ahead",
+            "approved",
+            "do it",
+            "send it",
+            "ok",
+            "sure",
+            "confirm",
+            "approve",
         }
 
         async def handle_message(update: Update, _ctx: Any) -> None:
@@ -418,20 +442,35 @@ class App:
 
         tg_app.add_handler(CommandHandler("help", cmd_help))
         tg_app.add_handler(CommandHandler("start", cmd_help))
-        tg_app.add_handler(CommandHandler("status", build_status_handler(
-            name=name,
-            timezone=timezone,
-            tool_definitions=tool_definitions,
-            jobs_config=jobs_config,
-            stakeholder_count=len(stakeholders),
-        )))
-        tg_app.add_handler(CommandHandler("cost", build_cost_handler(
-            cost_tracker=loop.cost,
-        )))
-        tg_app.add_handler(CommandHandler("brief", build_brief_handler(
-            agent_loop=loop,
-            chat_id=chat_id,
-        )))
+        tg_app.add_handler(
+            CommandHandler(
+                "status",
+                build_status_handler(
+                    name=name,
+                    timezone=timezone,
+                    tool_definitions=tool_definitions,
+                    jobs_config=jobs_config,
+                    stakeholder_count=len(stakeholders),
+                ),
+            )
+        )
+        tg_app.add_handler(
+            CommandHandler(
+                "cost",
+                build_cost_handler(
+                    cost_tracker=loop.cost,
+                ),
+            )
+        )
+        tg_app.add_handler(
+            CommandHandler(
+                "brief",
+                build_brief_handler(
+                    agent_loop=loop,
+                    chat_id=chat_id,
+                ),
+            )
+        )
 
         logger.info(
             "cosinabox running: %s's CoS (%s)",
