@@ -114,7 +114,7 @@ class PostMeetingDebriefJob(Job):
             if self.fireflies is not None:
                 try:
                     transcripts = self.fireflies.list_recent_meetings(hours=24)
-                    cal_emails: set[str] = set()
+                    cal_emails: set[str] = {a.lower() for a in (evt.attendees or [])}
                     candidates = [
                         t for t in transcripts
                         if _transcript_matches(
