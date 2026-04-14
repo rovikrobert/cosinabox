@@ -46,3 +46,10 @@ def test_memory_uses_wal_mode(tmp_path):
     cur = mem._conn.execute("PRAGMA journal_mode")
     assert cur.fetchone()[0] == "wal"
     mem.close()
+
+
+def test_memory_enforces_foreign_keys(tmp_path):
+    mem = Memory(db_path=tmp_path / "test.db")
+    cur = mem._conn.execute("PRAGMA foreign_keys")
+    assert cur.fetchone()[0] == 1
+    mem.close()

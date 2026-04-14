@@ -19,6 +19,21 @@ def setup_function() -> None:
 
 
 # ---------------------------------------------------------------------------
+# TTL alignment
+# ---------------------------------------------------------------------------
+
+
+class TestTTLAlignment:
+    def test_approval_ttl_matches_pending_tool_window(self) -> None:
+        """Approval tokens must not expire before the user's reply window."""
+        from cosinabox.agent.policy import _APPROVAL_TTL_S
+
+        # app.py _PENDING_TOOL_TTL_S is 300; approvals must last at least as long
+        # so a user approving at t=4min doesn't hit an already-expired token.
+        assert _APPROVAL_TTL_S >= 300
+
+
+# ---------------------------------------------------------------------------
 # Default rules
 # ---------------------------------------------------------------------------
 

@@ -85,6 +85,61 @@ def test_single_tool_call_then_final_text() -> None:
     assert result.tool_calls[0].name == "weather"
 
 
+def test_allowed_tools_filters_tool_definitions_sent_to_api() -> None:
+    """When allowed_tools is set, only those tools are exposed to Sonnet."""
+    client = MagicMock()
+    client.messages.create.return_value = _text_response("ok")
+    loop = AgentLoop(
+        anthropic_client=client,
+        router=Router(available_tools={"gmail_send", "gmail_read"}),
+        cost_tracker=CostTracker(per_message_cap_usd=10, daily_cap_usd=100),
+        tools={"gmail_send": MagicMock(), "gmail_read": MagicMock()},
+        tool_definitions=[
+            {"name": "gmail_send", "description": "x", "input_schema": {}},
+            {"name": "gmail_read", "description": "y", "input_schema": {}},
+        ],
+    )
+    loop.run(prompt="hi", session_id="s1", allowed_tools=["gmail_read"])
+    call_kwargs = client.messages.create.call_args.kwargs
+    exposed = [t["name"] for t in call_kwargs.get("tools", [])]
+    assert "gmail_send" not in exposed
+    assert "gmail_read" in exposed
+
+
+def test_allowed_tools_empty_list_exposes_no_tools() -> None:
+    client = MagicMock()
+    client.messages.create.return_value = _text_response("ok")
+    loop = AgentLoop(
+        anthropic_client=client,
+        router=Router(available_tools={"gmail_send"}),
+        cost_tracker=CostTracker(per_message_cap_usd=10, daily_cap_usd=100),
+        tools={"gmail_send": MagicMock()},
+        tool_definitions=[{"name": "gmail_send", "description": "x", "input_schema": {}}],
+    )
+    loop.run(prompt="hi", session_id="s1", allowed_tools=[])
+    call_kwargs = client.messages.create.call_args.kwargs
+    assert "tools" not in call_kwargs or call_kwargs["tools"] == []
+
+
+def test_allowed_tools_blocks_dispatch_of_filtered_tool() -> None:
+    """If Sonnet tries to call a disallowed tool, it must not execute."""
+    blocked_fn = MagicMock(return_value="should not run")
+    client = MagicMock()
+    client.messages.create.side_effect = [
+        _tool_call_response("gmail_send", "tu_1", {}),
+        _text_response("done"),
+    ]
+    loop = AgentLoop(
+        anthropic_client=client,
+        router=Router(available_tools={"gmail_send"}),
+        cost_tracker=CostTracker(per_message_cap_usd=10, daily_cap_usd=100),
+        tools={"gmail_send": blocked_fn},
+        tool_definitions=[{"name": "gmail_send", "description": "x", "input_schema": {}}],
+    )
+    loop.run(prompt="hi", session_id="s1", allowed_tools=[])
+    blocked_fn.assert_not_called()
+
+
 def test_max_iterations_breaks_loop() -> None:
     loop = make_loop(
         [_tool_call_response("noop", f"tu_{i}", {}) for i in range(10)],

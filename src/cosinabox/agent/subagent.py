@@ -41,12 +41,17 @@ class SubAgent:
         system_prompt: str,
         agent_loop: Any,
         memory_client: Any,
+        allowed_tools: list[str] | None = None,
     ) -> None:
         self.name = name
         self.namespace = namespace
         self.system_prompt = system_prompt
         self._loop = agent_loop
         self._namespaced_client = _NamespacedMemoryClient(memory_client, namespace)
+        # Default [] = no external tools. Sub-agents should opt-in explicitly
+        # rather than inherit the full parent registry (which could include
+        # write tools like gmail_send that a read-only sub-agent must not reach).
+        self.allowed_tools: list[str] = [] if allowed_tools is None else list(allowed_tools)
 
     def ingest(self, content: str) -> None:
         """Fire-and-forget: process content in a background thread."""
@@ -56,6 +61,7 @@ class SubAgent:
                 self._loop.run(
                     prompt=content, session_id=session,
                     system_prompt_override=self.system_prompt,
+                    allowed_tools=self.allowed_tools,
                 )
             except Exception:
                 logger.warning("SubAgent %s ingest failed", self.name, exc_info=True)
@@ -64,10 +70,11 @@ class SubAgent:
 
     def query(self, question: str) -> str:
         """Synchronous query — blocks until response is ready."""
-        session = f"{self.name}-query"
+        session = f"{self.name}-query-{uuid.uuid4().hex[:8]}"
         result = self._loop.run(
             prompt=question, session_id=session,
             system_prompt_override=self.system_prompt,
+            allowed_tools=self.allowed_tools,
         )
         return result.final_text or "(no response)"
 

@@ -107,6 +107,7 @@ class Memory:
             check_same_thread=False,  # APScheduler + Telegram use different threads
         )
         self._conn.execute("PRAGMA journal_mode=WAL")
+        self._conn.execute("PRAGMA foreign_keys=ON")
         self._conn.row_factory = sqlite3.Row
         self._conn.executescript(_SCHEMA)
         self._conn.commit()
