@@ -56,3 +56,39 @@ class TestSubAgent:
         agent._namespaced_client.recall(query="test", namespace="wrong")
         mc.recall.assert_called_once()
         assert mc.recall.call_args.kwargs["namespace"] == "rela"
+
+    def test_allowed_tools_passed_to_loop(self):
+        mock_loop = MagicMock()
+        mock_loop.run.return_value = MagicMock(final_text="ok")
+        agent = SubAgent(
+            name="rela", namespace="rela", system_prompt="test",
+            agent_loop=mock_loop, memory_client=MagicMock(),
+            allowed_tools=[],
+        )
+        agent.query("any")
+        assert mock_loop.run.call_args.kwargs.get("allowed_tools") == []
+
+    def test_allowed_tools_default_is_empty_list(self):
+        mock_loop = MagicMock()
+        mock_loop.run.return_value = MagicMock(final_text="ok")
+        agent = SubAgent(
+            name="rela", namespace="rela", system_prompt="test",
+            agent_loop=mock_loop, memory_client=MagicMock(),
+        )
+        agent.query("any")
+        assert mock_loop.run.call_args.kwargs.get("allowed_tools") == []
+
+    def test_query_session_ids_are_unique(self):
+        mock_loop = MagicMock()
+        mock_loop.run.return_value = MagicMock(final_text="ok")
+        agent = SubAgent(
+            name="rela", namespace="rela", system_prompt="test",
+            agent_loop=mock_loop, memory_client=MagicMock(),
+        )
+        agent.query("q1")
+        agent.query("q2")
+        sid1 = mock_loop.run.call_args_list[0].kwargs["session_id"]
+        sid2 = mock_loop.run.call_args_list[1].kwargs["session_id"]
+        assert sid1 != sid2
+        assert sid1.startswith("rela-query-")
+        assert sid2.startswith("rela-query-")

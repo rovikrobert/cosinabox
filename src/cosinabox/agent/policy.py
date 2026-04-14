@@ -42,7 +42,9 @@ class PolicyResult:
 # Temporary approval tokens (one-shot, in-memory, TTL-based)
 # ---------------------------------------------------------------------------
 
-_APPROVAL_TTL_S = 120  # 2 minutes
+_APPROVAL_TTL_S = 300  # 5 minutes — matches app.py _PENDING_TOOL_TTL_S so a
+# user approving at the edge of their reply window doesn't hit an
+# already-expired token.
 
 # (session_id, tool_name) → grant timestamp
 _pending_approvals: dict[tuple[str, str], float] = {}
