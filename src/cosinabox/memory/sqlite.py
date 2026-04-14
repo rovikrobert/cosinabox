@@ -38,6 +38,46 @@ CREATE TABLE IF NOT EXISTS summaries (
 );
 CREATE INDEX IF NOT EXISTS idx_summaries_session
     ON summaries (session_id);
+
+CREATE TABLE IF NOT EXISTS tool_logs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    session_id TEXT NOT NULL,
+    tool_name TEXT NOT NULL,
+    duration_ms INTEGER NOT NULL,
+    error_type TEXT NOT NULL DEFAULT 'none',
+    created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_tool_logs_created ON tool_logs (created_at);
+CREATE INDEX IF NOT EXISTS idx_tool_logs_tool ON tool_logs (tool_name);
+
+CREATE TABLE IF NOT EXISTS daily_costs (
+    date TEXT PRIMARY KEY,
+    total_cost REAL NOT NULL DEFAULT 0,
+    opus_calls INTEGER NOT NULL DEFAULT 0,
+    sonnet_calls INTEGER NOT NULL DEFAULT 0,
+    tool_calls INTEGER NOT NULL DEFAULT 0
+);
+
+CREATE TABLE IF NOT EXISTS job_runs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    job_name TEXT NOT NULL,
+    started_at TEXT NOT NULL,
+    duration_ms INTEGER NOT NULL,
+    status TEXT NOT NULL,
+    output_length INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_job_runs_created ON job_runs (created_at);
+
+CREATE TABLE IF NOT EXISTS gmail_poll_state (
+    account_index INTEGER PRIMARY KEY,
+    last_check_ts TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS processed_message_ids (
+    message_id TEXT PRIMARY KEY,
+    created_at TEXT NOT NULL
+);
 """
 
 
@@ -52,7 +92,11 @@ class Memory:
     def __init__(self, db_path: str | Path) -> None:
         self.db_path = Path(db_path)
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
-        self._conn = sqlite3.connect(self.db_path)
+        self._conn = sqlite3.connect(
+            self.db_path,
+            check_same_thread=False,  # APScheduler + Telegram use different threads
+        )
+        self._conn.execute("PRAGMA journal_mode=WAL")
         self._conn.row_factory = sqlite3.Row
         self._conn.executescript(_SCHEMA)
         self._conn.commit()

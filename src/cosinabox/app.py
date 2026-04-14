@@ -271,6 +271,12 @@ class App:
         jobs_config = self._load_jobs()
         integrations = self._load_integrations()
 
+        # Set runtime timezone from personality.md — scheduler uses this
+        from cosinabox.timezone import set_timezone
+
+        set_timezone(timezone)
+        logger.info("Timezone set to %s", timezone)
+
         bot_token = os.environ.get("TELEGRAM_BOT_TOKEN")
         chat_id = os.environ.get("TELEGRAM_CHAT_ID")
         if not bot_token or not chat_id:
@@ -315,6 +321,7 @@ class App:
             cost_tracker=CostTracker(
                 per_message_cap_usd=defaults.COST_PER_MESSAGE_CAP_USD,
                 daily_cap_usd=defaults.COST_DAILY_CAP_USD,
+                db=memory,
             ),
             tools=tool_handlers,
             tool_definitions=tool_definitions,
@@ -366,6 +373,34 @@ class App:
                     json={"chat_id": chat_id, "text": text[i : i + 4000]},
                 )
 
+        # --- Register jobs that need send_telegram ---
+        for job_name, cfg in jobs_config.items():
+            if not cfg.get("enabled"):
+                continue
+            if job_name == "inbound_email_check":
+                from cosinabox.jobs.inbound_email_check import InboundEmailCheckJob
+
+                google_cfg = integrations.get("google", {})
+                job = InboundEmailCheckJob(
+                    gmail=gmail,
+                    db=memory,
+                    send_alert=send_telegram,
+                    urgent_senders=google_cfg.get("urgent_senders", []),
+                    poll_interval_minutes=google_cfg.get("poll_interval_minutes", 5),
+                )
+                cron = cfg.get("schedule", "*/5 * * * *")
+                scheduler.add_job(job, cron=cron)
+                logger.info("Registered %s at %s", job_name, cron)
+            elif job_name == "crm_email_sync":
+                from cosinabox.jobs.crm_email_sync import CrmEmailSyncJob
+
+                job = CrmEmailSyncJob(
+                    gmail=gmail, attio=tool_instances.get("attio"),
+                )
+                cron = cfg.get("schedule", "45 17 * * *")
+                scheduler.add_job(job, cron=cron)
+                logger.info("Registered %s at %s", job_name, cron)
+
         self._wire_telegram_output(scheduler, send_telegram)
 
         # --- Start scheduler ---
@@ -380,30 +415,47 @@ class App:
         from telegram import Update
         from telegram.ext import Application, MessageHandler, filters
 
-        _pending_tool: dict[str, tuple[str, float]] = {}
+        # Track tools pending approval per session (may be multiple).
+        # Value is (list_of_tool_names, timestamp) so we can evict stale
+        # entries from abandoned sessions.
+        _pending_tools: dict[str, tuple[list[str], float]] = {}
         _PENDING_TOOL_TTL_S = 300  # 5 minutes
 
         def _sweep_pending_tools() -> None:
             now = _time.time()
             expired = [
-                sid for sid, (_, ts) in _pending_tool.items() if now - ts > _PENDING_TOOL_TTL_S
+                sid for sid, (_, ts) in _pending_tools.items() if now - ts > _PENDING_TOOL_TTL_S
             ]
             for sid in expired:
-                del _pending_tool[sid]
+                del _pending_tools[sid]
 
         _APPROVAL_PHRASES = {
             "yes",
             "yep",
             "yeah",
+            "y",
             "go ahead",
             "approved",
             "do it",
             "send it",
             "ok",
+            "k",
             "sure",
             "confirm",
             "approve",
+            "absolutely",
+            "definitely",
         }
+
+        def _is_approval(text: str) -> bool:
+            """Check if user text is an approval (exact match or common prefix)."""
+            normalized = text.strip().lower()
+            if normalized in _APPROVAL_PHRASES:
+                return True
+            # Handle phrases like "yes please", "ok thanks", "sure thing"
+            first_word = normalized.split()[0] if normalized else ""
+            return first_word in _APPROVAL_PHRASES
+
 
         async def handle_message(update: Update, _ctx: Any) -> None:
             if update.message is None or update.message.text is None:
@@ -417,26 +469,30 @@ class App:
 
             _sweep_pending_tools()
 
-            # Check if this message is an approval for a pending tool
-            if session in _pending_tool and user_text.strip().lower() in _APPROVAL_PHRASES:
+            # Check if this message is an approval for pending tools
+            if session in _pending_tools and _is_approval(user_text):
                 from cosinabox.agent.policy import grant_temporary_approval
 
-                tool_name, _ = _pending_tool.pop(session)
-                grant_temporary_approval(session, tool_name)
-                logger.info("User approved %s in %s", tool_name, session)
+                tool_names, _ts = _pending_tools.pop(session)
+                for tool_name in tool_names:
+                    grant_temporary_approval(session, tool_name)
+                    logger.info("User approved %s in %s", tool_name, session)
 
+            blocked: list[str] = []
             try:
                 result = loop.run(prompt=user_text, session_id=session)
                 reply = result.final_text or "(no response)"
+                blocked = [
+                    tc.name
+                    for tc in result.tool_calls
+                    if "APPROVAL REQUIRED" in tc.result
+                ]
             except Exception:
                 logger.exception("Agent loop failed")
                 reply = "(error processing message)"
 
-            # Track if any tool call was blocked by REQUIRE_APPROVAL
-            for tc in result.tool_calls:
-                if "APPROVAL REQUIRED" in tc.result:
-                    _pending_tool[session] = (tc.name, _time.time())
-                    break
+            if blocked:
+                _pending_tools[session] = (blocked, _time.time())
 
             for i in range(0, len(reply), 4000):
                 await update.message.reply_text(reply[i : i + 4000])
@@ -448,6 +504,7 @@ class App:
         from telegram.ext import CommandHandler
 
         from cosinabox.bot.commands import (
+            build_analytics_handler,
             build_brief_handler,
             build_cost_handler,
             build_status_handler,
@@ -482,6 +539,14 @@ class App:
                 build_brief_handler(
                     agent_loop=loop,
                     chat_id=chat_id,
+                ),
+            )
+        )
+        tg_app.add_handler(
+            CommandHandler(
+                "analytics",
+                build_analytics_handler(
+                    db=memory,
                 ),
             )
         )

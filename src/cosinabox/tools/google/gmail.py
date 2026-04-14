@@ -143,12 +143,18 @@ class GmailTool:
     def send_draft(self, *, draft_id: str, account_index: int = 0) -> dict[str, str]:
         """Send an existing draft by ID. Requires user approval."""
         svc = self._services[min(account_index, len(self._services) - 1)]
-        result = (
-            svc.users()
-            .drafts()
-            .send(userId="me", body={"id": draft_id})
-            .execute()
-        )
+        try:
+            result = (
+                svc.users()
+                .drafts()
+                .send(userId="me", body={"id": draft_id})
+                .execute()
+            )
+        except Exception as exc:
+            return {
+                "message_id": "",
+                "message": f"Failed to send draft '{draft_id}': {exc}",
+            }
         msg_id = result.get("id", "unknown")
         return {
             "message_id": msg_id,

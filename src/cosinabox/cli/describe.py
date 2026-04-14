@@ -41,6 +41,10 @@ def _build_data(config_dir: Path) -> dict[str, Any]:
     enabled_integrations = [k for k, v in integrations.items() if v.get("enabled")]
     disabled_integrations = [k for k, v in integrations.items() if not v.get("enabled")]
 
+    import os
+
+    memory_backend = "remote" if os.getenv("MEMORY_SERVICE_URL") else "local"
+
     return {
         "name": personality.get("name", "Unknown"),
         "role": personality.get("role", "Unknown"),
@@ -63,6 +67,7 @@ def _build_data(config_dir: Path) -> dict[str, Any]:
         },
         "integrations": enabled_integrations,
         "disabled_integrations": disabled_integrations,
+        "memory_backend": memory_backend,
     }
 
 
@@ -71,6 +76,7 @@ def _format_english(data: dict[str, Any]) -> str:
     lines.append(f"Name:      {data['name']}")
     lines.append(f"Role:      {data['role']}")
     lines.append(f"Timezone:  {data['timezone']}")
+    lines.append(f"Memory: {data.get('memory_backend', 'local')}")
     lines.append("")
 
     stakeholders = data.get("stakeholders", [])
