@@ -418,6 +418,7 @@ class App:
                     memory_client=memory_client,
                     db=memory,
                     anthropic_client=_Anthropic(),
+                    cost_tracker=loop.cost,
                 )
                 cron = cfg.get("schedule", "0 7 * * *")
                 scheduler.add_job(job, cron=cron)
@@ -431,6 +432,7 @@ class App:
                     db=memory,
                     anthropic_client=_Anthropic(),
                     stakeholders=stakeholders,
+                    cost_tracker=loop.cost,
                 )
                 cron = cfg.get("schedule", "15 7 * * *")
                 scheduler.add_job(job, cron=cron)
@@ -450,6 +452,16 @@ class App:
                 )
                 scheduler.add_job(job, cron="*/5 * * * *")
                 logger.info("Registered %s (every 5 min)", job_name)
+            elif job_name == "rela_daily_scan":
+                from cosinabox.jobs.rela_daily_scan import RelaDailyScanJob
+
+                job = RelaDailyScanJob(
+                    rela=rela_agent,
+                    stakeholders=stakeholders,
+                )
+                cron = cfg.get("schedule", "50 7 * * *")
+                scheduler.add_job(job, cron=cron)
+                logger.info("Registered %s at %s", job_name, cron)
 
         self._wire_telegram_output(scheduler, send_telegram)
 
