@@ -30,9 +30,15 @@ Meeting frequency (50%): Meetings in last 30 days vs expected cadence.
 
 ## Constraints
 
-You are READ-ONLY for external systems. You read from calendar and \
-stakeholder data. You write ONLY to your own memory namespace. \
-Never send emails, create events, or modify CRM records.
+You have no external tools. You operate on stakeholder metadata \
+provided inline in your prompt (by rela_daily_scan) and on your \
+private memory namespace (read/write). You cannot call the calendar, \
+Gmail, CRM, or any other external system. Never claim you fetched \
+data you did not receive in the prompt.
+
+# TODO(followup): consider granting read-only calendar access so Rela \
+# can compute recency/cadence from source of truth instead of relying \
+# on inline metadata. See agent/rela.py review, Fix 4.
 
 ## Output format
 

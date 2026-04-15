@@ -141,3 +141,133 @@ class TestExtractGmailJob:
         result = job.run()
         assert "0" in result
         gmail.search.assert_not_called()
+
+
+class TestExtractionPartialFailure:
+    """When store() raises mid-loop, the source must NOT be marked processed —
+    otherwise next run skips it and the un-stored facts are lost forever."""
+
+    def _build_response(self, facts_json: str) -> MagicMock:
+        mock_response = MagicMock()
+        text_block = MagicMock()
+        text_block.type = "text"
+        text_block.text = facts_json
+        mock_response.content = [text_block]
+        return mock_response
+
+    def test_fireflies_not_marked_processed_when_store_raises(self, mem):
+        from cosinabox.memory.client import MemoryServiceError
+
+        ff = MagicMock()
+        ff.list_recent_meetings.return_value = [{"id": "t1", "title": "Strategy"}]
+        ff.get_transcript.return_value = {
+            "id": "t1", "title": "Strategy",
+            "sentences": [{"text": "Decision one", "speaker_name": "A"}] * 5,
+            "duration": 600,
+        }
+
+        facts_json = (
+            '[{"text": "fact1", "metadata": {}},'
+            ' {"text": "fact2", "metadata": {}},'
+            ' {"text": "fact3", "metadata": {}}]'
+        )
+        anthropic = MagicMock()
+        anthropic.messages.create.return_value = self._build_response(facts_json)
+
+        mc = MagicMock()
+        # store succeeds for fact1, raises for fact2 (fact3 never attempted)
+        mc.store.side_effect = ["id1", MemoryServiceError("503"), "id3"]
+
+        job = ExtractFirefliesJob(
+            fireflies=ff, memory_client=mc, db=mem, anthropic_client=anthropic,
+        )
+        job.run()
+
+        # fact1 stored, loop aborted at fact2 => 2 calls total
+        assert mc.store.call_count == 2
+        # Source NOT marked processed — re-run will retry
+        assert is_source_processed(mem, "fireflies", "t1") is False
+
+    def test_fireflies_marked_processed_when_all_stores_succeed(self, mem):
+        ff = MagicMock()
+        ff.list_recent_meetings.return_value = [{"id": "t2", "title": "Sync"}]
+        ff.get_transcript.return_value = {
+            "id": "t2", "title": "Sync",
+            "sentences": [{"text": "Decision", "speaker_name": "A"}] * 5,
+            "duration": 600,
+        }
+        facts_json = (
+            '[{"text": "f1", "metadata": {}},'
+            ' {"text": "f2", "metadata": {}},'
+            ' {"text": "f3", "metadata": {}}]'
+        )
+        anthropic = MagicMock()
+        anthropic.messages.create.return_value = self._build_response(facts_json)
+        mc = MagicMock()
+
+        job = ExtractFirefliesJob(
+            fireflies=ff, memory_client=mc, db=mem, anthropic_client=anthropic,
+        )
+        job.run()
+
+        assert mc.store.call_count == 3
+        assert is_source_processed(mem, "fireflies", "t2") is True
+
+    def test_gmail_not_marked_processed_when_store_raises(self, mem):
+        from cosinabox.memory.client import MemoryServiceError
+
+        gmail = MagicMock()
+        msg = MagicMock()
+        msg.id = "m1"
+        msg.sender = "alice@x.com"
+        msg.subject = "Plan"
+        msg.snippet = "Body"
+        gmail.search.return_value = [msg]
+
+        facts_json = (
+            '[{"text": "f1", "metadata": {}},'
+            ' {"text": "f2", "metadata": {}},'
+            ' {"text": "f3", "metadata": {}}]'
+        )
+        anthropic = MagicMock()
+        anthropic.messages.create.return_value = self._build_response(facts_json)
+
+        mc = MagicMock()
+        mc.store.side_effect = ["id1", MemoryServiceError("503"), "id3"]
+
+        stakeholders = [{"name": "Alice", "email": "alice@x.com", "cadence": "daily"}]
+        job = ExtractGmailJob(
+            gmail=gmail, memory_client=mc, db=mem,
+            anthropic_client=anthropic, stakeholders=stakeholders,
+        )
+        job.run()
+
+        assert mc.store.call_count == 2
+        assert is_source_processed(mem, "gmail", "m1") is False
+
+    def test_gmail_marked_processed_when_all_stores_succeed(self, mem):
+        gmail = MagicMock()
+        msg = MagicMock()
+        msg.id = "m2"
+        msg.sender = "alice@x.com"
+        msg.subject = "Plan"
+        msg.snippet = "Body"
+        gmail.search.return_value = [msg]
+        facts_json = (
+            '[{"text": "f1", "metadata": {}},'
+            ' {"text": "f2", "metadata": {}},'
+            ' {"text": "f3", "metadata": {}}]'
+        )
+        anthropic = MagicMock()
+        anthropic.messages.create.return_value = self._build_response(facts_json)
+        mc = MagicMock()
+
+        stakeholders = [{"name": "Alice", "email": "alice@x.com", "cadence": "daily"}]
+        job = ExtractGmailJob(
+            gmail=gmail, memory_client=mc, db=mem,
+            anthropic_client=anthropic, stakeholders=stakeholders,
+        )
+        job.run()
+
+        assert mc.store.call_count == 3
+        assert is_source_processed(mem, "gmail", "m2") is True

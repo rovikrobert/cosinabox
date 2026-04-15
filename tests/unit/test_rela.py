@@ -12,7 +12,11 @@ class TestRelaPrompt:
         assert "meeting frequency" in RELA_SYSTEM_PROMPT.lower()
 
     def test_prompt_enforces_read_only(self):
-        assert "READ-ONLY" in RELA_SYSTEM_PROMPT
+        # Rela has no external tools — assert the prompt does not claim
+        # calendar access (it would hallucinate) and does say "no external
+        # tools" or equivalent.
+        assert "read from calendar" not in RELA_SYSTEM_PROMPT.lower()
+        assert "no external tools" in RELA_SYSTEM_PROMPT.lower()
 
 
 class TestCreateRelaAgent:

@@ -23,6 +23,17 @@ except ImportError:
 
 logger = logging.getLogger(__name__)
 
+
+class MemoryServiceError(RuntimeError):
+    """Raised when a remote memory service call fails.
+
+    Previously store/recall/search swallowed all failures and returned
+    "" / []. Silent data loss is worse than a loud error: callers (e.g.
+    extraction jobs) rely on the return value to decide whether to mark
+    a source as processed. They should catch this exception explicitly
+    and decide whether to skip-and-retry or abort.
+    """
+
 _MEMORY_SCHEMA = """
 CREATE TABLE IF NOT EXISTS memories (
     id TEXT PRIMARY KEY,
@@ -133,30 +144,30 @@ class RemoteMemoryClient:
             data = self._post("/memories", {
                 "text": text, "metadata": metadata, "namespace": namespace,
             })
-            return str(data.get("id", ""))
-        except Exception:
+        except Exception as exc:
             logger.warning("Memory service store failed", exc_info=True)
-            return ""
+            raise MemoryServiceError(f"store failed: {exc}") from exc
+        return str(data.get("id", ""))
 
     def recall(self, *, query: str, namespace: str, limit: int = 5) -> list[dict[str, Any]]:
         try:
             data = self._post("/recall", {
                 "query": query, "namespace": namespace, "limit": limit,
             })
-            return data if isinstance(data, list) else data.get("results", [])
-        except Exception:
+        except Exception as exc:
             logger.warning("Memory service recall failed", exc_info=True)
-            return []
+            raise MemoryServiceError(f"recall failed: {exc}") from exc
+        return data if isinstance(data, list) else data.get("results", [])
 
     def search(self, *, query: str, namespace: str) -> list[dict[str, Any]]:
         try:
             data = self._post("/search", {
                 "query": query, "namespace": namespace,
             })
-            return data if isinstance(data, list) else data.get("results", [])
-        except Exception:
+        except Exception as exc:
             logger.warning("Memory service search failed", exc_info=True)
-            return []
+            raise MemoryServiceError(f"search failed: {exc}") from exc
+        return data if isinstance(data, list) else data.get("results", [])
 
     def delete(self, *, memory_id: str) -> bool:
         try:
@@ -172,10 +183,21 @@ class RemoteMemoryClient:
 
 
 def resolve_memory_client(*, db_path: str | Path) -> LocalMemoryClient | RemoteMemoryClient:
-    """Pick local or remote memory client based on env vars."""
+    """Pick local or remote memory client based on env vars.
+
+    Fails loud if MEMORY_SERVICE_URL is set without MEMORY_API_KEY — an
+    unauthenticated request would 401 on every call, silently dropping
+    every memory. Better to crash at startup.
+    """
     url = os.getenv("MEMORY_SERVICE_URL")
     if url:
         api_key = os.getenv("MEMORY_API_KEY", "")
+        if not api_key:
+            raise ValueError(
+                "MEMORY_SERVICE_URL is set but MEMORY_API_KEY is missing. "
+                "Set MEMORY_API_KEY in your .env, or unset MEMORY_SERVICE_URL "
+                "to use the local SQLite backend.",
+            )
         logger.info("Using remote memory service: %s", url)
         return RemoteMemoryClient(base_url=url, api_key=api_key)
     logger.info("Using local memory (SQLite keyword search)")
