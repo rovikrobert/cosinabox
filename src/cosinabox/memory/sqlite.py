@@ -144,7 +144,8 @@ CREATE TABLE IF NOT EXISTS scheduling_responses (
     participant_id INTEGER NOT NULL REFERENCES scheduling_participants(id),
     slot_id INTEGER NOT NULL REFERENCES scheduling_slots(id),
     response TEXT NOT NULL CHECK(response IN ('yes', 'if_needed', 'no')),
-    responded_at TEXT NOT NULL
+    responded_at TEXT NOT NULL,
+    UNIQUE(request_id, participant_id, slot_id)
 );
 CREATE INDEX IF NOT EXISTS idx_scheduling_responses_request ON scheduling_responses(request_id);
 
