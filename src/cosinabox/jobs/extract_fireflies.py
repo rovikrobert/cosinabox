@@ -13,6 +13,7 @@ from cosinabox.jobs.extraction import (
     mark_source_processed,
     parse_extraction_response,
 )
+from cosinabox.memory.client import MemoryServiceError
 
 logger = logging.getLogger(__name__)
 
@@ -93,14 +94,29 @@ class ExtractFirefliesJob(Job):
                 logger.warning("Extraction failed for transcript %s", mid, exc_info=True)
                 continue
 
+            # Mark-on-success only: same reasoning as extract_gmail.py.
+            # Partial-failure means re-run may duplicate facts, but that's
+            # strictly better than losing data + marking processed.
+            store_failed = False
             for fact in facts:
-                self.memory_client.store(
-                    text=fact.get("text", ""),
-                    metadata=fact.get("metadata", {}),
-                    namespace="extraction",
-                )
-                extracted += 1
+                try:
+                    self.memory_client.store(
+                        text=fact.get("text", ""),
+                        metadata=fact.get("metadata", {}),
+                        namespace="extraction",
+                    )
+                    extracted += 1
+                except MemoryServiceError:
+                    logger.warning(
+                        "Memory store failed for fireflies source %s — "
+                        "will retry on next run (duplicates possible)",
+                        mid,
+                        exc_info=True,
+                    )
+                    store_failed = True
+                    break
 
-            mark_source_processed(self.db, "fireflies", mid)
+            if not store_failed:
+                mark_source_processed(self.db, "fireflies", mid)
 
         return f"Fireflies: {extracted} facts from {len(meetings)} transcripts ({skipped} skipped)"

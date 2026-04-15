@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import fnmatch
 import logging
+import threading
 import time
 from dataclasses import dataclass
 from enum import Enum
@@ -48,33 +49,51 @@ _APPROVAL_TTL_S = 300  # 5 minutes — matches app.py _PENDING_TOOL_TTL_S so a
 
 # (session_id, tool_name) → grant timestamp
 _pending_approvals: dict[tuple[str, str], float] = {}
+# Guards _pending_approvals — approval tokens are granted by the Telegram DM
+# handler thread and consumed by agent-loop threads (including APScheduler
+# worker threads and SubAgent daemons). Without this lock, concurrent
+# grant/consume could either drop/duplicate approvals or raise
+# RuntimeError during sweep iteration.
+_pending_approvals_lock = threading.Lock()
 
 
-def _sweep_expired_approvals() -> None:
-    """Evict approval tokens past their TTL. Prevents unbounded dict growth
-    from abandoned sessions that never approve/reject."""
+def _sweep_expired_approvals_locked() -> None:
+    """Evict approval tokens past their TTL. Caller must hold the lock."""
     now = time.time()
     expired = [k for k, ts in _pending_approvals.items() if now - ts > _APPROVAL_TTL_S]
     for k in expired:
         del _pending_approvals[k]
 
 
+def _sweep_expired_approvals() -> None:
+    """Evict approval tokens past their TTL. Prevents unbounded dict growth
+    from abandoned sessions that never approve/reject."""
+    with _pending_approvals_lock:
+        _sweep_expired_approvals_locked()
+
+
 def grant_temporary_approval(session_id: str, tool_name: str) -> None:
     """Grant a one-shot approval for a specific tool in a session."""
-    _sweep_expired_approvals()
-    _pending_approvals[(session_id, tool_name)] = time.time()
+    with _pending_approvals_lock:
+        _sweep_expired_approvals_locked()
+        _pending_approvals[(session_id, tool_name)] = time.time()
     logger.info("Granted temporary approval: %s in %s", tool_name, session_id)
 
 
 def _check_temporary_approval(session_id: str, tool_name: str) -> bool:
-    """Check and consume a temporary approval token."""
-    _sweep_expired_approvals()
+    """Check and consume a temporary approval token.
+
+    The sweep, lookup, and delete must all happen under one lock so two
+    threads racing on the same (session, tool) can't both consume the token.
+    """
     key = (session_id, tool_name)
-    granted_at = _pending_approvals.get(key)
-    if granted_at is None:
-        return False
-    # Consume the token
-    del _pending_approvals[key]
+    with _pending_approvals_lock:
+        _sweep_expired_approvals_locked()
+        granted_at = _pending_approvals.get(key)
+        if granted_at is None:
+            return False
+        # Consume the token atomically
+        del _pending_approvals[key]
     if time.time() - granted_at > _APPROVAL_TTL_S:
         return False  # expired
     return True
@@ -82,7 +101,8 @@ def _check_temporary_approval(session_id: str, tool_name: str) -> bool:
 
 def clear_approvals() -> None:
     """Clear all pending approvals (for testing)."""
-    _pending_approvals.clear()
+    with _pending_approvals_lock:
+        _pending_approvals.clear()
 
 
 # ---------------------------------------------------------------------------

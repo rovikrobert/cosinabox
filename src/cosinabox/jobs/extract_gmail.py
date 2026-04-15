@@ -13,6 +13,7 @@ from cosinabox.jobs.extraction import (
     mark_source_processed,
     parse_extraction_response,
 )
+from cosinabox.memory.client import MemoryServiceError
 
 logger = logging.getLogger(__name__)
 
@@ -92,14 +93,30 @@ class ExtractGmailJob(Job):
                 logger.warning("Extraction failed for email %s", msg.id, exc_info=True)
                 continue
 
+            # Mark-on-success only: if any store() raises we do NOT mark
+            # the source processed. On re-run, the already-stored facts may
+            # duplicate — that's better than silent data loss + source
+            # marked done. See memory/client.py: MemoryServiceError.
+            store_failed = False
             for fact in facts:
-                self.memory_client.store(
-                    text=fact.get("text", ""),
-                    metadata=fact.get("metadata", {}),
-                    namespace="extraction",
-                )
-                extracted += 1
+                try:
+                    self.memory_client.store(
+                        text=fact.get("text", ""),
+                        metadata=fact.get("metadata", {}),
+                        namespace="extraction",
+                    )
+                    extracted += 1
+                except MemoryServiceError:
+                    logger.warning(
+                        "Memory store failed for gmail source %s — "
+                        "will retry on next run (duplicates possible)",
+                        msg.id,
+                        exc_info=True,
+                    )
+                    store_failed = True
+                    break
 
-            mark_source_processed(self.db, "gmail", msg.id)
+            if not store_failed:
+                mark_source_processed(self.db, "gmail", msg.id)
 
         return f"Gmail: {extracted} facts from {len(messages)} emails ({skipped} skipped)"

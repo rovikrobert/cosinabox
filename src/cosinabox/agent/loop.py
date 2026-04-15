@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import contextlib
 import logging
+import threading
 import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
@@ -42,23 +43,29 @@ _CIRCUIT_BREAKER_THRESHOLD = 5
 _CIRCUIT_BREAKER_COOLDOWN_S = 600  # 10 minutes
 _consecutive_failures = 0
 _last_failure_at: float = 0.0
+# Guards _consecutive_failures + _last_failure_at. These are read/written by
+# every thread running AgentLoop.run (APScheduler job threads, the Telegram
+# DM handler, SubAgent daemons). Without this lock, concurrent failures race
+# on the increment and we can trip below or above the threshold.
+_circuit_breaker_lock = threading.Lock()
 
 
 def _circuit_breaker_tripped() -> bool:
     """Check the circuit breaker with auto-reset after cooldown."""
     global _consecutive_failures, _last_failure_at
-    if _consecutive_failures < _CIRCUIT_BREAKER_THRESHOLD:
-        return False
-    # Auto-reset if cooldown elapsed
-    if time.time() - _last_failure_at > _CIRCUIT_BREAKER_COOLDOWN_S:
-        logger.info(
-            "Circuit breaker cooldown elapsed (%ds) — resetting",
-            _CIRCUIT_BREAKER_COOLDOWN_S,
-        )
-        _consecutive_failures = 0
-        _last_failure_at = 0.0
-        return False
-    return True
+    with _circuit_breaker_lock:
+        if _consecutive_failures < _CIRCUIT_BREAKER_THRESHOLD:
+            return False
+        # Auto-reset if cooldown elapsed
+        if time.time() - _last_failure_at > _CIRCUIT_BREAKER_COOLDOWN_S:
+            logger.info(
+                "Circuit breaker cooldown elapsed (%ds) — resetting",
+                _CIRCUIT_BREAKER_COOLDOWN_S,
+            )
+            _consecutive_failures = 0
+            _last_failure_at = 0.0
+            return False
+        return True
 
 
 class AnthropicClient(Protocol):
@@ -279,20 +286,23 @@ class AgentLoop:
                     response = self.client.messages.create(**call_kwargs)
 
                 # Reset circuit breaker on success
-                _consecutive_failures = 0
+                with _circuit_breaker_lock:
+                    _consecutive_failures = 0
 
             except CostExceeded:
                 result.stopped_reason = "cost_exceeded"
                 return result
             except Exception as exc:
-                _consecutive_failures += 1
-                _last_failure_at = time.time()
+                with _circuit_breaker_lock:
+                    _consecutive_failures += 1
+                    _last_failure_at = time.time()
+                    current_failures = _consecutive_failures
                 logger.warning(
                     "API call failed (attempt %d): %s",
-                    _consecutive_failures,
+                    current_failures,
                     str(exc)[:200],
                 )
-                if _consecutive_failures >= _CIRCUIT_BREAKER_THRESHOLD:
+                if current_failures >= _CIRCUIT_BREAKER_THRESHOLD:
                     result.final_text = "(API unavailable — circuit breaker tripped)"
                     result.stopped_reason = "circuit_breaker"
                     return result

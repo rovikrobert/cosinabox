@@ -540,6 +540,7 @@ class App:
         # --- Telegram DM polling ---
         # Track tools that are pending approval per session, with timestamps
         # so we can evict stale entries (user walked away without responding).
+        import threading as _threading
         import time as _time
 
         from telegram import Update
@@ -550,14 +551,19 @@ class App:
         # entries from abandoned sessions.
         _pending_tools: dict[str, tuple[list[str], float]] = {}
         _PENDING_TOOL_TTL_S = 300  # 5 minutes
+        # The DM handler runs on the PTB async loop thread, while the sweep
+        # can be called by the same handler mid-request; scheduling outreach
+        # and agent loop errors may interleave. Protect all accesses.
+        _pending_tools_lock = _threading.Lock()
 
         def _sweep_pending_tools() -> None:
             now = _time.time()
-            expired = [
-                sid for sid, (_, ts) in _pending_tools.items() if now - ts > _PENDING_TOOL_TTL_S
-            ]
-            for sid in expired:
-                del _pending_tools[sid]
+            with _pending_tools_lock:
+                expired = [
+                    sid for sid, (_, ts) in _pending_tools.items() if now - ts > _PENDING_TOOL_TTL_S
+                ]
+                for sid in expired:
+                    del _pending_tools[sid]
 
         _APPROVAL_PHRASES = {
             "yes",
@@ -599,11 +605,15 @@ class App:
             _sweep_pending_tools()
 
             # Check if this message is an approval for pending tools
-            if session in _pending_tools and _is_approval(user_text):
+            tool_names_to_grant: list[str] = []
+            with _pending_tools_lock:
+                if session in _pending_tools and _is_approval(user_text):
+                    tool_names, _ts = _pending_tools.pop(session)
+                    tool_names_to_grant = tool_names
+            if tool_names_to_grant:
                 from cosinabox.agent.policy import grant_temporary_approval
 
-                tool_names, _ts = _pending_tools.pop(session)
-                for tool_name in tool_names:
+                for tool_name in tool_names_to_grant:
                     grant_temporary_approval(session, tool_name)
                     logger.info("User approved %s in %s", tool_name, session)
 
@@ -620,7 +630,8 @@ class App:
                 logger.exception("Agent loop failed")
                 reply = "(error processing message)"
             if blocked:
-                _pending_tools[session] = (blocked, _time.time())
+                with _pending_tools_lock:
+                    _pending_tools[session] = (blocked, _time.time())
 
             for i in range(0, len(reply), 4000):
                 await update.message.reply_text(reply[i : i + 4000])
