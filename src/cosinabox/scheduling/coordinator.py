@@ -107,7 +107,13 @@ def transition(
             f"Legal targets: "
             f"{sorted(s.value for s in allowed) if allowed else 'none (terminal)'}"
         )
-    sched_db.update_request_status(db, request_id, to.value)
+    # Optimistic concurrency: UPDATE ... WHERE status=? so concurrent
+    # transitions from the same source state don't both "win".
+    ok = sched_db.update_request_status_guarded(db, request_id, frm.value, to.value)
+    if not ok:
+        raise InvalidTransition(
+            f"Concurrent transition — status is no longer {frm.value!r}"
+        )
 
 
 # ---------------------------------------------------------------------------

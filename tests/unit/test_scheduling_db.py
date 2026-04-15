@@ -167,6 +167,102 @@ class TestResponses:
                 slot_db_id=1, response="maybe",
             )
 
+    def test_record_response_flips_sent_to_responded(self, mem, sample_request):
+        rid = sched_db.create_request(mem, sample_request)
+        loaded = sched_db.get_request(mem, rid)
+        pid = loaded.participants[0].db_id
+        sched_db.update_participant_status(mem, pid, "sent")
+        slot = TimeSlot(
+            start_time=datetime(2026, 4, 14, 10, 0, tzinfo=UTC),
+            end_time=datetime(2026, 4, 14, 10, 30, tzinfo=UTC),
+        )
+        sid = sched_db.add_slot(mem, rid, slot)
+        sched_db.record_response(
+            mem, request_id=rid, participant_db_id=pid,
+            slot_db_id=sid, response="yes",
+        )
+        reloaded = sched_db.get_participants(mem, rid)[0]
+        assert reloaded.status == "responded"
+
+    def test_record_response_flips_nudged_to_responded(self, mem, sample_request):
+        rid = sched_db.create_request(mem, sample_request)
+        loaded = sched_db.get_request(mem, rid)
+        pid = loaded.participants[0].db_id
+        sched_db.update_participant_status(mem, pid, "nudged")
+        slot = TimeSlot(
+            start_time=datetime(2026, 4, 14, 10, 0, tzinfo=UTC),
+            end_time=datetime(2026, 4, 14, 10, 30, tzinfo=UTC),
+        )
+        sid = sched_db.add_slot(mem, rid, slot)
+        sched_db.record_response(
+            mem, request_id=rid, participant_db_id=pid,
+            slot_db_id=sid, response="yes",
+        )
+        reloaded = sched_db.get_participants(mem, rid)[0]
+        assert reloaded.status == "responded"
+
+    def test_record_response_does_not_resurrect_no_response(self, mem, sample_request):
+        rid = sched_db.create_request(mem, sample_request)
+        loaded = sched_db.get_request(mem, rid)
+        pid = loaded.participants[0].db_id
+        sched_db.update_participant_status(mem, pid, "no_response")
+        slot = TimeSlot(
+            start_time=datetime(2026, 4, 14, 10, 0, tzinfo=UTC),
+            end_time=datetime(2026, 4, 14, 10, 30, tzinfo=UTC),
+        )
+        sid = sched_db.add_slot(mem, rid, slot)
+        sched_db.record_response(
+            mem, request_id=rid, participant_db_id=pid,
+            slot_db_id=sid, response="yes",
+        )
+        reloaded = sched_db.get_participants(mem, rid)[0]
+        assert reloaded.status == "no_response"
+
+
+class TestGuardedStatusUpdate:
+    def test_guarded_update_success(self, mem, sample_request):
+        rid = sched_db.create_request(mem, sample_request)
+        sched_db.update_request_status(mem, rid, SchedulingStatus.POLLING.value)
+        ok = sched_db.update_request_status_guarded(
+            mem, rid, SchedulingStatus.POLLING.value,
+            SchedulingStatus.CONVERGED.value,
+        )
+        assert ok is True
+        assert sched_db.get_request(mem, rid).status == SchedulingStatus.CONVERGED.value
+
+    def test_guarded_update_stale_expected(self, mem, sample_request):
+        rid = sched_db.create_request(mem, sample_request)
+        sched_db.update_request_status(mem, rid, SchedulingStatus.POLLING.value)
+        # First one wins
+        assert sched_db.update_request_status_guarded(
+            mem, rid, SchedulingStatus.POLLING.value,
+            SchedulingStatus.CONVERGED.value,
+        )
+        # Second, racing from stale POLLING, fails
+        ok = sched_db.update_request_status_guarded(
+            mem, rid, SchedulingStatus.POLLING.value,
+            SchedulingStatus.CANCELLED.value,
+        )
+        assert ok is False
+        # Status preserved
+        assert sched_db.get_request(mem, rid).status == SchedulingStatus.CONVERGED.value
+
+
+class TestTransitionOptimisticConcurrency:
+    def test_transition_raises_invalid_transition_on_stale_from(self, mem, sample_request):
+        from cosinabox.scheduling.coordinator import InvalidTransition, transition
+
+        rid = sched_db.create_request(mem, sample_request)
+        sched_db.update_request_status(mem, rid, SchedulingStatus.POLLING.value)
+
+        # Thread A wins
+        transition(mem, rid, SchedulingStatus.POLLING, SchedulingStatus.CONVERGED)
+
+        # Thread B loses — tries POLLING→CANCELLED but DB is already CONVERGED
+        with pytest.raises(InvalidTransition):
+            transition(mem, rid, SchedulingStatus.POLLING, SchedulingStatus.CANCELLED)
+        assert sched_db.get_request(mem, rid).status == SchedulingStatus.CONVERGED.value
+
 
 class TestIntegrityConstraints:
     def test_invalid_status_raises_scheduling_error(self, mem, sample_request):

@@ -198,9 +198,9 @@ def test_partial_expiry_stays_polling(mem, job_factory):
     hydrated = sched_db.get_request(mem, req_id)
     p_alice, p_bob = hydrated.participants
 
-    # Alice: 49h old → expire. Bob: 10h old → still active.
+    # Alice: 49h old, already nudged → expire. Bob: 10h old → still active.
     _set_outreach_sent_at(
-        mem, p_alice.db_id, datetime.now(UTC) - timedelta(hours=49), status="sent",
+        mem, p_alice.db_id, datetime.now(UTC) - timedelta(hours=49), status="nudged",
     )
     _set_outreach_sent_at(
         mem, p_bob.db_id, datetime.now(UTC) - timedelta(hours=10), status="sent",
@@ -262,6 +262,73 @@ def test_gmail_reply_parsed_and_recorded(mem, job_factory, monkeypatch):
     # Single-participant unanimous yes → consensus → CONVERGED.
     assert sched_db.get_request(mem, req_id).status == SchedulingStatus.CONVERGED.value
     assert "1 converged" in result
+
+
+def test_expire_age_without_prior_nudge_sends_nudge_first(mem, job_factory):
+    """60h old, status still 'sent' (bot was down during 24-48h nudge window):
+    send the nudge first; defer expire to next cycle."""
+    send = _FakeSend()
+    alice = Participant(name="Alice", email="a@x.com", timezone="UTC", channel="gmail")
+    req_id = _make_polling_request(mem, participants=[alice])
+
+    hydrated = sched_db.get_request(mem, req_id)
+    p = hydrated.participants[0]
+
+    _set_outreach_sent_at(
+        mem, p.db_id, datetime.now(UTC) - timedelta(hours=60), status="sent",
+    )
+
+    job = job_factory(send_fn=send)
+    result = job.run()
+
+    refreshed = sched_db.get_participants(mem, req_id)[0]
+    assert refreshed.status == "nudged"
+    assert "1 nudged" in result
+    assert "0 expired" in result
+    assert any("nudge" in msg.lower() for msg in send.calls)
+    # Request stays POLLING — not expired this cycle.
+    assert sched_db.get_request(mem, req_id).status == SchedulingStatus.POLLING.value
+
+
+def test_expire_age_with_prior_nudge_expires(mem, job_factory):
+    send = _FakeSend()
+    alice = Participant(name="Alice", email="a@x.com", timezone="UTC", channel="gmail")
+    req_id = _make_polling_request(mem, participants=[alice])
+
+    hydrated = sched_db.get_request(mem, req_id)
+    p = hydrated.participants[0]
+
+    _set_outreach_sent_at(
+        mem, p.db_id, datetime.now(UTC) - timedelta(hours=60), status="nudged",
+    )
+
+    job = job_factory(send_fn=send)
+    result = job.run()
+
+    refreshed = sched_db.get_participants(mem, req_id)[0]
+    assert refreshed.status == "no_response"
+    assert "1 expired" in result
+
+
+def test_expire_past_safety_cap_without_nudge(mem, job_factory):
+    """80h old (past 72h safety cap), status='sent' — too old to nudge now, expire."""
+    send = _FakeSend()
+    alice = Participant(name="Alice", email="a@x.com", timezone="UTC", channel="gmail")
+    req_id = _make_polling_request(mem, participants=[alice])
+
+    hydrated = sched_db.get_request(mem, req_id)
+    p = hydrated.participants[0]
+
+    _set_outreach_sent_at(
+        mem, p.db_id, datetime.now(UTC) - timedelta(hours=80), status="sent",
+    )
+
+    job = job_factory(send_fn=send)
+    result = job.run()
+
+    refreshed = sched_db.get_participants(mem, req_id)[0]
+    assert refreshed.status == "no_response"
+    assert "1 expired" in result
 
 
 def test_no_outreach_sent_at_is_not_nudged(mem, job_factory):
