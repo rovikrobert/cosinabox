@@ -15,3 +15,19 @@ integrations:
     enabled: false   # Meeting transcripts — requires FIREFLIES_API_KEY in .env
   web_search:
     enabled: false   # Google search via Serper.dev — requires SERPER_API_KEY in .env
+
+# Scheduling sub-system configuration (optional).
+# The presence of this section (OR `scheduling_poll_check` in jobs.yaml) wires
+# in the 3 scheduling tools: schedule_group_meeting, scheduling_status,
+# scheduling_respond. All fields below are optional — defaults are safe.
+# Delete this whole section to fully disable scheduling (tools + job).
+# See docs/agent/scheduling.md for details.
+scheduling:
+  peak_hours: [9, 12]             # hours (local) that score highest for meetings
+  avoid_hours: [12, 13]           # de-preferred (e.g., lunch)
+  workday_hours: [9, 18]          # outside this window is penalised
+  immovable_keywords: []          # event-title hints that block rescheduling (e.g. ["board meeting"])
+  high_priority_keywords: []      # event-title hints for "prefer not to move" (e.g. ["1:1", "partner"])
+  vip_domains: []                 # attendee-email domains that lift priority (e.g. [".gov"])
+  domain_timezones: {}            # email domain → IANA tz override (e.g. {"example.com": "America/Los_Angeles"})
+  max_moves_per_request: 2        # most existing events the engine may propose rescheduling

@@ -15,6 +15,7 @@ Your CoS runs background jobs on a schedule. Enable or disable them in `jobs.yam
 | extract_gmail | disabled | 7:15 AM | Extract facts from stakeholder emails |
 | post_meeting_debrief | disabled | every 5 min | Sends summary after meetings end |
 | rela_daily_scan | disabled | 7:50 AM | Check relationship health |
+| scheduling_poll_check | disabled | every 30 min | Poll participants for scheduling responses, nudge at 24h, expire at 48h (see `scheduling.md`) |
 
 ## Enabling a job
 

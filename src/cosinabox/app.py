@@ -317,10 +317,34 @@ class App:
             db_path=self.config_dir / ".cosinabox" / "memory.db",
         )
 
+        # --- Scheduling context (built once; shared by tool registry + poll job) ---
+        # Built lazily so the scheduling job + tools only wire if the user has
+        # opted in (via scheduling_poll_check in jobs.yaml OR a scheduling:
+        # section in integrations.yaml). OSS users without either get no extra
+        # cost or surface area.
+        scheduling_enabled = bool(
+            jobs_config.get("scheduling_poll_check", {}).get("enabled")
+            or "scheduling" in integrations
+        )
+        scheduling_ctx: dict[str, Any] | None = None
+        if scheduling_enabled:
+            scheduling_ctx = {
+                "db": memory,
+                "coordinator_ctx": {
+                    "anthropic_client": _Anthropic(),
+                    "cost_tracker": None,  # filled after loop is created
+                    "bot": None,           # filled after tg_app is created
+                    "gmail": tool_instances.get("gmail"),
+                },
+                "owner_name": name,
+                "owner_timezone": timezone,
+            }
+
         # Initial tool registry (without rela_query — loop not yet created)
         tool_definitions, tool_handlers = build_tool_registry(
             tool_instances,
             timezone=timezone,
+            scheduling_ctx=scheduling_ctx,
         )
 
         loop = AgentLoop(
@@ -349,8 +373,16 @@ class App:
                 agent_loop=loop, memory_client=memory_client,
             )
 
+        # Now that the loop (and its cost tracker) exists, plug it into the
+        # scheduling context so tool handlers + the poll job share one tracker.
+        if scheduling_ctx is not None:
+            scheduling_ctx["coordinator_ctx"]["cost_tracker"] = loop.cost
+
         tool_definitions, tool_handlers = build_tool_registry(
-            tool_instances, timezone=timezone, rela_agent=rela_agent,
+            tool_instances,
+            timezone=timezone,
+            rela_agent=rela_agent,
+            scheduling_ctx=scheduling_ctx,
         )
         # Patch updated registry into the already-constructed loop
         loop.tools = tool_handlers
@@ -468,6 +500,24 @@ class App:
                 )
                 scheduler.add_job(job, cron="*/5 * * * *")
                 logger.info("Registered %s (every 5 min)", job_name)
+            elif job_name == "scheduling_poll_check":
+                from cosinabox.jobs.scheduling_poll_check import SchedulingPollCheckJob
+
+                if scheduling_ctx is None:
+                    logger.warning(
+                        "scheduling_poll_check enabled but scheduling_ctx not built; skipping",
+                    )
+                    continue
+                job = SchedulingPollCheckJob(
+                    db=scheduling_ctx["db"],
+                    gmail=scheduling_ctx["coordinator_ctx"]["gmail"],
+                    anthropic_client=scheduling_ctx["coordinator_ctx"]["anthropic_client"],
+                    cost_tracker=scheduling_ctx["coordinator_ctx"]["cost_tracker"],
+                    send_fn=send_telegram,
+                )
+                cron = cfg.get("schedule", "*/30 * * * *")
+                scheduler.add_job(job, cron=cron)
+                logger.info("Registered %s at %s", job_name, cron)
             elif job_name == "rela_daily_scan":
                 from cosinabox.jobs.rela_daily_scan import RelaDailyScanJob
 
@@ -575,6 +625,21 @@ class App:
 
         tg_app = Application.builder().token(bot_token).build()
         tg_app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
+
+        # --- Scheduling callback handler (inline buttons on poll DMs) ---
+        if scheduling_ctx is not None:
+            from telegram.ext import CallbackQueryHandler
+
+            from cosinabox.bot.scheduling_callbacks import (
+                build_scheduling_callback_handler,
+            )
+
+            sched_cb = build_scheduling_callback_handler(memory)
+            tg_app.add_handler(
+                CallbackQueryHandler(sched_cb, pattern=r"^sched_resp:"),
+            )
+            # Outreach uses the tg_app bot for Telegram DMs to participants.
+            scheduling_ctx["coordinator_ctx"]["bot"] = tg_app.bot
 
         # --- Bot commands ---
         from telegram.ext import CommandHandler

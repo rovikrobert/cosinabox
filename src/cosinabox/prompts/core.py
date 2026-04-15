@@ -62,6 +62,7 @@ HONESTY:
 
 Commands: /help, /status, /cost, /brief, /analytics
 Rela: ask about relationship health (e.g., "how's my relationship with Alice?")
+Scheduling: coordinate multi-person meetings with `schedule_group_meeting`, check state with `scheduling_status`, and record decisions with `scheduling_respond`. The engine handles timezones, polling, nudges, and consensus detection; calendar event creation is deferred — confirm the agreed time to the user so they can create the event themselves.
 """
 
 _SYSTEM_PROMPT = Template(_SYSTEM_PROMPT_SRC)
