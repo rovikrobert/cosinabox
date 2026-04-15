@@ -338,8 +338,9 @@ def test_fk_delete_request_blocks_when_children_exist(mem):
 
 
 def test_concurrent_poll_double_records_response(mem):
-    """Two polling runs see the same Gmail reply → two response rows recorded.
-    This is a REAL bug — there's no dedup on (request_id, participant_id, slot_id).
+    """Two polling runs see the same Gmail reply → still one row. Protected by
+    both (a) in-flight `already_responded` guard and (b) DB-level UNIQUE
+    constraint on (request_id, participant_id, slot_id).
     """
     req = SchedulingRequest(
         id="", title="T", duration_minutes=30,
@@ -546,9 +547,10 @@ def test_handler_malformed_callback_shows_alert(mem):
 # ---------------------------------------------------------------------------
 
 
-def test_duplicate_response_appends(mem):
-    """Participant clicks yes twice on same slot — schema has no UNIQUE so both
-    are appended. Documents current behavior."""
+def test_duplicate_response_upserts(mem):
+    """Participant clicks twice on the same slot — UNIQUE constraint +
+    ON CONFLICT DO UPDATE collapses to a single row with the latest response.
+    Prevents storage bloat and concurrent-poll double-recording."""
     req = SchedulingRequest(
         id="", title="T", duration_minutes=30,
         date_range_start=date(2026, 5, 4),
@@ -569,11 +571,8 @@ def test_duplicate_response_appends(mem):
     )
     sched_db.record_response(
         mem, request_id=rid, participant_db_id=p.db_id,
-        slot_db_id=slot.db_id, response="yes",
+        slot_db_id=slot.db_id, response="no",
     )
     responses = sched_db.get_responses(mem, rid)
-    # Current behavior: duplicates ARE stored (no unique constraint). This
-    # is a latent bug — consensus counting still works because set-dedup
-    # collapses participant_ids, but it inflates storage and would break
-    # any per-response analytics. Flag as medium.
-    assert len(responses) == 2
+    assert len(responses) == 1
+    assert responses[0]["response"] == "no"

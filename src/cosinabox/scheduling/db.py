@@ -243,7 +243,9 @@ def record_response(
     db._conn.execute(
         """INSERT INTO scheduling_responses
            (request_id, participant_id, slot_id, response, responded_at)
-           VALUES (?, ?, ?, ?, ?)""",
+           VALUES (?, ?, ?, ?, ?)
+           ON CONFLICT(request_id, participant_id, slot_id)
+           DO UPDATE SET response=excluded.response, responded_at=excluded.responded_at""",
         (request_id, participant_db_id, slot_db_id, response, now),
     )
     db._conn.commit()
