@@ -45,6 +45,24 @@ def _fake_client(text: str, *, input_tokens: int = 100, output_tokens: int = 50)
 # ---------------------------------------------------------------------------
 
 
+def test_parse_response_truncates_very_long_reply() -> None:
+    """Adversarial or quoted-history replies must be capped before Sonnet."""
+    slots = [_slot(10, 9)]
+    client = _fake_client('{"responses": {"10": "yes"}}')
+    huge_reply = "a" * 50_000
+
+    parse_response(
+        participant_name="Alice",
+        slots=slots,
+        reply_text=huge_reply,
+        anthropic_client=client,
+    )
+
+    prompt_sent = client.messages.create.call_args.kwargs["messages"][0]["content"]
+    # Prompt should not carry the full 50k payload; cap is well under 10k chars.
+    assert len(prompt_sent) < 10_000
+
+
 def test_parse_response_valid_json_returns_responses() -> None:
     slots = [_slot(10, 9), _slot(11, 14)]
     client = _fake_client(

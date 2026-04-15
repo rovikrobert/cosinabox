@@ -35,6 +35,11 @@ logger = logging.getLogger(__name__)
 
 _MAX_TOKENS = 300
 
+# Cap reply_text before embedding in the Sonnet prompt. A participant's real
+# reply is rarely over a few hundred chars; longer payloads are usually quoted
+# email history or adversarial. Cost-of-parse is per-token, per-poll-cycle.
+_MAX_REPLY_CHARS = 4000
+
 
 # ---------------------------------------------------------------------------
 # Inline button response parsing (no LLM)
@@ -137,6 +142,13 @@ def parse_response(
     raises.
     """
     slots_text = _render_slots(slots, participant_timezone)
+
+    if len(reply_text) > _MAX_REPLY_CHARS:
+        logger.info(
+            "Truncating scheduling reply from %s: %d → %d chars",
+            participant_name, len(reply_text), _MAX_REPLY_CHARS,
+        )
+        reply_text = reply_text[:_MAX_REPLY_CHARS] + "…[truncated]"
 
     prompt = f"""Parse this scheduling response from {participant_name}.
 

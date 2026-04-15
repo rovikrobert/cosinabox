@@ -23,6 +23,32 @@ def setup_function() -> None:
 # ---------------------------------------------------------------------------
 
 
+class TestSchedulingRespondPolicy:
+    """scheduling_respond('approve') triggers outreach → must require approval.
+    Other actions ('reject', 'cancel') only change local state and stay ALLOW."""
+
+    def test_approve_action_requires_approval(self) -> None:
+        result = evaluate(
+            "scheduling_respond",
+            {"action": "approve", "request_id": "r1"},
+        )
+        assert result.decision == Decision.REQUIRE_APPROVAL
+
+    def test_reject_action_is_allowed(self) -> None:
+        result = evaluate(
+            "scheduling_respond",
+            {"action": "reject", "request_id": "r1"},
+        )
+        assert result.decision == Decision.ALLOW
+
+    def test_cancel_action_is_allowed(self) -> None:
+        result = evaluate(
+            "scheduling_respond",
+            {"action": "cancel", "request_id": "r1"},
+        )
+        assert result.decision == Decision.ALLOW
+
+
 class TestTTLAlignment:
     def test_approval_ttl_matches_pending_tool_window(self) -> None:
         """Approval tokens must not expire before the user's reply window."""

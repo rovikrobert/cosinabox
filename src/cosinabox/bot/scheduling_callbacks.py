@@ -45,6 +45,37 @@ def build_scheduling_callback_handler(db: Any) -> Callable:
         participant_db_id = parsed["participant_db_id"]
         slot_ids = parsed["slot_ids"]
 
+        # Identity check: the Telegram user tapping the button must be the
+        # participant named in the callback. Prevents forwarded-keyboard CSRF
+        # where a third party votes on behalf of the real participant.
+        from_user = getattr(query, "from_user", None)
+        from_user_id = getattr(from_user, "id", None) if from_user is not None else None
+        participant = sched_db.get_participant_by_db_id(db, participant_db_id)
+        if (
+            participant is None
+            or participant.telegram_id is None
+            or str(from_user_id) != str(participant.telegram_id)
+        ):
+            logger.warning(
+                "Rejected scheduling callback: from_user=%s participant=%s (telegram_id=%s)",
+                from_user_id, participant_db_id,
+                getattr(participant, "telegram_id", None),
+            )
+            await query.answer("Not authorized for this poll", show_alert=True)
+            return
+
+        # Slot scope check: every slot_id must belong to request_id. Prevents
+        # a malicious or stale callback from recording votes on slots from a
+        # different request (the FK alone doesn't enforce this pairing).
+        owned_slot_ids = sched_db.get_slot_ids_for_request(db, request_id)
+        if not set(slot_ids).issubset(owned_slot_ids):
+            logger.warning(
+                "Rejected scheduling callback: slot(s) %s not in request %s",
+                slot_ids, request_id,
+            )
+            await query.answer("Invalid slot for this poll", show_alert=True)
+            return
+
         try:
             for slot_id in slot_ids:
                 sched_db.record_response(
