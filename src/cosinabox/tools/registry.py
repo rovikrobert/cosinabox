@@ -541,6 +541,7 @@ def build_tool_registry(
     *,
     timezone: str = "UTC",
     rela_agent: Any | None = None,
+    scheduling_ctx: dict[str, Any] | None = None,
 ) -> tuple[list[dict[str, Any]], dict[str, Callable[..., str]]]:
     """Build Claude API tool definitions and handler dict from tool instances.
 
@@ -592,6 +593,20 @@ def build_tool_registry(
         definitions.append(RELA_QUERY_DEFINITION)
         handlers["rela_query"] = rela_query_handler(rela_agent)
         logger.info("Registered rela_query tool")
+
+    # Scheduling tools (registered if scheduling_ctx provided)
+    if scheduling_ctx is not None:
+        from cosinabox.tools.scheduling_tool import (
+            build_scheduling_handlers,
+            build_scheduling_tool_definitions,
+        )
+
+        sched_defs = build_scheduling_tool_definitions(
+            scheduling_ctx["owner_name"],
+        )
+        definitions.extend(sched_defs)
+        handlers.update(build_scheduling_handlers(**scheduling_ctx))
+        logger.info("Registered %d scheduling tools", len(sched_defs))
 
     # Consistency check: every definition has a matching handler
     def_names = {d["name"] for d in definitions}

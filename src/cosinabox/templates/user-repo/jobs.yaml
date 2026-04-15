@@ -31,3 +31,9 @@ jobs:
   rela_daily_scan:
     enabled: false
     schedule: "50 7 * * *"     # 7:50 AM — check relationship health
+  # Scheduling polling job — runs every 30 min, checks for meeting responses,
+  # nudges participants at 24h, expires at 48h. Enable to activate the
+  # multi-person scheduling sub-system (see docs/agent/scheduling.md).
+  # scheduling_poll_check:
+  #   enabled: true
+  #   schedule: "*/30 * * * *"

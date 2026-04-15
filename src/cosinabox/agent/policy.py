@@ -136,6 +136,27 @@ DEFAULT_RULES: list[PolicyRule] = [
         priority=200,
         description="Sub-agent query is read-only",
     ),
+    # Scheduling tools — owner-initiated actions on the owner's own state.
+    # These do not send external messages or create calendar events directly
+    # (outreach is gated inside the coordinator; booking is deferred).
+    PolicyRule(
+        "schedule_group_meeting",
+        Decision.ALLOW,
+        priority=200,
+        description="Owner-initiated scheduling flow — local state only",
+    ),
+    PolicyRule(
+        "scheduling_status",
+        Decision.ALLOW,
+        priority=200,
+        description="Scheduling status is read-only",
+    ),
+    PolicyRule(
+        "scheduling_respond",
+        Decision.ALLOW,
+        priority=200,
+        description="Owner decision on own scheduling request",
+    ),
     # Drafts are safe (user reviews before sending)
     PolicyRule(
         "gmail_compose",
