@@ -635,13 +635,20 @@ class App:
             from cosinabox.bot.scheduling_callbacks import (
                 build_scheduling_callback_handler,
             )
+            from cosinabox.bot.sync_scheduling_adapter import (
+                SyncSchedulingBotAdapter,
+            )
 
             sched_cb = build_scheduling_callback_handler(memory)
             tg_app.add_handler(
                 CallbackQueryHandler(sched_cb, pattern=r"^sched_resp:"),
             )
-            # Outreach uses the tg_app bot for Telegram DMs to participants.
-            scheduling_ctx["coordinator_ctx"]["bot"] = tg_app.bot
+            # Outreach runs in sync worker threads; python-telegram-bot's
+            # Application.bot is async and has an incompatible send_poll
+            # signature, so wire the sync HTTP adapter instead.
+            scheduling_ctx["coordinator_ctx"]["bot"] = SyncSchedulingBotAdapter(
+                bot_token,
+            )
 
         # --- Bot commands ---
         from telegram.ext import CommandHandler

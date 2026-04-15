@@ -47,6 +47,9 @@ logger = logging.getLogger(__name__)
 
 _NUDGE_HOURS = 24
 _EXPIRE_HOURS = 48
+# Safety cap: if the bot was down through the nudge window, we still want to
+# nudge once before expiring — but not after 3 days (too stale to be useful).
+_NUDGE_SAFETY_CAP_HOURS = 72
 
 
 class SchedulingPollCheckJob(Job):
@@ -144,12 +147,34 @@ class SchedulingPollCheckJob(Job):
 
                 age_hours = (now - sent_at).total_seconds() / 3600.0
 
-                if age_hours >= _EXPIRE_HOURS:
+                # Nudge-before-expire guard: if we're past the expire window
+                # but never nudged (e.g. bot was down 24-48h window), send the
+                # nudge first and defer expire to the next cycle — but only if
+                # we're still within the safety cap (72h). Past the cap, expire
+                # without nudging (the nudge would be too stale to matter).
+                in_expire_window = age_hours >= _EXPIRE_HOURS
+                in_nudge_window = age_hours >= _NUDGE_HOURS
+                can_still_nudge = age_hours < _NUDGE_SAFETY_CAP_HOURS
+
+                if in_expire_window and p.status == "sent" and can_still_nudge:
+                    # Bot-down-during-nudge-window recovery path.
+                    self.send_fn(
+                        f"Scheduling nudge: {p.name} hasn't responded to "
+                        f"'{req.title}' in {int(age_hours)}h. "
+                        "Consider reaching out directly."
+                    )
+                    sched_db.update_participant_status(
+                        self.db, p.db_id, "nudged",
+                    )
+                    nudged_names.append(p.name)
+                    remaining_active += 1
+                elif in_expire_window:
+                    # Either already nudged, or past safety cap — expire.
                     sched_db.update_participant_status(
                         self.db, p.db_id, "no_response",
                     )
                     expired_names.append(p.name)
-                elif age_hours >= _NUDGE_HOURS and p.status == "sent":
+                elif in_nudge_window and p.status == "sent":
                     self.send_fn(
                         f"Scheduling nudge: {p.name} hasn't responded to "
                         f"'{req.title}' in {int(age_hours)}h. "

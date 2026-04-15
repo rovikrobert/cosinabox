@@ -99,6 +99,28 @@ def update_request_status(db: Any, request_id: str, status: str) -> None:
         raise SchedulingStateError(f"Invalid status '{status}': {exc}") from exc
 
 
+def update_request_status_guarded(
+    db: Any, request_id: str, expected_old: str, new_status: str,
+) -> bool:
+    """Optimistic-concurrency status update.
+
+    Atomically sets status=new_status only if the current row's status still
+    matches expected_old. Returns True if the UPDATE affected one row, False
+    otherwise (caller lost a race or the row is gone).
+    """
+    now = datetime.now(UTC).isoformat()
+    try:
+        cur = db._conn.execute(
+            "UPDATE scheduling_requests SET status = ?, updated_at = ? "
+            "WHERE id = ? AND status = ?",
+            (new_status, now, request_id, expected_old),
+        )
+        db._conn.commit()
+    except sqlite3.IntegrityError as exc:
+        raise SchedulingStateError(f"Invalid status '{new_status}': {exc}") from exc
+    return cur.rowcount == 1
+
+
 def get_active_requests(
     db: Any, *, status_filter: list[str] | None = None,
 ) -> list[SchedulingRequest]:
@@ -274,6 +296,14 @@ def record_response(
            ON CONFLICT(request_id, participant_id, slot_id)
            DO UPDATE SET response=excluded.response, responded_at=excluded.responded_at""",
         (request_id, participant_db_id, slot_db_id, response, now),
+    )
+    # Flip participant status sent/nudged → responded in the same transaction.
+    # Do not resurrect expired participants ('no_response') or overwrite 'responded'.
+    db._conn.execute(
+        """UPDATE scheduling_participants
+           SET status = 'responded'
+           WHERE id = ? AND status IN ('sent', 'nudged')""",
+        (participant_db_id,),
     )
     db._conn.commit()
 
