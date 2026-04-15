@@ -164,8 +164,22 @@ class AgentLoop:
         prompt: str,
         session_id: str,
         system_prompt_override: str | None = None,
+        allowed_tools: list[str] | None = None,
     ) -> LoopResult:
         global _consecutive_failures, _last_failure_at
+
+        # Filter tool set per-call. Sub-agents pass a restricted list so
+        # they can't reach write tools (e.g., gmail_send) inherited from the
+        # shared parent loop. None = inherit full registry.
+        if allowed_tools is not None:
+            allowed_set = set(allowed_tools)
+            effective_tool_definitions = [
+                td for td in self.tool_definitions if td.get("name") in allowed_set
+            ]
+            effective_tools = {k: v for k, v in self.tools.items() if k in allowed_set}
+        else:
+            effective_tool_definitions = self.tool_definitions
+            effective_tools = self.tools
 
         # Circuit breaker check (with auto-reset after cooldown)
         if _circuit_breaker_tripped():
@@ -254,14 +268,14 @@ class AgentLoop:
                 # Inject tools: advisor + user tools when advisor is active,
                 # just user tools otherwise
                 if use_advisor:
-                    call_kwargs["tools"] = [_ADVISOR_TOOL] + self.tool_definitions
+                    call_kwargs["tools"] = [_ADVISOR_TOOL] + effective_tool_definitions
                     response = self.client.beta.messages.create(
                         betas=[_ADVISOR_BETA],
                         **call_kwargs,
                     )
                 else:
-                    if self.tool_definitions:
-                        call_kwargs["tools"] = self.tool_definitions
+                    if effective_tool_definitions:
+                        call_kwargs["tools"] = effective_tool_definitions
                     response = self.client.messages.create(**call_kwargs)
 
                 # Reset circuit breaker on success
@@ -354,7 +368,7 @@ class AgentLoop:
                             "approval. No tools were executed."
                         )
                     else:
-                        fn = self.tools.get(block.name)
+                        fn = effective_tools.get(block.name)
                         if fn is None:
                             raw = f"Tool '{block.name}' not configured"
                         else:

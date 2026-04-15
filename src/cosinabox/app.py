@@ -203,8 +203,9 @@ class App:
                     personality=personality,
                     skip_titles=cfg.get("skip_if_calendar_title_matches", []),
                 )
-                scheduler.add_job(job, cron="*/5 * * * *")
-                logger.info("Registered %s (every 5 min)", job_name)
+                cron = cfg.get("schedule", "*/5 * * * *")
+                scheduler.add_job(job, cron=cron)
+                logger.info("Registered %s at %s", job_name, cron)
 
             elif job_name == "weekly_review" and cfg.get("schedule"):
                 job = WeeklyReviewJob(
@@ -498,8 +499,9 @@ class App:
                     ),
                     rela=rela_agent,
                 )
-                scheduler.add_job(job, cron="*/5 * * * *")
-                logger.info("Registered %s (every 5 min)", job_name)
+                cron = cfg.get("schedule", "*/5 * * * *")
+                scheduler.add_job(job, cron=cron)
+                logger.info("Registered %s at %s", job_name, cron)
             elif job_name == "scheduling_poll_check":
                 from cosinabox.jobs.scheduling_poll_check import SchedulingPollCheckJob
 
