@@ -125,6 +125,33 @@ def get_active_requests(
 # Participants
 # ---------------------------------------------------------------------------
 
+def get_participant_by_db_id(db: Any, participant_db_id: int) -> Participant | None:
+    cur = db._conn.execute(
+        "SELECT * FROM scheduling_participants WHERE id = ?",
+        (participant_db_id,),
+    )
+    row = cur.fetchone()
+    if row is None:
+        return None
+    return Participant(
+        name=row["name"],
+        email=row["email"],
+        telegram_id=row["telegram_id"],
+        timezone=row["timezone"],
+        channel=row["channel"],
+        db_id=row["id"],
+        status=row["status"],
+    )
+
+
+def get_slot_ids_for_request(db: Any, request_id: str) -> set[int]:
+    cur = db._conn.execute(
+        "SELECT id FROM scheduling_slots WHERE request_id = ?",
+        (request_id,),
+    )
+    return {row["id"] for row in cur.fetchall()}
+
+
 def get_participants(db: Any, request_id: str) -> list[Participant]:
     cur = db._conn.execute(
         "SELECT * FROM scheduling_participants WHERE request_id = ? ORDER BY id",

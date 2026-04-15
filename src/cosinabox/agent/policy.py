@@ -151,11 +151,22 @@ DEFAULT_RULES: list[PolicyRule] = [
         priority=200,
         description="Scheduling status is read-only",
     ),
+    # scheduling_respond(action="approve") triggers immediate participant
+    # outreach (Telegram polls, Gmail drafts). Treat like gmail_send.
+    PolicyRule(
+        "scheduling_respond",
+        Decision.REQUIRE_APPROVAL,
+        condition_field="action",
+        condition_op="eq",
+        condition_value="approve",
+        priority=50,
+        description="Approving a scheduling request sends DMs to participants",
+    ),
     PolicyRule(
         "scheduling_respond",
         Decision.ALLOW,
         priority=200,
-        description="Owner decision on own scheduling request",
+        description="Owner decision on own scheduling request (reject/cancel — local only)",
     ),
     # Drafts are safe (user reviews before sending)
     PolicyRule(

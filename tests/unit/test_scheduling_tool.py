@@ -250,7 +250,6 @@ class TestPolicyRules:
         [
             "schedule_group_meeting",
             "scheduling_status",
-            "scheduling_respond",
         ],
     )
     def test_rule_exists_priority_200_allow(self, tool_name):
@@ -261,3 +260,17 @@ class TestPolicyRules:
         rule = matches[0]
         assert rule.action == Decision.ALLOW
         assert rule.priority == 200
+
+    def test_scheduling_respond_has_conditional_approve_rule(self) -> None:
+        """scheduling_respond splits into a conditional REQUIRE_APPROVAL for
+        action=approve (because it triggers outreach) and a default ALLOW for
+        reject/cancel (local-only state changes)."""
+        matches = [r for r in DEFAULT_RULES if r.tool_pattern == "scheduling_respond"]
+        assert len(matches) == 2
+        conditional = [r for r in matches if r.condition_field == "action"]
+        default = [r for r in matches if r.condition_field == ""]
+        assert len(conditional) == 1 and len(default) == 1
+        assert conditional[0].action == Decision.REQUIRE_APPROVAL
+        assert conditional[0].condition_value == "approve"
+        assert default[0].action == Decision.ALLOW
+        assert conditional[0].priority < default[0].priority
