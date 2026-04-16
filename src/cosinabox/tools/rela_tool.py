@@ -31,7 +31,8 @@ def rela_query_handler(rela_agent: Any | None) -> Callable[..., str]:
         if rela_agent is None:
             return "Rela relationship manager not configured."
         try:
-            return rela_agent.query(query)
+            result: str = rela_agent.query(query)
+            return result
         except Exception as exc:
             return f"Rela query failed: {exc}"
 

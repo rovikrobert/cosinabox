@@ -106,8 +106,9 @@ def load_timezone_override(db_path: Path | None = None) -> str | None:
             )
             row = cur.fetchone()
             if row:
-                set_timezone(row[0])
-                return row[0]
+                tz: str = row[0]
+                set_timezone(tz)
+                return tz
         finally:
             conn.close()
     except Exception:

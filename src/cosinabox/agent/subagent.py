@@ -20,16 +20,24 @@ class _NamespacedMemoryClient:
         self._namespace = namespace
 
     def store(self, *, text: str, metadata: dict[str, Any], namespace: str = "") -> str:
-        return self._inner.store(text=text, metadata=metadata, namespace=self._namespace)
+        mid: str = self._inner.store(text=text, metadata=metadata, namespace=self._namespace)
+        return mid
 
     def recall(self, *, query: str, namespace: str = "", limit: int = 5) -> list[dict[str, Any]]:
-        return self._inner.recall(query=query, namespace=self._namespace, limit=limit)
+        rows: list[dict[str, Any]] = self._inner.recall(
+            query=query,
+            namespace=self._namespace,
+            limit=limit,
+        )
+        return rows
 
     def search(self, *, query: str, namespace: str = "") -> list[dict[str, Any]]:
-        return self._inner.search(query=query, namespace=self._namespace)
+        rows: list[dict[str, Any]] = self._inner.search(query=query, namespace=self._namespace)
+        return rows
 
     def delete(self, *, memory_id: str) -> bool:
-        return self._inner.delete(memory_id=memory_id)
+        ok: bool = self._inner.delete(memory_id=memory_id)
+        return ok
 
 
 DEFAULT_MAX_CONCURRENT_INGESTS = 3

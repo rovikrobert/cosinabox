@@ -64,6 +64,10 @@ select = ["E", "F", "I", "B", "UP", "SIM"]
 strict = true
 python_version = "3.11"
 
+[[tool.mypy.overrides]]
+module = ["apscheduler.*", "google_auth_oauthlib.*"]
+ignore_missing_imports = true
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 asyncio_mode = "auto"

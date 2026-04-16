@@ -4,17 +4,19 @@ from __future__ import annotations
 
 import json as jsonlib
 from pathlib import Path
+from typing import Any
 
 import click
 
 from cosinabox.doctor.registry import REGISTRY
 
 
-def _load_history(config_dir: Path) -> dict:
+def _load_history(config_dir: Path) -> dict[str, Any]:
     path = config_dir / ".cosinabox" / "history.json"
     if path.exists():
         try:
-            return jsonlib.loads(path.read_text())
+            data = jsonlib.loads(path.read_text())
+            return data if isinstance(data, dict) else {}
         except jsonlib.JSONDecodeError:
             return {}
     return {}

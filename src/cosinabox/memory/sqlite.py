@@ -214,7 +214,8 @@ class Memory:
             "SELECT COUNT(*) FROM messages WHERE session_id = ?",
             (session_id,),
         )
-        return cur.fetchone()[0]
+        count: int = cur.fetchone()[0]
+        return count
 
     def oldest_messages(
         self,

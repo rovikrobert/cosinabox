@@ -25,7 +25,7 @@ from cosinabox.scheduling.response_parser import parse_callback_data
 logger = logging.getLogger(__name__)
 
 
-def build_scheduling_callback_handler(db: Any) -> Callable:
+def build_scheduling_callback_handler(db: Any) -> Callable[..., Any]:
     """Return an async handler ``(update, ctx) -> None`` bound to ``db``."""
 
     async def handle_scheduling_callback(update: Any, _ctx: Any) -> None:

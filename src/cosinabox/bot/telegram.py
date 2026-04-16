@@ -15,7 +15,7 @@ from telegram.ext import (
 
 ChatMode = str  # "dm" | "group"
 MessageHandlerFn = Callable[[Update, ChatMode], Awaitable[None]]
-CallbackHandlerFn = Callable[[Update, CallbackContext], Awaitable[None]]
+CallbackHandlerFn = Callable[[Update, CallbackContext], Awaitable[None]]  # type: ignore[type-arg]  # telegram's CallbackContext has 4 type params; leaving default
 
 
 class TelegramBot:
