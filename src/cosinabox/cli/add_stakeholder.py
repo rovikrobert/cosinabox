@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import datetime
 from pathlib import Path
+from typing import Any
 
 import click
 import yaml
@@ -50,7 +51,7 @@ def add_stakeholder_cmd(
         raise click.ClickException(f"Stakeholder '{name}' already exists.")
 
     # Build the new entry
-    entry: dict = {"name": name, "cadence": cadence}
+    entry: dict[str, Any] = {"name": name, "cadence": cadence}
     if role:
         entry["role"] = role
     if last_contact:

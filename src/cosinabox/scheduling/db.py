@@ -139,7 +139,8 @@ def update_request_status_guarded(
         db._conn.commit()
     except sqlite3.IntegrityError as exc:
         raise SchedulingStateError(f"Invalid status '{new_status}': {exc}") from exc
-    return cur.rowcount == 1
+    success: bool = cur.rowcount == 1
+    return success
 
 
 def get_active_requests(

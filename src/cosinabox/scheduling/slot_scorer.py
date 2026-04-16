@@ -196,6 +196,8 @@ def _generate_raw_slots(
     overlap = compute_overlap_window(participants, day, duration_minutes, config)
     if overlap.window_start_utc is None or overlap.available_minutes < duration_minutes:
         return slots
+    if overlap.window_end_utc is None:
+        return slots
 
     cursor = overlap.window_start_utc
     window_end = overlap.window_end_utc
