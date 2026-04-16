@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
+import pytest
+
 from cosinabox.agent.policy import (
     Decision,
-    PolicyResult,
     clear_approvals,
     evaluate,
     grant_temporary_approval,
@@ -12,8 +13,19 @@ from cosinabox.agent.policy import (
 )
 
 
-def setup_function() -> None:
-    """Reset state between tests."""
+@pytest.fixture(autouse=True)
+def _reset_policy_state():
+    """Reset module-level approval tokens + rule cache around every test.
+
+    ``setup_function`` only fires for module-level test functions, so the
+    class-based tests here (``TestPolicyInAgentLoop``, ``TestTemporaryApprovals``,
+    etc.) would otherwise inherit leaked approvals from earlier runs. An
+    autouse fixture covers both styles and cleans up on both sides of the
+    test so ordering never matters.
+    """
+    clear_approvals()
+    invalidate_cache()
+    yield
     clear_approvals()
     invalidate_cache()
 
@@ -257,7 +269,15 @@ class TestPolicyInAgentLoop:
             router=Router(),
             cost_tracker=CostTracker(per_message_cap_usd=1.0, daily_cap_usd=10.0),
             tools={"gmail_search": fake_search},
-            tool_definitions=[{"name": "gmail_search", "description": "test", "input_schema": {"type": "object", "properties": {}, "required": []}}],
+            tool_definitions=[
+                {
+                    "name": "gmail_search",
+                    "description": "test",
+                    "input_schema": {
+                        "type": "object", "properties": {}, "required": [],
+                    },
+                },
+            ],
             system_prompt="Test",
         )
 
@@ -305,7 +325,15 @@ class TestPolicyInAgentLoop:
             router=Router(),
             cost_tracker=CostTracker(per_message_cap_usd=1.0, daily_cap_usd=10.0),
             tools={"gmail_send": lambda draft_id: "sent"},
-            tool_definitions=[{"name": "gmail_send", "description": "test", "input_schema": {"type": "object", "properties": {}, "required": []}}],
+            tool_definitions=[
+                {
+                    "name": "gmail_send",
+                    "description": "test",
+                    "input_schema": {
+                        "type": "object", "properties": {}, "required": [],
+                    },
+                },
+            ],
             system_prompt="Test",
         )
 
@@ -367,8 +395,20 @@ class TestPolicyInAgentLoop:
                 "gmail_send": lambda **kw: send_called.append(1) or "sent",
             },
             tool_definitions=[
-                {"name": "gmail_compose", "description": "test", "input_schema": {"type": "object", "properties": {}, "required": []}},
-                {"name": "gmail_send", "description": "test", "input_schema": {"type": "object", "properties": {}, "required": []}},
+                {
+                    "name": "gmail_compose",
+                    "description": "test",
+                    "input_schema": {
+                        "type": "object", "properties": {}, "required": [],
+                    },
+                },
+                {
+                    "name": "gmail_send",
+                    "description": "test",
+                    "input_schema": {
+                        "type": "object", "properties": {}, "required": [],
+                    },
+                },
             ],
             system_prompt="Test",
         )
