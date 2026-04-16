@@ -70,6 +70,7 @@ class InboundEmailCheckJob(Job):
 
         messages = self.gmail.search(f"after:{after_epoch}", max_results=50)
 
+        poll_start_ts = datetime.now(UTC).isoformat()
         alert_count = 0
         for msg in messages:
             cur = self.db._conn.execute(
@@ -92,12 +93,14 @@ class InboundEmailCheckJob(Job):
                 )
                 alert_count += 1
 
-            self.db._conn.execute(
-                "INSERT OR REPLACE INTO gmail_poll_state (account_index, last_check_ts) "
-                "VALUES (0, ?)",
-                (ts,),
-            )
-
+        # Advance poll state once per run — even when no messages arrived —
+        # so the next poll's `after:` window moves forward. Without this, a
+        # quiet inbox would re-query the same window on every run.
+        self.db._conn.execute(
+            "INSERT OR REPLACE INTO gmail_poll_state (account_index, last_check_ts) "
+            "VALUES (0, ?)",
+            (poll_start_ts,),
+        )
         self.db._conn.commit()
 
         cutoff = (datetime.now(UTC) - timedelta(days=7)).isoformat()
