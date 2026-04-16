@@ -25,7 +25,9 @@ class _NamespacedMemoryClient:
 
     def recall(self, *, query: str, namespace: str = "", limit: int = 5) -> list[dict[str, Any]]:
         rows: list[dict[str, Any]] = self._inner.recall(
-            query=query, namespace=self._namespace, limit=limit,
+            query=query,
+            namespace=self._namespace,
+            limit=limit,
         )
         return rows
 
