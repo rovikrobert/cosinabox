@@ -70,7 +70,9 @@ class TestCreateAndGet:
         """Plan 4 polish item 10: callers (start_scheduling) can pass a
         parameter so the column reflects the actual owner_name."""
         rid = sched_db.create_request(
-            mem, sample_request, requested_by="Parvati",
+            mem,
+            sample_request,
+            requested_by="Parvati",
         )
         row = mem._conn.execute(
             "SELECT requested_by FROM scheduling_requests WHERE id = ?",
@@ -88,19 +90,26 @@ class TestStatusUpdates:
 
     def test_get_active_requests_filtered(self, mem):
         req1 = SchedulingRequest(
-            id="r1", title="Active", duration_minutes=30,
-            date_range_start=date(2026, 4, 14), date_range_end=date(2026, 4, 21),
+            id="r1",
+            title="Active",
+            duration_minutes=30,
+            date_range_start=date(2026, 4, 14),
+            date_range_end=date(2026, 4, 21),
         )
         req2 = SchedulingRequest(
-            id="r2", title="Cancelled", duration_minutes=30,
-            date_range_start=date(2026, 4, 14), date_range_end=date(2026, 4, 21),
+            id="r2",
+            title="Cancelled",
+            duration_minutes=30,
+            date_range_start=date(2026, 4, 14),
+            date_range_end=date(2026, 4, 21),
             status=SchedulingStatus.CANCELLED.value,
         )
         sched_db.create_request(mem, req1)
         sched_db.create_request(mem, req2)
         # req1 defaults to 'proposing'
         active = sched_db.get_active_requests(
-            mem, status_filter=[SchedulingStatus.PROPOSING.value],
+            mem,
+            status_filter=[SchedulingStatus.PROPOSING.value],
         )
         assert len(active) == 1
         assert active[0].id == "r1"
@@ -112,7 +121,11 @@ class TestParticipants:
         loaded = sched_db.get_request(mem, rid)
         pid = loaded.participants[0].db_id
         sched_db.update_participant_status(
-            mem, pid, "sent", gmail_thread_id="thread-1", mark_outreach_sent=True,
+            mem,
+            pid,
+            "sent",
+            gmail_thread_id="thread-1",
+            mark_outreach_sent=True,
         )
         reloaded = sched_db.get_request(mem, rid)
         alice = reloaded.participants[0]
@@ -172,8 +185,11 @@ class TestResponses:
         )
         sid = sched_db.add_slot(mem, rid, slot)
         sched_db.record_response(
-            mem, request_id=rid, participant_db_id=pid,
-            slot_db_id=sid, response="yes",
+            mem,
+            request_id=rid,
+            participant_db_id=pid,
+            slot_db_id=sid,
+            response="yes",
         )
         responses = sched_db.get_responses(mem, rid)
         assert len(responses) == 1
@@ -184,9 +200,11 @@ class TestResponses:
         loaded = sched_db.get_request(mem, rid)
         with pytest.raises(ValueError):
             sched_db.record_response(
-                mem, request_id=rid,
+                mem,
+                request_id=rid,
                 participant_db_id=loaded.participants[0].db_id,
-                slot_db_id=1, response="maybe",
+                slot_db_id=1,
+                response="maybe",
             )
 
     def test_record_response_flips_sent_to_responded(self, mem, sample_request):
@@ -200,8 +218,11 @@ class TestResponses:
         )
         sid = sched_db.add_slot(mem, rid, slot)
         sched_db.record_response(
-            mem, request_id=rid, participant_db_id=pid,
-            slot_db_id=sid, response="yes",
+            mem,
+            request_id=rid,
+            participant_db_id=pid,
+            slot_db_id=sid,
+            response="yes",
         )
         reloaded = sched_db.get_participants(mem, rid)[0]
         assert reloaded.status == "responded"
@@ -217,8 +238,11 @@ class TestResponses:
         )
         sid = sched_db.add_slot(mem, rid, slot)
         sched_db.record_response(
-            mem, request_id=rid, participant_db_id=pid,
-            slot_db_id=sid, response="yes",
+            mem,
+            request_id=rid,
+            participant_db_id=pid,
+            slot_db_id=sid,
+            response="yes",
         )
         reloaded = sched_db.get_participants(mem, rid)[0]
         assert reloaded.status == "responded"
@@ -234,8 +258,11 @@ class TestResponses:
         )
         sid = sched_db.add_slot(mem, rid, slot)
         sched_db.record_response(
-            mem, request_id=rid, participant_db_id=pid,
-            slot_db_id=sid, response="yes",
+            mem,
+            request_id=rid,
+            participant_db_id=pid,
+            slot_db_id=sid,
+            response="yes",
         )
         reloaded = sched_db.get_participants(mem, rid)[0]
         assert reloaded.status == "no_response"
@@ -246,7 +273,9 @@ class TestGuardedStatusUpdate:
         rid = sched_db.create_request(mem, sample_request)
         sched_db.update_request_status(mem, rid, SchedulingStatus.POLLING.value)
         ok = sched_db.update_request_status_guarded(
-            mem, rid, SchedulingStatus.POLLING.value,
+            mem,
+            rid,
+            SchedulingStatus.POLLING.value,
             SchedulingStatus.CONVERGED.value,
         )
         assert ok is True
@@ -257,12 +286,16 @@ class TestGuardedStatusUpdate:
         sched_db.update_request_status(mem, rid, SchedulingStatus.POLLING.value)
         # First one wins
         assert sched_db.update_request_status_guarded(
-            mem, rid, SchedulingStatus.POLLING.value,
+            mem,
+            rid,
+            SchedulingStatus.POLLING.value,
             SchedulingStatus.CONVERGED.value,
         )
         # Second, racing from stale POLLING, fails
         ok = sched_db.update_request_status_guarded(
-            mem, rid, SchedulingStatus.POLLING.value,
+            mem,
+            rid,
+            SchedulingStatus.POLLING.value,
             SchedulingStatus.CANCELLED.value,
         )
         assert ok is False
@@ -296,14 +329,21 @@ class TestIntegrityConstraints:
 
     def test_foreign_key_enforcement(self, mem):
         import sqlite3
+
         # Try to insert a participant referencing a nonexistent request
         with pytest.raises(sqlite3.IntegrityError):
             mem._conn.execute(
                 """INSERT INTO scheduling_participants
                    (request_id, name, timezone, channel, status, created_at)
                    VALUES (?, ?, ?, ?, ?, ?)""",
-                ("nonexistent-req", "Ghost", "UTC", "gmail", "pending",
-                 datetime.now(UTC).isoformat()),
+                (
+                    "nonexistent-req",
+                    "Ghost",
+                    "UTC",
+                    "gmail",
+                    "pending",
+                    datetime.now(UTC).isoformat(),
+                ),
             )
             mem._conn.commit()
 
@@ -313,8 +353,11 @@ class TestMoves:
         rid = sched_db.create_request(mem, sample_request)
         now = datetime(2026, 4, 14, 10, 0, tzinfo=UTC)
         move_id = sched_db.record_move(
-            mem, request_id=rid, event_id="event-1",
-            original_start=now, original_end=now + timedelta(minutes=30),
+            mem,
+            request_id=rid,
+            event_id="event-1",
+            original_start=now,
+            original_end=now + timedelta(minutes=30),
             new_start=now + timedelta(hours=2),
             new_end=now + timedelta(hours=2, minutes=30),
         )

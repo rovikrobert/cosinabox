@@ -141,17 +141,19 @@ def build_analytics_handler(*, db: Any) -> Any:
             f"Jobs: {jobs['runs_today']} runs today",
         ]
         if jobs["failing_jobs"]:
-            lines.append("Failing: " + ", ".join(
-                f"{j['name']} ({j['failures']}x)" for j in jobs["failing_jobs"]
-            ))
+            lines.append(
+                "Failing: "
+                + ", ".join(f"{j['name']} ({j['failures']}x)" for j in jobs["failing_jobs"])
+            )
         if tools["tools"]:
-            lines.append("Top tools: " + ", ".join(
-                f"{t['name']} ({t['calls']})" for t in tools["tools"][:3]
-            ))
+            lines.append(
+                "Top tools: " + ", ".join(f"{t['name']} ({t['calls']})" for t in tools["tools"][:3])
+            )
         if errors["errors"]:
-            lines.append("Errors (24h): " + ", ".join(
-                f"{e['type']} ({e['count']})" for e in errors["errors"]
-            ))
+            lines.append(
+                "Errors (24h): "
+                + ", ".join(f"{e['type']} ({e['count']})" for e in errors["errors"])
+            )
         else:
             lines.append("Errors (24h): none")
 

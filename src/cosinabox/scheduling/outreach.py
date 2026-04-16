@@ -45,7 +45,10 @@ def _tz_label(tz_name: str, at: datetime | None = None) -> str:
 
 
 def _format_slot_lines(
-    slots: list[TimeSlot], participant_tz: str, *, long_form: bool,
+    slots: list[TimeSlot],
+    participant_tz: str,
+    *,
+    long_form: bool,
 ) -> list[str]:
     """Render slot list localized to participant tz. Long form for email, short for chat."""
     p_tz = ZoneInfo(participant_tz)
@@ -119,10 +122,7 @@ def send_telegram_poll(
     ]
     lines.extend(_format_slot_lines(slots, participant.timezone, long_form=False))
     lines.append("")
-    lines.append(
-        "Tap the buttons below to select which times work, "
-        "or reply with alternatives."
-    )
+    lines.append("Tap the buttons below to select which times work, or reply with alternatives.")
     text = "\n".join(lines)
 
     # Build buttons: one per slot with callback_data
@@ -133,9 +133,7 @@ def send_telegram_poll(
             continue
         local_start = slot.start_time.astimezone(p_tz)
         label = f"{i}. {local_start.strftime('%a %d %b %I:%M%p').lstrip('0')}"
-        callback_data = (
-            f"sched_resp:{request.id}:{participant.db_id}:{slot.db_id}"
-        )
+        callback_data = f"sched_resp:{request.id}:{participant.db_id}:{slot.db_id}"
         buttons.append((label, callback_data))
 
     try:
@@ -149,7 +147,10 @@ def send_telegram_poll(
         if db is not None:
             try:
                 sched_db.update_participant_status(
-                    db, participant.db_id, "sent", mark_outreach_sent=True,
+                    db,
+                    participant.db_id,
+                    "sent",
+                    mark_outreach_sent=True,
                 )
             except Exception as exc:  # noqa: BLE001
                 logger.warning("Failed to update participant status: %s", exc)
@@ -164,7 +165,9 @@ def send_telegram_poll(
     except Exception as exc:  # noqa: BLE001
         logger.error(
             "Failed to send Telegram poll to %s (%s): %s",
-            participant.name, participant.telegram_id, exc,
+            participant.name,
+            participant.telegram_id,
+            exc,
         )
         return {
             "status": "error",
@@ -211,9 +214,7 @@ def send_gmail_draft(
         f"I'm writing on behalf of {owner_name} to find a time for a "
         f"{request.duration_minutes}-minute {request.title} with {others_str}.\n\n"
         f"Would any of the following work for you? "
-        f"(times shown in {tz_label_short}):\n\n"
-        + "\n".join(slot_lines)
-        + "\n\n"
+        f"(times shown in {tz_label_short}):\n\n" + "\n".join(slot_lines) + "\n\n"
         f"If none work, please suggest alternatives and I'll coordinate.\n\n"
         f"Best regards,\n"
         f"{owner_name}'s scheduling assistant"
@@ -222,7 +223,9 @@ def send_gmail_draft(
 
     try:
         result = gmail.compose_draft(
-            to=participant.email, subject=subject, body=body,
+            to=participant.email,
+            subject=subject,
+            body=body,
         )
         draft_id = result.get("draft_id") if isinstance(result, dict) else None
         thread_id = result.get("thread_id") if isinstance(result, dict) else None
@@ -231,7 +234,9 @@ def send_gmail_draft(
         if db is not None and participant.db_id is not None:
             try:
                 sched_db.update_participant_status(
-                    db, participant.db_id, "pending",
+                    db,
+                    participant.db_id,
+                    "pending",
                     gmail_draft_id=draft_id,
                     gmail_thread_id=thread_id,
                 )
@@ -250,7 +255,9 @@ def send_gmail_draft(
     except Exception as exc:  # noqa: BLE001
         logger.error(
             "Failed to create Gmail draft for %s (%s): %s",
-            participant.name, participant.email, exc,
+            participant.name,
+            participant.email,
+            exc,
         )
         return {
             "status": "error",
@@ -301,11 +308,11 @@ def execute_outreach(
                 if db is not None and participant.db_id is not None:
                     with contextlib.suppress(Exception):
                         sched_db.update_participant_status(
-                            db, participant.db_id, "skipped: no_telegram",
+                            db,
+                            participant.db_id,
+                            "skipped: no_telegram",
                         )
-                skipped.append(
-                    f"{participant.name} (telegram — no bot configured)"
-                )
+                skipped.append(f"{participant.name} (telegram — no bot configured)")
             else:
                 any_handled = True
                 status = send_telegram_poll(
@@ -329,11 +336,11 @@ def execute_outreach(
                 if db is not None and participant.db_id is not None:
                     with contextlib.suppress(Exception):
                         sched_db.update_participant_status(
-                            db, participant.db_id, "skipped: no_gmail",
+                            db,
+                            participant.db_id,
+                            "skipped: no_gmail",
                         )
-                skipped.append(
-                    f"{participant.name} (gmail — no gmail configured)"
-                )
+                skipped.append(f"{participant.name} (gmail — no gmail configured)")
             else:
                 any_handled = True
                 status = send_gmail_draft(
@@ -348,9 +355,7 @@ def execute_outreach(
                 if status.get("status") == "draft_created":
                     gmail_drafts.append(participant.name)
                 else:
-                    errors.append(
-                        f"{participant.name} (gmail): {status.get('reason', 'unknown')}"
-                    )
+                    errors.append(f"{participant.name} (gmail): {status.get('reason', 'unknown')}")
         else:
             skipped.append(f"{participant.name} (unknown channel: {channel})")
 
@@ -363,15 +368,11 @@ def execute_outreach(
 
     lines: list[str] = [f"Outreach summary for '{request.title}':"]
     if telegram_sent:
-        lines.append(
-            f"  Telegram sent ({len(telegram_sent)}): "
-            + ", ".join(telegram_sent)
-        )
+        lines.append(f"  Telegram sent ({len(telegram_sent)}): " + ", ".join(telegram_sent))
     if gmail_drafts:
         lines.append(
             f"  Gmail drafts created ({len(gmail_drafts)}) "
-            f"— review in Gmail before sending: "
-            + ", ".join(gmail_drafts)
+            f"— review in Gmail before sending: " + ", ".join(gmail_drafts)
         )
     if skipped:
         lines.append(f"  Skipped ({len(skipped)}): " + "; ".join(skipped))

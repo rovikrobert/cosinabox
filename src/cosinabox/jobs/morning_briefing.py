@@ -81,8 +81,11 @@ class MorningBriefingJob(Job):
                         days_ago = (date.today() - date.fromisoformat(str(lc)[:10])).days
                         cadence = s.get("cadence", "weekly")
                         cadence_days = {
-                            "daily": 1, "weekly": 7, "biweekly": 14,
-                            "monthly": 30, "quarterly": 90,
+                            "daily": 1,
+                            "weekly": 7,
+                            "biweekly": 14,
+                            "monthly": 30,
+                            "quarterly": 90,
                         }
                         threshold = cadence_days.get(cadence, 7)
                         if days_ago > threshold:

@@ -32,7 +32,7 @@ def test_get_recipients_parses_to_and_cc_headers() -> None:
             "payload": {
                 "headers": [
                     {"name": "To", "value": "Alice <alice@example.com>, bob@example.com"},
-                    {"name": "Cc", "value": "\"Carol Q.\" <carol@example.com>"},
+                    {"name": "Cc", "value": '"Carol Q." <carol@example.com>'},
                 ],
             },
         }

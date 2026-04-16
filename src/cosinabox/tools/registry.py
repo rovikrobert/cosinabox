@@ -124,8 +124,7 @@ CALENDAR_TOOL_DEFINITIONS: list[dict[str, Any]] = [
     {
         "name": "calendar_list_events",
         "description": (
-            "List calendar events in a date/time range. "
-            "Returns event titles, times, and attendees."
+            "List calendar events in a date/time range. Returns event titles, times, and attendees."
         ),
         "input_schema": {
             "type": "object",
@@ -318,8 +317,7 @@ WEB_SEARCH_TOOL_DEFINITIONS: list[dict[str, Any]] = [
     {
         "name": "web_search",
         "description": (
-            "Search the web via Google. Returns organic results with titles, "
-            "links, and snippets."
+            "Search the web via Google. Returns organic results with titles, links, and snippets."
         ),
         "input_schema": {
             "type": "object",
@@ -343,6 +341,7 @@ WEB_SEARCH_TOOL_DEFINITIONS: list[dict[str, Any]] = [
 # ---------------------------------------------------------------------------
 # Handler builders — wrap tool class methods as Claude-callable functions
 # ---------------------------------------------------------------------------
+
 
 def _serialize(obj: Any) -> str:
     """Serialize a tool result to a string for Claude.
@@ -381,7 +380,10 @@ def _build_gmail_handlers(gmail: Any) -> dict[str, Callable[..., str]]:
         return _serialize(results)
 
     def gmail_compose(
-        to: str, subject: str, body: str, cc: str = "",
+        to: str,
+        subject: str,
+        body: str,
+        cc: str = "",
     ) -> str:
         result = gmail.compose_draft(to=to, subject=subject, body=body, cc=cc)
         return _serialize(result)
@@ -399,7 +401,9 @@ def _build_gmail_handlers(gmail: Any) -> dict[str, Callable[..., str]]:
 
 
 def _build_calendar_handlers(
-    calendar: Any, *, timezone: str = "UTC",
+    calendar: Any,
+    *,
+    timezone: str = "UTC",
 ) -> dict[str, Callable[..., str]]:
     """Build handler dict from a CalendarTool instance."""
 
@@ -471,8 +475,7 @@ def _build_calendar_handlers(
         for slot_start, slot_end in slots:
             slot_dur = int((slot_end - slot_start).total_seconds() // 60)
             lines.append(
-                f"  {slot_start.strftime('%H:%M')} — "
-                f"{slot_end.strftime('%H:%M')}  ({slot_dur} min)"
+                f"  {slot_start.strftime('%H:%M')} — {slot_end.strftime('%H:%M')}  ({slot_dur} min)"
             )
         return "\n".join(lines)
 
@@ -539,6 +542,7 @@ def _build_web_search_handlers(web_search: Any) -> dict[str, Callable[..., str]]
 # Public API: build_tool_registry
 # ---------------------------------------------------------------------------
 
+
 def build_tool_registry(
     tool_instances: dict[str, Any],
     *,
@@ -569,9 +573,7 @@ def build_tool_registry(
 
     if "calendar" in tool_instances:
         definitions.extend(CALENDAR_TOOL_DEFINITIONS)
-        handlers.update(
-            _build_calendar_handlers(tool_instances["calendar"], timezone=timezone)
-        )
+        handlers.update(_build_calendar_handlers(tool_instances["calendar"], timezone=timezone))
         logger.info("Registered %d Calendar tools", len(CALENDAR_TOOL_DEFINITIONS))
 
     if "attio" in tool_instances:

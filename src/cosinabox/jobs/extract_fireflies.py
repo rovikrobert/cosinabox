@@ -66,8 +66,7 @@ class ExtractFirefliesJob(Job):
             sentences = transcript.get("sentences") or []
             content = f"Meeting: {meeting.get('title', 'Untitled')}\n\n"
             content += "\n".join(
-                f"{s.get('speaker_name', 'Unknown')}: {s.get('text', '')}"
-                for s in sentences[:100]
+                f"{s.get('speaker_name', 'Unknown')}: {s.get('text', '')}" for s in sentences[:100]
             )
             if len(content) > 5000:
                 content = content[:5000] + "... (truncated)"
@@ -76,21 +75,26 @@ class ExtractFirefliesJob(Job):
                 response = self.anthropic.messages.create(
                     model=SONNET_MODEL_ID,
                     max_tokens=1024,
-                    messages=[{
-                        "role": "user",
-                        "content": EXTRACTION_PROMPT.format(content=content),
-                    }],
+                    messages=[
+                        {
+                            "role": "user",
+                            "content": EXTRACTION_PROMPT.format(content=content),
+                        }
+                    ],
                 )
                 resp_text = "\n".join(b.text for b in response.content if b.type == "text")
                 # Track cost
                 if self.cost_tracker is not None:
                     from cosinabox.agent.cost import estimate_cost
+
                     with contextlib.suppress(Exception):
-                        self.cost_tracker.record(estimate_cost(
-                            SONNET_MODEL_ID,
-                            response.usage.input_tokens,
-                            response.usage.output_tokens,
-                        ))
+                        self.cost_tracker.record(
+                            estimate_cost(
+                                SONNET_MODEL_ID,
+                                response.usage.input_tokens,
+                                response.usage.output_tokens,
+                            )
+                        )
                 facts = parse_extraction_response(resp_text)
             except Exception:
                 logger.warning("Extraction failed for transcript %s", mid, exc_info=True)

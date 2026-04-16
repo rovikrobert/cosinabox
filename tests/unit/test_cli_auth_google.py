@@ -12,12 +12,15 @@ def test_auth_google_prints_refresh_token() -> None:
     fake_flow = MagicMock()
     fake_creds = MagicMock(refresh_token="r-token-1")
     fake_flow.run_local_server.return_value = fake_creds
-    with patch.dict(
-        os.environ,
-        {"GOOGLE_OAUTH_CLIENT_ID": "cid", "GOOGLE_OAUTH_CLIENT_SECRET": "sec"},
-        clear=True,
-    ), patch(
-        "cosinabox.cli.auth_google.InstalledAppFlow.from_client_config", return_value=fake_flow
+    with (
+        patch.dict(
+            os.environ,
+            {"GOOGLE_OAUTH_CLIENT_ID": "cid", "GOOGLE_OAUTH_CLIENT_SECRET": "sec"},
+            clear=True,
+        ),
+        patch(
+            "cosinabox.cli.auth_google.InstalledAppFlow.from_client_config", return_value=fake_flow
+        ),
     ):
         runner = CliRunner()
         result = runner.invoke(cli, ["auth", "google"])

@@ -65,7 +65,8 @@ def maybe_summarize(
     )
 
     old_messages = memory.oldest_messages(
-        session_id=session_id, count=to_summarize,
+        session_id=session_id,
+        count=to_summarize,
     )
 
     # Build the prompt from old messages
@@ -87,9 +88,7 @@ def maybe_summarize(
             max_tokens=1024,
             messages=[{"role": "user", "content": prompt}],
         )
-        summary_text = "\n".join(
-            b.text for b in response.content if b.type == "text"
-        )
+        summary_text = "\n".join(b.text for b in response.content if b.type == "text")
     except Exception:
         logger.warning("Summarization API call failed — skipping", exc_info=True)
         return

@@ -9,7 +9,8 @@ from typing import Any
 def get_cost_summary(db: Any, days: int = 7) -> dict[str, Any]:
     today = datetime.now(UTC).date().isoformat()
     cur = db._conn.execute(
-        "SELECT total_cost FROM daily_costs WHERE date = ?", (today,),
+        "SELECT total_cost FROM daily_costs WHERE date = ?",
+        (today,),
     )
     row = cur.fetchone()
     today_cost = float(row["total_cost"]) if row else 0.0
@@ -17,7 +18,8 @@ def get_cost_summary(db: Any, days: int = 7) -> dict[str, Any]:
     cutoff = (datetime.now(UTC).date() - timedelta(days=days)).isoformat()
     cur = db._conn.execute(
         "SELECT AVG(total_cost) as avg_cost, COUNT(*) as day_count "
-        "FROM daily_costs WHERE date >= ?", (cutoff,),
+        "FROM daily_costs WHERE date >= ?",
+        (cutoff,),
     )
     row = cur.fetchone()
     week_avg = float(row["avg_cost"]) if row and row["avg_cost"] else 0.0
@@ -38,12 +40,14 @@ def get_tool_stats(db: Any, days: int = 7) -> dict[str, Any]:
     for row in cur.fetchall():
         calls = row["calls"]
         errors = row["errors"]
-        tools.append({
-            "name": row["tool_name"],
-            "calls": calls,
-            "errors": errors,
-            "error_rate": round(errors / calls, 2) if calls > 0 else 0.0,
-        })
+        tools.append(
+            {
+                "name": row["tool_name"],
+                "calls": calls,
+                "errors": errors,
+                "error_rate": round(errors / calls, 2) if calls > 0 else 0.0,
+            }
+        )
     return {"tools": tools, "days": days}
 
 
@@ -63,8 +67,7 @@ def get_job_health(db: Any, days: int = 7) -> dict[str, Any]:
         (cutoff,),
     )
     failing_jobs = [
-        {"name": row["job_name"], "failures": row["failures"]}
-        for row in cur.fetchall()
+        {"name": row["job_name"], "failures": row["failures"]} for row in cur.fetchall()
     ]
 
     return {"runs_today": runs_today, "failing_jobs": failing_jobs, "days": days}

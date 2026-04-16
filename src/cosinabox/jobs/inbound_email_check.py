@@ -105,7 +105,8 @@ class InboundEmailCheckJob(Job):
 
         cutoff = (datetime.now(UTC) - timedelta(days=7)).isoformat()
         self.db._conn.execute(
-            "DELETE FROM processed_message_ids WHERE created_at < ?", (cutoff,),
+            "DELETE FROM processed_message_ids WHERE created_at < ?",
+            (cutoff,),
         )
         self.db._conn.commit()
 

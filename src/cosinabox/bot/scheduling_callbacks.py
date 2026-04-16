@@ -36,7 +36,8 @@ def build_scheduling_callback_handler(db: Any) -> Callable:
         if "error" in parsed:
             logger.warning(
                 "Malformed scheduling callback data %r: %s",
-                data, parsed["error"],
+                data,
+                parsed["error"],
             )
             await query.answer("Invalid response format", show_alert=True)
             return
@@ -58,7 +59,8 @@ def build_scheduling_callback_handler(db: Any) -> Callable:
         ):
             logger.warning(
                 "Rejected scheduling callback: from_user=%s participant=%s (telegram_id=%s)",
-                from_user_id, participant_db_id,
+                from_user_id,
+                participant_db_id,
                 getattr(participant, "telegram_id", None),
             )
             await query.answer("Not authorized for this poll", show_alert=True)
@@ -71,7 +73,8 @@ def build_scheduling_callback_handler(db: Any) -> Callable:
         if not set(slot_ids).issubset(owned_slot_ids):
             logger.warning(
                 "Rejected scheduling callback: slot(s) %s not in request %s",
-                slot_ids, request_id,
+                slot_ids,
+                request_id,
             )
             await query.answer("Invalid slot for this poll", show_alert=True)
             return
@@ -88,7 +91,9 @@ def build_scheduling_callback_handler(db: Any) -> Callable:
         except Exception as exc:
             logger.exception(
                 "Failed to record scheduling response for request=%s participant=%s: %s",
-                request_id, participant_db_id, exc,
+                request_id,
+                participant_db_id,
+                exc,
             )
             await query.answer("Error recording response", show_alert=True)
             return
@@ -96,7 +101,9 @@ def build_scheduling_callback_handler(db: Any) -> Callable:
         await query.answer("Thanks — response recorded", show_alert=False)
         logger.info(
             "Scheduling response recorded via callback: request=%s participant=%s slots=%s",
-            request_id, participant_db_id, slot_ids,
+            request_id,
+            participant_db_id,
+            slot_ids,
         )
 
     return handle_scheduling_callback

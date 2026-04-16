@@ -46,8 +46,11 @@ def mem(tmp_path):
 
 def _participant(**kw):
     defaults = dict(
-        name="Alice", email="alice@x.com", telegram_id=None,
-        timezone="UTC", channel="gmail",
+        name="Alice",
+        email="alice@x.com",
+        telegram_id=None,
+        timezone="UTC",
+        channel="gmail",
     )
     defaults.update(kw)
     return Participant(**defaults)
@@ -103,8 +106,12 @@ def test_first_run_end_to_end(mem):
     gmail = MagicMock()
     gmail.compose_draft.return_value = {"draft_id": "d1", "thread_id": "t1"}
     result = record_decision(
-        mem, req.id, "approve",
-        gmail=gmail, owner_name="Host", owner_timezone="UTC",
+        mem,
+        req.id,
+        "approve",
+        gmail=gmail,
+        owner_name="Host",
+        owner_timezone="UTC",
     )
     assert result["status"] == "ok"
     assert result["new_status"] == "polling"
@@ -114,8 +121,10 @@ def test_first_run_end_to_end(mem):
     slots = sched_db.get_slots(mem, req.id)
     for p in participants_fresh:
         sched_db.record_response(
-            mem, request_id=req.id,
-            participant_db_id=p.db_id, slot_db_id=slots[0].db_id,
+            mem,
+            request_id=req.id,
+            participant_db_id=p.db_id,
+            slot_db_id=slots[0].db_id,
             response="yes",
         )
 
@@ -151,11 +160,15 @@ def _build_mixed_request(mem):
     )
     rid = sched_db.create_request(mem, req)
     # add a slot
-    sched_db.add_slot(mem, rid, TimeSlot(
-        start_time=datetime(2026, 5, 4, 9, 0, tzinfo=UTC),
-        end_time=datetime(2026, 5, 4, 9, 30, tzinfo=UTC),
-        score=0.8,
-    ))
+    sched_db.add_slot(
+        mem,
+        rid,
+        TimeSlot(
+            start_time=datetime(2026, 5, 4, 9, 0, tzinfo=UTC),
+            end_time=datetime(2026, 5, 4, 9, 30, tzinfo=UTC),
+            score=0.8,
+        ),
+    )
     return sched_db.get_request(mem, rid)
 
 
@@ -164,8 +177,13 @@ def test_outreach_gmail_none_telegram_works(mem):
     bot = MagicMock()
     bot.send_poll.return_value = {"message_id": 42}
     summary = execute_outreach(
-        request=req, slots=req.slots, bot=bot, gmail=None,
-        owner_name="Host", owner_timezone="UTC", db=mem,
+        request=req,
+        slots=req.slots,
+        bot=bot,
+        gmail=None,
+        owner_name="Host",
+        owner_timezone="UTC",
+        db=mem,
     )
     assert "Telegram sent" in summary
     assert "TG" in summary
@@ -177,8 +195,13 @@ def test_outreach_bot_none_gmail_works(mem):
     gmail = MagicMock()
     gmail.compose_draft.return_value = {"draft_id": "d", "thread_id": "t"}
     summary = execute_outreach(
-        request=req, slots=req.slots, bot=None, gmail=gmail,
-        owner_name="Host", owner_timezone="UTC", db=mem,
+        request=req,
+        slots=req.slots,
+        bot=None,
+        gmail=gmail,
+        owner_name="Host",
+        owner_timezone="UTC",
+        db=mem,
     )
     assert "Gmail drafts" in summary
     assert "no bot configured" in summary.lower()
@@ -187,8 +210,13 @@ def test_outreach_bot_none_gmail_works(mem):
 def test_outreach_both_none_returns_error(mem):
     req = _build_mixed_request(mem)
     summary = execute_outreach(
-        request=req, slots=req.slots, bot=None, gmail=None,
-        owner_name="Host", owner_timezone="UTC", db=mem,
+        request=req,
+        slots=req.slots,
+        bot=None,
+        gmail=None,
+        owner_name="Host",
+        owner_timezone="UTC",
+        db=mem,
     )
     assert "error" in summary.lower()
 
@@ -205,7 +233,7 @@ def test_no_calendar_still_finds_slots(mem):
         participants=[_participant(name="X", timezone="UTC", channel="gmail")],
         duration_minutes=30,
         date_range_start=date(2026, 5, 4),  # Monday
-        date_range_end=date(2026, 5, 8),    # Friday
+        date_range_end=date(2026, 5, 8),  # Friday
         owner_events=None,
         owner_timezone="UTC",
         owner_name="Host",
@@ -233,7 +261,9 @@ ILLEGAL_PAIRS = [
 @pytest.mark.parametrize("frm,to", ILLEGAL_PAIRS)
 def test_illegal_transitions_raise(mem, frm, to):
     req = SchedulingRequest(
-        id="", title="T", duration_minutes=30,
+        id="",
+        title="T",
+        duration_minutes=30,
         date_range_start=date(2026, 5, 4),
         date_range_end=date(2026, 5, 8),
         participants=[_participant()],
@@ -258,7 +288,9 @@ def test_hard_block_1am_6am_enforced(mem):
     # Flip: participant in Pacific/Kiritimati (UTC+14) → UTC 11:00 = 01:00 next day.
     # So owner's 9-12 UTC window = 23:00-02:00 for participant. Some of that is hard-blocked.
     participant = _participant(
-        name="Far", timezone="Pacific/Kiritimati", channel="gmail",
+        name="Far",
+        timezone="Pacific/Kiritimati",
+        channel="gmail",
     )
     req = start_scheduling(
         db=mem,
@@ -271,6 +303,7 @@ def test_hard_block_1am_6am_enforced(mem):
         owner_name="Host",
     )
     from zoneinfo import ZoneInfo
+
     ktz = ZoneInfo("Pacific/Kiritimati")
     for slot in req.slots:
         local = slot.start_time.astimezone(ktz)
@@ -287,14 +320,14 @@ def test_hard_block_1am_6am_enforced(mem):
 def test_cost_tracker_populated_after_parse_response():
     tracker = MagicMock()
     client = MagicMock()
-    client.messages.create.return_value = _mock_anthropic_response(
-        '{"responses": {"1": "yes"}}'
-    )
-    slots = [TimeSlot(
-        start_time=datetime(2026, 5, 4, 9, 0, tzinfo=UTC),
-        end_time=datetime(2026, 5, 4, 9, 30, tzinfo=UTC),
-        db_id=1,
-    )]
+    client.messages.create.return_value = _mock_anthropic_response('{"responses": {"1": "yes"}}')
+    slots = [
+        TimeSlot(
+            start_time=datetime(2026, 5, 4, 9, 0, tzinfo=UTC),
+            end_time=datetime(2026, 5, 4, 9, 30, tzinfo=UTC),
+            db_id=1,
+        )
+    ]
     result = parse_response(
         participant_name="Alice",
         slots=slots,
@@ -319,7 +352,9 @@ def test_fk_delete_request_blocks_when_children_exist(mem):
     behavior — if it changes we want to know.
     """
     req = SchedulingRequest(
-        id="", title="T", duration_minutes=30,
+        id="",
+        title="T",
+        duration_minutes=30,
         date_range_start=date(2026, 5, 4),
         date_range_end=date(2026, 5, 5),
         participants=[_participant()],
@@ -341,26 +376,36 @@ def test_concurrent_poll_double_records_response(mem):
     constraint on (request_id, participant_id, slot_id).
     """
     req = SchedulingRequest(
-        id="", title="T", duration_minutes=30,
+        id="",
+        title="T",
+        duration_minutes=30,
         date_range_start=date(2026, 5, 4),
         date_range_end=date(2026, 5, 5),
         participants=[
             _participant(
-                name="A", email="a@x.com", channel="gmail",
+                name="A",
+                email="a@x.com",
+                channel="gmail",
             ),
         ],
     )
     rid = sched_db.create_request(mem, req)
     p = sched_db.get_participants(mem, rid)[0]
-    sched_db.add_slot(mem, rid, TimeSlot(
-        start_time=datetime(2026, 5, 4, 9, 0, tzinfo=UTC),
-        end_time=datetime(2026, 5, 4, 9, 30, tzinfo=UTC),
-    ))
+    sched_db.add_slot(
+        mem,
+        rid,
+        TimeSlot(
+            start_time=datetime(2026, 5, 4, 9, 0, tzinfo=UTC),
+            end_time=datetime(2026, 5, 4, 9, 30, tzinfo=UTC),
+        ),
+    )
     slot = sched_db.get_slots(mem, rid)[0]
 
     # Set thread id so polling will fetch
     sched_db.update_participant_status(
-        mem, p.db_id, "sent",
+        mem,
+        p.db_id,
+        "sent",
         gmail_thread_id="thread-1",
         mark_outreach_sent=True,
     )
@@ -390,9 +435,7 @@ def test_concurrent_poll_double_records_response(mem):
     responses = sched_db.get_responses(mem, rid)
     # Sequential polling IS dedup-safe (via already_responded check).
     # We document this behavior here.
-    assert len(responses) == 1, (
-        f"Sequential polling is dedup-safe. Got {len(responses)} responses."
-    )
+    assert len(responses) == 1, f"Sequential polling is dedup-safe. Got {len(responses)} responses."
 
 
 # ---------------------------------------------------------------------------
@@ -462,7 +505,9 @@ def test_cosinabox_app_import_does_not_crash():
 def test_dst_boundary_no_crash(mem):
     """Scheduling across the US spring-forward DST transition (2026-03-08)."""
     participant = _participant(
-        name="PDT", timezone="America/Los_Angeles", channel="gmail",
+        name="PDT",
+        timezone="America/Los_Angeles",
+        channel="gmail",
     )
     # Range spans the DST transition
     req = start_scheduling(
@@ -480,6 +525,7 @@ def test_dst_boundary_no_crash(mem):
     from zoneinfo import ZoneInfo
 
     from cosinabox.scheduling.outreach import _tz_label
+
     # Mimic the caller: pass a datetime already-in-participant-tz.
     tz = ZoneInfo("America/Los_Angeles")
     at_pdt = datetime(2026, 6, 15, 12, 0, tzinfo=UTC).astimezone(tz)
@@ -499,8 +545,8 @@ def test_empty_slots_auto_cancel(mem):
         db=mem,
         participants=[_participant()],
         duration_minutes=30,
-        date_range_start=date(2026, 5, 9),   # Saturday
-        date_range_end=date(2026, 5, 10),    # Sunday
+        date_range_start=date(2026, 5, 9),  # Saturday
+        date_range_end=date(2026, 5, 10),  # Sunday
         owner_events=None,
         owner_timezone="UTC",
         owner_name="Host",
@@ -551,26 +597,38 @@ def test_duplicate_response_upserts(mem):
     ON CONFLICT DO UPDATE collapses to a single row with the latest response.
     Prevents storage bloat and concurrent-poll double-recording."""
     req = SchedulingRequest(
-        id="", title="T", duration_minutes=30,
+        id="",
+        title="T",
+        duration_minutes=30,
         date_range_start=date(2026, 5, 4),
         date_range_end=date(2026, 5, 5),
         participants=[_participant()],
     )
     rid = sched_db.create_request(mem, req)
     p = sched_db.get_participants(mem, rid)[0]
-    sched_db.add_slot(mem, rid, TimeSlot(
-        start_time=datetime(2026, 5, 4, 9, 0, tzinfo=UTC),
-        end_time=datetime(2026, 5, 4, 9, 30, tzinfo=UTC),
-    ))
+    sched_db.add_slot(
+        mem,
+        rid,
+        TimeSlot(
+            start_time=datetime(2026, 5, 4, 9, 0, tzinfo=UTC),
+            end_time=datetime(2026, 5, 4, 9, 30, tzinfo=UTC),
+        ),
+    )
     slot = sched_db.get_slots(mem, rid)[0]
 
     sched_db.record_response(
-        mem, request_id=rid, participant_db_id=p.db_id,
-        slot_db_id=slot.db_id, response="yes",
+        mem,
+        request_id=rid,
+        participant_db_id=p.db_id,
+        slot_db_id=slot.db_id,
+        response="yes",
     )
     sched_db.record_response(
-        mem, request_id=rid, participant_db_id=p.db_id,
-        slot_db_id=slot.db_id, response="no",
+        mem,
+        request_id=rid,
+        participant_db_id=p.db_id,
+        slot_db_id=slot.db_id,
+        response="no",
     )
     responses = sched_db.get_responses(mem, rid)
     assert len(responses) == 1

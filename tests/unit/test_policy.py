@@ -66,11 +66,16 @@ class TestTTLAlignment:
 class TestDefaultRules:
     def test_read_tools_are_allowed(self) -> None:
         for tool in [
-            "gmail_search", "gmail_list_recent",
-            "calendar_list_events", "calendar_find_conflicts",
+            "gmail_search",
+            "gmail_list_recent",
+            "calendar_list_events",
+            "calendar_find_conflicts",
             "calendar_find_free_time",
-            "crm_search_people", "crm_get_person", "crm_list_people",
-            "fireflies_list_meetings", "fireflies_get_transcript",
+            "crm_search_people",
+            "crm_get_person",
+            "crm_list_people",
+            "fireflies_list_meetings",
+            "fireflies_get_transcript",
             "web_search",
         ]:
             result = evaluate(tool, {})
@@ -88,9 +93,14 @@ class TestDefaultRules:
         assert result.decision == Decision.REQUIRE_APPROVAL
 
     def test_calendar_create_requires_approval(self) -> None:
-        result = evaluate("calendar_create_event", {
-            "summary": "Lunch", "start": "2026-04-14T12:00:00", "end": "2026-04-14T13:00:00",
-        })
+        result = evaluate(
+            "calendar_create_event",
+            {
+                "summary": "Lunch",
+                "start": "2026-04-14T12:00:00",
+                "end": "2026-04-14T13:00:00",
+            },
+        )
         assert result.decision == Decision.REQUIRE_APPROVAL
 
     def test_unknown_tool_requires_approval(self) -> None:
@@ -138,35 +148,41 @@ class TestTemporaryApprovals:
 
 class TestCustomRules:
     def test_custom_deny_rule(self) -> None:
-        custom = [{
-            "tool_pattern": "gmail_send",
-            "action": "deny",
-            "priority": 10,
-            "description": "No email sending allowed",
-        }]
+        custom = [
+            {
+                "tool_pattern": "gmail_send",
+                "action": "deny",
+                "priority": 10,
+                "description": "No email sending allowed",
+            }
+        ]
         result = evaluate("gmail_send", {"draft_id": "d1"}, custom_rules=custom)
         assert result.decision == Decision.DENY
 
     def test_custom_allow_overrides_default(self) -> None:
-        custom = [{
-            "tool_pattern": "gmail_send",
-            "action": "allow",
-            "priority": 50,
-            "description": "Auto-approve email sends",
-        }]
+        custom = [
+            {
+                "tool_pattern": "gmail_send",
+                "action": "allow",
+                "priority": 50,
+                "description": "Auto-approve email sends",
+            }
+        ]
         result = evaluate("gmail_send", {"draft_id": "d1"}, custom_rules=custom)
         assert result.decision == Decision.ALLOW
 
     def test_condition_field_matching(self) -> None:
-        custom = [{
-            "tool_pattern": "gmail_send",
-            "action": "deny",
-            "condition_field": "draft_id",
-            "condition_op": "eq",
-            "condition_value": "blocked-draft",
-            "priority": 10,
-            "description": "Block specific draft",
-        }]
+        custom = [
+            {
+                "tool_pattern": "gmail_send",
+                "action": "deny",
+                "condition_field": "draft_id",
+                "condition_op": "eq",
+                "condition_value": "blocked-draft",
+                "priority": 10,
+                "description": "Block specific draft",
+            }
+        ]
         # Matching condition
         result = evaluate("gmail_send", {"draft_id": "blocked-draft"}, custom_rules=custom)
         assert result.decision == Decision.DENY
@@ -177,15 +193,17 @@ class TestCustomRules:
         assert result.decision == Decision.REQUIRE_APPROVAL  # default rule
 
     def test_condition_contains(self) -> None:
-        custom = [{
-            "tool_pattern": "gmail_compose",
-            "action": "deny",
-            "condition_field": "to",
-            "condition_op": "contains",
-            "condition_value": ".gov",
-            "priority": 10,
-            "description": "Block government emails",
-        }]
+        custom = [
+            {
+                "tool_pattern": "gmail_compose",
+                "action": "deny",
+                "condition_field": "to",
+                "condition_op": "contains",
+                "condition_value": ".gov",
+                "priority": 10,
+                "description": "Block government emails",
+            }
+        ]
         result = evaluate("gmail_compose", {"to": "official@agency.gov.sg"}, custom_rules=custom)
         assert result.decision == Decision.DENY
 
@@ -256,15 +274,17 @@ class TestPolicyInAgentLoop:
             router=Router(),
             cost_tracker=CostTracker(per_message_cap_usd=1.0, daily_cap_usd=10.0),
             tools={"gmail_search": fake_search},
-            tool_definitions=[{
-                "name": "gmail_search",
-                "description": "test",
-                "input_schema": {
-                    "type": "object",
-                    "properties": {},
-                    "required": [],
-                },
-            }],
+            tool_definitions=[
+                {
+                    "name": "gmail_search",
+                    "description": "test",
+                    "input_schema": {
+                        "type": "object",
+                        "properties": {},
+                        "required": [],
+                    },
+                }
+            ],
             system_prompt="Test",
         )
 
@@ -312,15 +332,17 @@ class TestPolicyInAgentLoop:
             router=Router(),
             cost_tracker=CostTracker(per_message_cap_usd=1.0, daily_cap_usd=10.0),
             tools={"gmail_send": lambda draft_id: "sent"},
-            tool_definitions=[{
-                "name": "gmail_send",
-                "description": "test",
-                "input_schema": {
-                    "type": "object",
-                    "properties": {},
-                    "required": [],
-                },
-            }],
+            tool_definitions=[
+                {
+                    "name": "gmail_send",
+                    "description": "test",
+                    "input_schema": {
+                        "type": "object",
+                        "properties": {},
+                        "required": [],
+                    },
+                }
+            ],
             system_prompt="Test",
         )
 

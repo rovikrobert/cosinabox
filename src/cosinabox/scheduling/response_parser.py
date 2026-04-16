@@ -146,7 +146,9 @@ def parse_response(
     if len(reply_text) > _MAX_REPLY_CHARS:
         logger.info(
             "Truncating scheduling reply from %s: %d → %d chars",
-            participant_name, len(reply_text), _MAX_REPLY_CHARS,
+            participant_name,
+            len(reply_text),
+            _MAX_REPLY_CHARS,
         )
         reply_text = reply_text[:_MAX_REPLY_CHARS] + "…[truncated]"
 
@@ -180,7 +182,9 @@ Return ONLY the JSON object, no other text."""
         )
     except Exception as exc:
         logger.error(
-            "Scheduling response parsing API call failed: %s", exc, exc_info=True,
+            "Scheduling response parsing API call failed: %s",
+            exc,
+            exc_info=True,
         )
         return {"error": f"API call failed: {exc}"}
 
@@ -190,9 +194,7 @@ Return ONLY the JSON object, no other text."""
             usage = getattr(response, "usage", None)
             input_tokens = int(getattr(usage, "input_tokens", 0) or 0)
             output_tokens = int(getattr(usage, "output_tokens", 0) or 0)
-            cache_creation = int(
-                getattr(usage, "cache_creation_input_tokens", 0) or 0
-            )
+            cache_creation = int(getattr(usage, "cache_creation_input_tokens", 0) or 0)
             cache_read = int(getattr(usage, "cache_read_input_tokens", 0) or 0)
             actual_usd = estimate_cost(
                 SONNET_MODEL_ID,

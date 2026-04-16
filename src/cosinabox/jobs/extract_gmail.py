@@ -75,21 +75,26 @@ class ExtractGmailJob(Job):
                 response = self.anthropic.messages.create(
                     model=SONNET_MODEL_ID,
                     max_tokens=1024,
-                    messages=[{
-                        "role": "user",
-                        "content": EXTRACTION_PROMPT.format(content=content),
-                    }],
+                    messages=[
+                        {
+                            "role": "user",
+                            "content": EXTRACTION_PROMPT.format(content=content),
+                        }
+                    ],
                 )
                 resp_text = "\n".join(b.text for b in response.content if b.type == "text")
                 # Track cost
                 if self.cost_tracker is not None:
                     from cosinabox.agent.cost import estimate_cost
+
                     with contextlib.suppress(Exception):
-                        self.cost_tracker.record(estimate_cost(
-                            SONNET_MODEL_ID,
-                            response.usage.input_tokens,
-                            response.usage.output_tokens,
-                        ))
+                        self.cost_tracker.record(
+                            estimate_cost(
+                                SONNET_MODEL_ID,
+                                response.usage.input_tokens,
+                                response.usage.output_tokens,
+                            )
+                        )
                 facts = parse_extraction_response(resp_text)
             except Exception:
                 logger.warning("Extraction failed for email %s", msg.id, exc_info=True)

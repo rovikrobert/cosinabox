@@ -64,11 +64,13 @@ def _make_polling_request(
 
 
 def _set_outreach_sent_at(
-    mem: Memory, participant_db_id: int, when: datetime, status: str = "sent",
+    mem: Memory,
+    participant_db_id: int,
+    when: datetime,
+    status: str = "sent",
 ) -> None:
     mem._conn.execute(
-        "UPDATE scheduling_participants "
-        "SET outreach_sent_at = ?, status = ? WHERE id = ?",
+        "UPDATE scheduling_participants SET outreach_sent_at = ?, status = ? WHERE id = ?",
         (when.isoformat(), status, participant_db_id),
     )
     mem._conn.commit()
@@ -89,6 +91,7 @@ def job_factory(mem):
             cost_tracker=None,
             send_fn=send_fn or _FakeSend(),
         )
+
     return _make
 
 
@@ -143,7 +146,10 @@ def test_24h_old_no_response_triggers_nudge(mem, job_factory):
 
     # 25h old, status 'sent' (no response) → nudge
     _set_outreach_sent_at(
-        mem, p.db_id, datetime.now(UTC) - timedelta(hours=25), status="sent",
+        mem,
+        p.db_id,
+        datetime.now(UTC) - timedelta(hours=25),
+        status="sent",
     )
 
     job = job_factory(send_fn=send)
@@ -168,7 +174,10 @@ def test_48h_old_expires_and_all_expired_goes_to_owner_review(mem, job_factory):
 
     # 49h old → expires
     _set_outreach_sent_at(
-        mem, p.db_id, datetime.now(UTC) - timedelta(hours=49), status="nudged",
+        mem,
+        p.db_id,
+        datetime.now(UTC) - timedelta(hours=49),
+        status="nudged",
     )
 
     job = job_factory(send_fn=send)
@@ -179,10 +188,7 @@ def test_48h_old_expires_and_all_expired_goes_to_owner_review(mem, job_factory):
     assert "1 expired" in result
 
     # All participants expired → owner review.
-    assert (
-        sched_db.get_request(mem, req_id).status
-        == SchedulingStatus.OWNER_REVIEW.value
-    )
+    assert sched_db.get_request(mem, req_id).status == SchedulingStatus.OWNER_REVIEW.value
     assert any("review" in msg.lower() for msg in send.calls)
 
 
@@ -198,10 +204,16 @@ def test_partial_expiry_stays_polling(mem, job_factory):
 
     # Alice: 49h old, already nudged → expire. Bob: 10h old → still active.
     _set_outreach_sent_at(
-        mem, p_alice.db_id, datetime.now(UTC) - timedelta(hours=49), status="nudged",
+        mem,
+        p_alice.db_id,
+        datetime.now(UTC) - timedelta(hours=49),
+        status="nudged",
     )
     _set_outreach_sent_at(
-        mem, p_bob.db_id, datetime.now(UTC) - timedelta(hours=10), status="sent",
+        mem,
+        p_bob.db_id,
+        datetime.now(UTC) - timedelta(hours=10),
+        status="sent",
     )
 
     job = job_factory(send_fn=send)
@@ -273,7 +285,10 @@ def test_expire_age_without_prior_nudge_sends_nudge_first(mem, job_factory):
     p = hydrated.participants[0]
 
     _set_outreach_sent_at(
-        mem, p.db_id, datetime.now(UTC) - timedelta(hours=60), status="sent",
+        mem,
+        p.db_id,
+        datetime.now(UTC) - timedelta(hours=60),
+        status="sent",
     )
 
     job = job_factory(send_fn=send)
@@ -297,7 +312,10 @@ def test_expire_age_with_prior_nudge_expires(mem, job_factory):
     p = hydrated.participants[0]
 
     _set_outreach_sent_at(
-        mem, p.db_id, datetime.now(UTC) - timedelta(hours=60), status="nudged",
+        mem,
+        p.db_id,
+        datetime.now(UTC) - timedelta(hours=60),
+        status="nudged",
     )
 
     job = job_factory(send_fn=send)
@@ -318,7 +336,10 @@ def test_expire_past_safety_cap_without_nudge(mem, job_factory):
     p = hydrated.participants[0]
 
     _set_outreach_sent_at(
-        mem, p.db_id, datetime.now(UTC) - timedelta(hours=80), status="sent",
+        mem,
+        p.db_id,
+        datetime.now(UTC) - timedelta(hours=80),
+        status="sent",
     )
 
     job = job_factory(send_fn=send)

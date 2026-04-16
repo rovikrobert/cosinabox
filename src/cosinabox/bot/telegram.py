@@ -29,7 +29,9 @@ class TelegramBot:
         self._handlers.append(handler)
 
     def register_callback_handler(
-        self, prefix: str, fn: CallbackHandlerFn,
+        self,
+        prefix: str,
+        fn: CallbackHandlerFn,
     ) -> None:
         """Register an inline-button callback handler for callback_data matching ``prefix``.
 

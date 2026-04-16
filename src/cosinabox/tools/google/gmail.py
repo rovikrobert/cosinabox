@@ -175,12 +175,7 @@ class GmailTool:
 
         raw = base64.urlsafe_b64encode(msg.as_bytes()).decode()
         svc = self._services[min(account_index, len(self._services) - 1)]
-        draft = (
-            svc.users()
-            .drafts()
-            .create(userId="me", body={"message": {"raw": raw}})
-            .execute()
-        )
+        draft = svc.users().drafts().create(userId="me", body={"message": {"raw": raw}}).execute()
         return {
             "draft_id": draft["id"],
             "message": f"Draft created (ID: {draft['id']}). Review in Gmail before sending.",
@@ -190,12 +185,7 @@ class GmailTool:
         """Send an existing draft by ID. Requires user approval."""
         svc = self._services[min(account_index, len(self._services) - 1)]
         try:
-            result = (
-                svc.users()
-                .drafts()
-                .send(userId="me", body={"id": draft_id})
-                .execute()
-            )
+            result = svc.users().drafts().send(userId="me", body={"id": draft_id}).execute()
         except Exception as exc:
             return {
                 "message_id": "",

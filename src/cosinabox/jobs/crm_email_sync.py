@@ -37,7 +37,9 @@ class CrmEmailSyncJob(Job):
             result = get_recipients(msg.id)
         except Exception:
             logger.warning(
-                "get_recipients failed for %s", getattr(msg, "id", "?"), exc_info=True,
+                "get_recipients failed for %s",
+                getattr(msg, "id", "?"),
+                exc_info=True,
             )
             return []
         return list(result or [])

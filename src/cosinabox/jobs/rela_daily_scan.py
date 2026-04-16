@@ -29,10 +29,7 @@ class RelaDailyScanJob(Job):
             return "Rela not configured — skipped"
 
         # Filter to active stakeholders
-        active = [
-            s for s in self.stakeholders
-            if s.get("cadence", "").lower() in _ACTIVE_CADENCES
-        ]
+        active = [s for s in self.stakeholders if s.get("cadence", "").lower() in _ACTIVE_CADENCES]
         if not active:
             return "No active stakeholders — 0 scored"
 

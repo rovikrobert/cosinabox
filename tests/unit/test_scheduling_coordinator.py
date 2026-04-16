@@ -28,6 +28,7 @@ from cosinabox.scheduling.models import (
 # Fixtures
 # ---------------------------------------------------------------------------
 
+
 @pytest.fixture
 def mem(tmp_path):
     return Memory(db_path=tmp_path / "coord.db")
@@ -104,7 +105,10 @@ def test_transition_accepts_string_status(mem, request_id):
 def _setup_polling_request(mem, *, n_participants=2, n_slots=2):
     ps = [
         Participant(
-            name=f"P{i}", email=f"p{i}@x.com", timezone="UTC", channel="gmail",
+            name=f"P{i}",
+            email=f"p{i}@x.com",
+            timezone="UTC",
+            channel="gmail",
         )
         for i in range(n_participants)
     ]
@@ -140,8 +144,11 @@ def test_find_consensus_all_yes(mem):
     rid, parts, slot_ids = _setup_polling_request(mem)
     for p in parts:
         sched_db.record_response(
-            mem, request_id=rid, participant_db_id=p.db_id,
-            slot_db_id=slot_ids[0], response="yes",
+            mem,
+            request_id=rid,
+            participant_db_id=p.db_id,
+            slot_db_id=slot_ids[0],
+            response="yes",
         )
     result = find_consensus(mem, rid)
     assert result is not None
@@ -151,12 +158,18 @@ def test_find_consensus_all_yes(mem):
 def test_find_consensus_if_needed_counts_as_yes(mem):
     rid, parts, slot_ids = _setup_polling_request(mem)
     sched_db.record_response(
-        mem, request_id=rid, participant_db_id=parts[0].db_id,
-        slot_db_id=slot_ids[0], response="yes",
+        mem,
+        request_id=rid,
+        participant_db_id=parts[0].db_id,
+        slot_db_id=slot_ids[0],
+        response="yes",
     )
     sched_db.record_response(
-        mem, request_id=rid, participant_db_id=parts[1].db_id,
-        slot_db_id=slot_ids[0], response="if_needed",
+        mem,
+        request_id=rid,
+        participant_db_id=parts[1].db_id,
+        slot_db_id=slot_ids[0],
+        response="if_needed",
     )
     result = find_consensus(mem, rid)
     assert result is not None
@@ -166,12 +179,18 @@ def test_find_consensus_if_needed_counts_as_yes(mem):
 def test_find_consensus_single_no_disqualifies(mem):
     rid, parts, slot_ids = _setup_polling_request(mem)
     sched_db.record_response(
-        mem, request_id=rid, participant_db_id=parts[0].db_id,
-        slot_db_id=slot_ids[0], response="yes",
+        mem,
+        request_id=rid,
+        participant_db_id=parts[0].db_id,
+        slot_db_id=slot_ids[0],
+        response="yes",
     )
     sched_db.record_response(
-        mem, request_id=rid, participant_db_id=parts[1].db_id,
-        slot_db_id=slot_ids[0], response="no",
+        mem,
+        request_id=rid,
+        participant_db_id=parts[1].db_id,
+        slot_db_id=slot_ids[0],
+        response="no",
     )
     assert find_consensus(mem, rid) is None
 
@@ -180,8 +199,11 @@ def test_find_consensus_missing_participant_returns_none(mem):
     rid, parts, slot_ids = _setup_polling_request(mem)
     # Only one of two participants responded.
     sched_db.record_response(
-        mem, request_id=rid, participant_db_id=parts[0].db_id,
-        slot_db_id=slot_ids[0], response="yes",
+        mem,
+        request_id=rid,
+        participant_db_id=parts[0].db_id,
+        slot_db_id=slot_ids[0],
+        response="yes",
     )
     assert find_consensus(mem, rid) is None
 
@@ -231,8 +253,11 @@ def test_find_consensus_rescores_against_fresh_calendar(mem):
     for p in loaded.participants:
         for sid in (sid_a, sid_b):
             sched_db.record_response(
-                mem, request_id=rid, participant_db_id=p.db_id,
-                slot_db_id=sid, response="yes",
+                mem,
+                request_id=rid,
+                participant_db_id=p.db_id,
+                slot_db_id=sid,
+                response="yes",
             )
 
     # Without fresh calendar, stored score wins → slot A.
@@ -260,8 +285,11 @@ def test_find_consensus_without_fresh_calendar_uses_stored_scores(mem):
     for p in parts:
         for sid in slot_ids:
             sched_db.record_response(
-                mem, request_id=rid, participant_db_id=p.db_id,
-                slot_db_id=sid, response="yes",
+                mem,
+                request_id=rid,
+                participant_db_id=p.db_id,
+                slot_db_id=sid,
+                response="yes",
             )
     result = find_consensus(mem, rid)
     assert result is not None
@@ -274,8 +302,11 @@ def test_find_consensus_picks_highest_score_slot(mem):
     for p in parts:
         for sid in slot_ids:
             sched_db.record_response(
-                mem, request_id=rid, participant_db_id=p.db_id,
-                slot_db_id=sid, response="yes",
+                mem,
+                request_id=rid,
+                participant_db_id=p.db_id,
+                slot_db_id=sid,
+                response="yes",
             )
     result = find_consensus(mem, rid)
     assert result is not None
@@ -336,9 +367,13 @@ def test_record_decision_approve_transitions_and_calls_outreach(mem):
     gmail = _FakeGmail()
 
     result = record_decision(
-        mem, rid, "approve",
-        bot=bot, gmail=gmail,
-        owner_name="Owner", owner_timezone="UTC",
+        mem,
+        rid,
+        "approve",
+        bot=bot,
+        gmail=gmail,
+        owner_name="Owner",
+        owner_timezone="UTC",
     )
 
     assert result["status"] == "ok"
@@ -423,7 +458,7 @@ def test_start_scheduling_creates_request_and_ends_in_owner_review(mem):
         participants=participants,
         duration_minutes=30,
         date_range_start=date(2026, 4, 14),  # Tue
-        date_range_end=date(2026, 4, 16),    # Thu
+        date_range_end=date(2026, 4, 16),  # Thu
         owner_events={},
         owner_timezone="UTC",
         owner_name="Owner",
@@ -449,7 +484,7 @@ def test_start_scheduling_no_slots_goes_to_cancelled(mem):
         participants=participants,
         duration_minutes=30,
         date_range_start=date(2026, 4, 11),  # Sat
-        date_range_end=date(2026, 4, 12),    # Sun
+        date_range_end=date(2026, 4, 12),  # Sun
         owner_events={},
         owner_timezone="UTC",
         owner_name="Owner",
@@ -466,8 +501,11 @@ def test_check_polling_status_returns_summary(mem):
     rid, parts, slot_ids = _setup_polling_request(mem)
     # One participant responded yes.
     sched_db.record_response(
-        mem, request_id=rid, participant_db_id=parts[0].db_id,
-        slot_db_id=slot_ids[0], response="yes",
+        mem,
+        request_id=rid,
+        participant_db_id=parts[0].db_id,
+        slot_db_id=slot_ids[0],
+        response="yes",
     )
     summary = coordinator.check_polling_status(mem, rid)
     assert summary["total_participants"] == 2

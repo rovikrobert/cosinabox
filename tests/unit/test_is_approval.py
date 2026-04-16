@@ -69,7 +69,10 @@ class TestIsApprovalNotApprovalPhrases:
         assert is_approval("", has_pending_tool=True) is False
 
     def test_long_message_rejected(self):
-        assert is_approval(
-            "Actually, I think we should hold off for now",
-            has_pending_tool=True,
-        ) is False
+        assert (
+            is_approval(
+                "Actually, I think we should hold off for now",
+                has_pending_tool=True,
+            )
+            is False
+        )

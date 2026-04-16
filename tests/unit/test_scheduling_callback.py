@@ -37,8 +37,11 @@ def seeded(mem):
         duration_minutes=30,
         participants=[
             Participant(
-                name="Alice", email="a@x.com", telegram_id="111",
-                timezone="UTC", channel="telegram",
+                name="Alice",
+                email="a@x.com",
+                telegram_id="111",
+                timezone="UTC",
+                channel="telegram",
             ),
         ],
         date_range_start=date.today(),
@@ -51,10 +54,14 @@ def seeded(mem):
 
     start = datetime.now(UTC) + timedelta(days=1)
     slot1_id = sched_db.add_slot(
-        mem, req_id, TimeSlot(start_time=start, end_time=start + timedelta(minutes=30)),
+        mem,
+        req_id,
+        TimeSlot(start_time=start, end_time=start + timedelta(minutes=30)),
     )
     slot2_id = sched_db.add_slot(
-        mem, req_id, TimeSlot(
+        mem,
+        req_id,
+        TimeSlot(
             start_time=start + timedelta(hours=2),
             end_time=start + timedelta(hours=2, minutes=30),
         ),
@@ -86,8 +93,11 @@ def seeded_with_telegram(mem):
         duration_minutes=30,
         participants=[
             Participant(
-                name="Alice", email="a@x.com", telegram_id="111",
-                timezone="UTC", channel="telegram",
+                name="Alice",
+                email="a@x.com",
+                telegram_id="111",
+                timezone="UTC",
+                channel="telegram",
             ),
         ],
         date_range_start=date.today(),
@@ -99,7 +109,9 @@ def seeded_with_telegram(mem):
     participant_id = req.participants[0].db_id
     start = datetime.now(UTC) + timedelta(days=1)
     slot_id = sched_db.add_slot(
-        mem, req_id, TimeSlot(start_time=start, end_time=start + timedelta(minutes=30)),
+        mem,
+        req_id,
+        TimeSlot(start_time=start, end_time=start + timedelta(minutes=30)),
     )
     return {"req_id": req_id, "participant_id": participant_id, "slot_id": slot_id}
 
@@ -152,7 +164,8 @@ async def test_malformed_callback_shows_invalid_format_alert(mem) -> None:
     await handler(update, MagicMock())
 
     update.callback_query.answer.assert_awaited_once_with(
-        "Invalid response format", show_alert=True,
+        "Invalid response format",
+        show_alert=True,
     )
 
 
@@ -163,7 +176,8 @@ async def test_empty_callback_data_shows_invalid_format_alert(mem) -> None:
     await handler(update, MagicMock())
 
     update.callback_query.answer.assert_awaited_once_with(
-        "Invalid response format", show_alert=True,
+        "Invalid response format",
+        show_alert=True,
     )
 
 
@@ -175,6 +189,7 @@ async def test_db_error_shows_error_alert_and_no_confirmation(mem, seeded) -> No
     update = _make_update(data, from_user_id=111)
 
     import cosinabox.bot.scheduling_callbacks as cb
+
     original = cb.sched_db.record_response
 
     def _boom(*_a, **_kw):
@@ -187,7 +202,8 @@ async def test_db_error_shows_error_alert_and_no_confirmation(mem, seeded) -> No
         cb.sched_db.record_response = original
 
     update.callback_query.answer.assert_awaited_once_with(
-        "Error recording response", show_alert=True,
+        "Error recording response",
+        show_alert=True,
     )
 
 
@@ -237,8 +253,11 @@ async def test_callback_rejects_slot_from_different_request(mem, seeded_with_tel
         duration_minutes=30,
         participants=[
             Participant(
-                name="Bob", email="b@x.com", telegram_id="222",
-                timezone="UTC", channel="telegram",
+                name="Bob",
+                email="b@x.com",
+                telegram_id="222",
+                timezone="UTC",
+                channel="telegram",
             ),
         ],
         date_range_start=date.today(),
@@ -249,7 +268,9 @@ async def test_callback_rejects_slot_from_different_request(mem, seeded_with_tel
     req2_id = sched_db.create_request(mem, req2)
     start2 = datetime.now(UTC) + timedelta(days=2)
     slot_from_req2 = sched_db.add_slot(
-        mem, req2_id, TimeSlot(start_time=start2, end_time=start2 + timedelta(minutes=30)),
+        mem,
+        req2_id,
+        TimeSlot(start_time=start2, end_time=start2 + timedelta(minutes=30)),
     )
 
     handler = build_scheduling_callback_handler(mem)

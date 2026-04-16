@@ -79,9 +79,13 @@ class TestScoring:
         start = datetime(2026, 4, 14, 10, 0, tzinfo=UTC)
         end = start + timedelta(minutes=30)
         score = compute_score(
-            start, end, [],
-            busy=[], events_per_day={},
-            range_start=date(2026, 4, 14), range_end=date(2026, 4, 14),
+            start,
+            end,
+            [],
+            busy=[],
+            events_per_day={},
+            range_start=date(2026, 4, 14),
+            range_end=date(2026, 4, 14),
             owner_tz="UTC",
         )
         # Should score high (peak owner pref, no participants → fairness 1.0)
@@ -92,17 +96,24 @@ class TestScoring:
         start = datetime(2026, 4, 14, 12, 30, tzinfo=UTC)
         end = start + timedelta(minutes=30)
         score = compute_score(
-            start, end, [],
-            busy=[], events_per_day={},
-            range_start=date(2026, 4, 14), range_end=date(2026, 4, 14),
+            start,
+            end,
+            [],
+            busy=[],
+            events_per_day={},
+            range_start=date(2026, 4, 14),
+            range_end=date(2026, 4, 14),
             owner_tz="UTC",
         )
         # Lunch hour gets low owner preference — overall score dips
         peak_score = compute_score(
             datetime(2026, 4, 14, 10, 0, tzinfo=UTC),
-            datetime(2026, 4, 14, 10, 30, tzinfo=UTC), [],
-            busy=[], events_per_day={},
-            range_start=date(2026, 4, 14), range_end=date(2026, 4, 14),
+            datetime(2026, 4, 14, 10, 30, tzinfo=UTC),
+            [],
+            busy=[],
+            events_per_day={},
+            range_start=date(2026, 4, 14),
+            range_end=date(2026, 4, 14),
             owner_tz="UTC",
         )
         assert score < peak_score
@@ -126,9 +137,7 @@ class TestScoring:
         # Pre-fix, the bug gave score=1.0 (peak). Midpoint is 23:45, outside
         # 8-19 work window and outside 6-work_start and work_end-22 bands.
         # So the score should fall into the "else" branch (0.1).
-        assert score < 0.2, (
-            f"Midnight-wrap slot must not be treated as work hours (got {score})"
-        )
+        assert score < 0.2, f"Midnight-wrap slot must not be treated as work hours (got {score})"
 
     def test_timezone_fairness_normal_daytime_unchanged(self):
         """Regression guard: the fix must not change scoring for normal
@@ -146,13 +155,23 @@ class TestScoring:
         start = datetime(2026, 4, 14, 10, 0, tzinfo=UTC)
         end = start + timedelta(minutes=30)
         no_move = compute_score(
-            start, end, [], busy=[], events_per_day={},
-            range_start=date(2026, 4, 14), range_end=date(2026, 4, 14),
+            start,
+            end,
+            [],
+            busy=[],
+            events_per_day={},
+            range_start=date(2026, 4, 14),
+            range_end=date(2026, 4, 14),
             owner_tz="UTC",
         )
         needs_move = compute_score(
-            start, end, [], busy=[], events_per_day={},
-            range_start=date(2026, 4, 14), range_end=date(2026, 4, 14),
+            start,
+            end,
+            [],
+            busy=[],
+            events_per_day={},
+            range_start=date(2026, 4, 14),
+            range_end=date(2026, 4, 14),
             owner_tz="UTC",
             requires_move="conflict:something",
         )
@@ -221,17 +240,19 @@ class TestFindCandidateSlots:
         # No slot should start at 3am UTC
         for slot in slots:
             local_hour = slot.start_time.astimezone(ZoneInfo("UTC")).hour
-            assert not (1 <= local_hour < 6), (
-                f"Slot at {slot.start_time} falls in hard block"
-            )
+            assert not (1 <= local_hour < 6), f"Slot at {slot.start_time} falls in hard block"
 
 
 class TestScoringConfig:
     def test_default_weights_sum_to_one(self):
         c = ScoringConfig()
         total = (
-            c.w_timezone_fairness + c.w_owner_preference + c.w_buffer
-            + c.w_move_cost + c.w_day_balance + c.w_recency
+            c.w_timezone_fairness
+            + c.w_owner_preference
+            + c.w_buffer
+            + c.w_move_cost
+            + c.w_day_balance
+            + c.w_recency
         )
         assert abs(total - 1.0) < 0.001
 

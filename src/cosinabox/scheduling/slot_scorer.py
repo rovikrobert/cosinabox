@@ -22,9 +22,9 @@ logger = logging.getLogger(__name__)
 class ScoringConfig:
     """Configurable scoring parameters — replaces cos-agent's hardcoded constants."""
 
-    peak_hours: tuple[int, int] = (9, 12)      # 9am-12pm in owner tz scores 1.0
-    avoid_hours: tuple[int, int] = (12, 13)    # lunch — scores 0.2
-    workday_hours: tuple[int, int] = (9, 18)   # outside this gets penalty
+    peak_hours: tuple[int, int] = (9, 12)  # 9am-12pm in owner tz scores 1.0
+    avoid_hours: tuple[int, int] = (12, 13)  # lunch — scores 0.2
+    workday_hours: tuple[int, int] = (9, 18)  # outside this gets penalty
 
     hard_block_hours: tuple[int, int] = (1, 6)  # 1am-6am local NEVER propose
     work_hours_fairness: tuple[int, int] = (8, 19)  # fairness score: 8am-7pm = 1.0
@@ -53,8 +53,11 @@ class OverlapResult:
 # Hard-block and overlap computation
 # ---------------------------------------------------------------------------
 
+
 def _is_in_hard_block(
-    dt_utc: datetime, participant: Participant, config: ScoringConfig,
+    dt_utc: datetime,
+    participant: Participant,
+    config: ScoringConfig,
 ) -> bool:
     local = dt_utc.astimezone(ZoneInfo(participant.timezone))
     hb_start, hb_end = config.hard_block_hours
@@ -62,8 +65,10 @@ def _is_in_hard_block(
 
 
 def _any_participant_blocked(
-    start_utc: datetime, end_utc: datetime,
-    participants: list[Participant], config: ScoringConfig,
+    start_utc: datetime,
+    end_utc: datetime,
+    participants: list[Participant],
+    config: ScoringConfig,
 ) -> bool:
     cursor = start_utc
     while cursor < end_utc:
@@ -75,7 +80,9 @@ def _any_participant_blocked(
 
 
 def _participant_utc_exclusion(
-    participant: Participant, day: date, config: ScoringConfig,
+    participant: Participant,
+    day: date,
+    config: ScoringConfig,
 ) -> tuple[datetime, datetime]:
     """UTC exclusion range for a participant's hard block on a given day."""
     tz = ZoneInfo(participant.timezone)
@@ -113,10 +120,12 @@ def compute_overlap_window(
             check_day = day + timedelta(days=offset_days)
             exc_start, exc_end = _participant_utc_exclusion(p, check_day, config)
             if exc_start < day_end and exc_end > day_start:
-                exclusion_ranges.append((
-                    max(exc_start, day_start),
-                    min(exc_end, day_end),
-                ))
+                exclusion_ranges.append(
+                    (
+                        max(exc_start, day_start),
+                        min(exc_end, day_end),
+                    )
+                )
 
     exclusion_ranges.sort()
     merged: list[tuple[datetime, datetime]] = []
@@ -136,10 +145,7 @@ def compute_overlap_window(
     if cursor < day_end:
         available.append((cursor, day_end))
 
-    total_minutes = sum(
-        int((w_end - w_start).total_seconds() / 60)
-        for w_start, w_end in available
-    )
+    total_minutes = sum(int((w_end - w_start).total_seconds() / 60) for w_start, w_end in available)
 
     if total_minutes < duration_minutes or not available:
         cities = [p.timezone.split("/")[-1].replace("_", " ") for p in participants]
@@ -166,8 +172,10 @@ def compute_overlap_window(
         )
 
     return OverlapResult(
-        window_start_utc=best[0], window_end_utc=best[1],
-        available_minutes=total_minutes, message=message,
+        window_start_utc=best[0],
+        window_end_utc=best[1],
+        available_minutes=total_minutes,
+        message=message,
     )
 
 
@@ -175,9 +183,12 @@ def compute_overlap_window(
 # Candidate slot generation
 # ---------------------------------------------------------------------------
 
+
 def _generate_raw_slots(
-    day: date, duration_minutes: int,
-    participants: list[Participant], config: ScoringConfig,
+    day: date,
+    duration_minutes: int,
+    participants: list[Participant],
+    config: ScoringConfig,
 ) -> list[tuple[datetime, datetime]]:
     duration = timedelta(minutes=duration_minutes)
     slots: list[tuple[datetime, datetime]] = []
@@ -202,9 +213,12 @@ def _generate_raw_slots(
 # Scoring dimensions
 # ---------------------------------------------------------------------------
 
+
 def _score_timezone_fairness(
-    start_utc: datetime, end_utc: datetime,
-    participants: list[Participant], config: ScoringConfig,
+    start_utc: datetime,
+    end_utc: datetime,
+    participants: list[Participant],
+    config: ScoringConfig,
 ) -> float:
     if not participants:
         return 1.0
@@ -235,7 +249,9 @@ def _score_timezone_fairness(
 
 
 def _score_owner_preference(
-    start_utc: datetime, owner_tz: str, config: ScoringConfig,
+    start_utc: datetime,
+    owner_tz: str,
+    config: ScoringConfig,
 ) -> float:
     local_start = start_utc.astimezone(ZoneInfo(owner_tz))
     hour = local_start.hour
@@ -257,7 +273,8 @@ def _score_owner_preference(
 
 
 def _score_buffer(
-    start_utc: datetime, end_utc: datetime,
+    start_utc: datetime,
+    end_utc: datetime,
     busy: list[tuple[datetime, datetime]],
 ) -> float:
     min_buffer = timedelta(minutes=30)
@@ -297,11 +314,13 @@ def _score_recency(day: date, range_start: date, range_end: date) -> float:
 
 
 def compute_score(
-    start_utc: datetime, end_utc: datetime,
+    start_utc: datetime,
+    end_utc: datetime,
     participants: list[Participant],
     busy: list[tuple[datetime, datetime]],
     events_per_day: dict[date, int],
-    range_start: date, range_end: date,
+    range_start: date,
+    range_end: date,
     owner_tz: str,
     requires_move: str | None = None,
     config: ScoringConfig | None = None,
@@ -323,8 +342,10 @@ def compute_score(
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _find_conflict(
-    start_utc: datetime, end_utc: datetime,
+    start_utc: datetime,
+    end_utc: datetime,
     busy: list[tuple[datetime, datetime]],
 ) -> str | None:
     for bs, be in busy:
@@ -338,8 +359,7 @@ def _deduplicate_overlapping(slots: list[TimeSlot]) -> list[TimeSlot]:
     for slot in slots:
         overlaps = False
         for existing in selected:
-            if (slot.start_time < existing.end_time
-                    and slot.end_time > existing.start_time):
+            if slot.start_time < existing.end_time and slot.end_time > existing.start_time:
                 overlaps = True
                 break
         if not overlaps:
@@ -348,20 +368,17 @@ def _deduplicate_overlapping(slots: list[TimeSlot]) -> list[TimeSlot]:
 
 
 def events_to_busy_intervals(
-    events: list[dict[str, Any]], tz_name: str,
+    events: list[dict[str, Any]],
+    tz_name: str,
 ) -> list[tuple[datetime, datetime]]:
     """Convert Google Calendar event dicts to sorted, merged busy intervals."""
     tz = ZoneInfo(tz_name)
     busy: list[tuple[datetime, datetime]] = []
     for ev in events:
         start_str = (
-            ev.get("start", {}).get("dateTime")
-            if isinstance(ev.get("start"), dict) else None
+            ev.get("start", {}).get("dateTime") if isinstance(ev.get("start"), dict) else None
         )
-        end_str = (
-            ev.get("end", {}).get("dateTime")
-            if isinstance(ev.get("end"), dict) else None
-        )
+        end_str = ev.get("end", {}).get("dateTime") if isinstance(ev.get("end"), dict) else None
         if start_str and end_str:
             s = datetime.fromisoformat(start_str).astimezone(tz)
             e = datetime.fromisoformat(end_str).astimezone(tz)
@@ -380,6 +397,7 @@ def events_to_busy_intervals(
 # ---------------------------------------------------------------------------
 # Top-level orchestrator
 # ---------------------------------------------------------------------------
+
 
 def find_candidate_slots(
     *,
@@ -419,16 +437,25 @@ def find_candidate_slots(
         for start_utc, end_utc in raw_slots:
             conflict = _find_conflict(start_utc, end_utc, busy)
             score = compute_score(
-                start_utc, end_utc, participants,
-                busy, events_per_day,
-                date_range_start, date_range_end,
+                start_utc,
+                end_utc,
+                participants,
+                busy,
+                events_per_day,
+                date_range_start,
+                date_range_end,
                 owner_tz=owner_timezone,
-                requires_move=conflict, config=config,
+                requires_move=conflict,
+                config=config,
             )
-            all_candidates.append(TimeSlot(
-                start_time=start_utc, end_time=end_utc,
-                score=score, requires_move=conflict,
-            ))
+            all_candidates.append(
+                TimeSlot(
+                    start_time=start_utc,
+                    end_time=end_utc,
+                    score=score,
+                    requires_move=conflict,
+                )
+            )
         current += timedelta(days=1)
 
     all_candidates.sort(key=lambda s: s.score, reverse=True)

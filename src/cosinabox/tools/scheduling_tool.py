@@ -61,9 +61,7 @@ def build_scheduling_tool_definitions(owner_name: str) -> list[dict[str, Any]]:
                     },
                     "participants": {
                         "type": "array",
-                        "description": (
-                            f"List of participants (excluding {owner_name})."
-                        ),
+                        "description": (f"List of participants (excluding {owner_name})."),
                         "items": {
                             "type": "object",
                             "properties": {
@@ -85,9 +83,7 @@ def build_scheduling_tool_definitions(owner_name: str) -> list[dict[str, Any]]:
                                 "channel": {
                                     "type": "string",
                                     "enum": ["telegram", "gmail"],
-                                    "description": (
-                                        "Preferred contact channel."
-                                    ),
+                                    "description": ("Preferred contact channel."),
                                 },
                             },
                             "required": ["name"],
@@ -166,9 +162,7 @@ def build_scheduling_tool_definitions(owner_name: str) -> list[dict[str, Any]]:
                     },
                     "slot_id": {
                         "type": "integer",
-                        "description": (
-                            "Slot ID (optional, relevant for 'book')."
-                        ),
+                        "description": ("Slot ID (optional, relevant for 'book')."),
                     },
                     "notes": {
                         "type": "string",
@@ -215,9 +209,7 @@ def _format_request_detail(db: Any, req: Any) -> str:
         "",
     ]
     for p in req.participants:
-        lines.append(
-            f"  - {p.name} ({p.timezone}, via {p.channel}): {p.status}"
-        )
+        lines.append(f"  - {p.name} ({p.timezone}, via {p.channel}): {p.status}")
     if req.slots:
         lines.append("")
         lines.append(f"Candidate slots: {len(req.slots)}")
@@ -316,8 +308,11 @@ def build_scheduling_handlers(
         active = sched_db.get_active_requests(
             db,
             status_filter=[
-                "proposing", "owner_review", "polling",
-                "converged", "backchannel",
+                "proposing",
+                "owner_review",
+                "polling",
+                "converged",
+                "backchannel",
             ],
         )
         if not active:
@@ -346,7 +341,10 @@ def build_scheduling_handlers(
 
         try:
             result = sched_coordinator.record_decision(
-                db, request_id, action, **kwargs,
+                db,
+                request_id,
+                action,
+                **kwargs,
             )
         except Exception as exc:
             logger.exception("scheduling_respond failed")
@@ -356,10 +354,7 @@ def build_scheduling_handlers(
             return f"Decision rejected: {result.get('reason', 'unknown error')}"
 
         new_status = result.get("new_status", "?")
-        msg = (
-            f"Action '{action}' recorded for {request_id}. "
-            f"New status: {new_status}."
-        )
+        msg = f"Action '{action}' recorded for {request_id}. New status: {new_status}."
         if action == "book":
             msg += " " + _BOOK_PHASE_B_CAVEAT
         if "outreach_summary" in result:

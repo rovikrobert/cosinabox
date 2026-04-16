@@ -88,10 +88,12 @@ class TestCostTrackerPersistence:
 
     def test_loads_existing_spend_on_init(self, mem):
         from datetime import UTC, datetime
+
         today = datetime.now(UTC).date().isoformat()
         mem._conn.execute(
             "INSERT INTO daily_costs (date, total_cost, opus_calls, sonnet_calls, tool_calls) "
-            "VALUES (?, ?, 0, 0, 0)", (today, 5.0),
+            "VALUES (?, ?, 0, 0, 0)",
+            (today, 5.0),
         )
         mem._conn.commit()
 
@@ -102,4 +104,5 @@ class TestCostTrackerPersistence:
         tracker = CostTracker(per_message_cap_usd=1.0, daily_cap_usd=15.0)
         tracker.record(0.50)
         from datetime import UTC, datetime
+
         assert tracker.spend_on(datetime.now(UTC).date()) == 0.50

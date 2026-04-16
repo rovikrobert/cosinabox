@@ -17,8 +17,7 @@ RELA_QUERY_DEFINITION = {
             "query": {
                 "type": "string",
                 "description": (
-                    "Question about a stakeholder "
-                    "(e.g., 'How is my relationship with Alice?')"
+                    "Question about a stakeholder (e.g., 'How is my relationship with Alice?')"
                 ),
             },
         },

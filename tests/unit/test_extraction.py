@@ -99,9 +99,7 @@ class TestExtractFirefliesJob:
     def test_skips_already_processed(self, mem):
         mark_source_processed(mem, "fireflies", "t1")
         ff = MagicMock()
-        ff.list_recent_meetings.return_value = [
-            {"id": "t1", "title": "Sync", "date": "2026-04-13"}
-        ]
+        ff.list_recent_meetings.return_value = [{"id": "t1", "title": "Sync", "date": "2026-04-13"}]
         job = ExtractFirefliesJob(
             fireflies=ff,
             memory_client=MagicMock(),
@@ -117,7 +115,8 @@ class TestExtractFirefliesJob:
             {"id": "t1", "title": "Strategy", "date": "2026-04-13"}
         ]
         ff.get_transcript.return_value = {
-            "id": "t1", "title": "Strategy",
+            "id": "t1",
+            "title": "Strategy",
             "sentences": [{"text": "We decided to launch in Q3", "speaker_name": "Alice"}] * 5,
             "duration": 600,
         }
@@ -208,7 +207,8 @@ class TestExtractionPartialFailure:
         ff = MagicMock()
         ff.list_recent_meetings.return_value = [{"id": "t1", "title": "Strategy"}]
         ff.get_transcript.return_value = {
-            "id": "t1", "title": "Strategy",
+            "id": "t1",
+            "title": "Strategy",
             "sentences": [{"text": "Decision one", "speaker_name": "A"}] * 5,
             "duration": 600,
         }
@@ -226,7 +226,10 @@ class TestExtractionPartialFailure:
         mc.store.side_effect = ["id1", MemoryServiceError("503"), "id3"]
 
         job = ExtractFirefliesJob(
-            fireflies=ff, memory_client=mc, db=mem, anthropic_client=anthropic,
+            fireflies=ff,
+            memory_client=mc,
+            db=mem,
+            anthropic_client=anthropic,
         )
         job.run()
 
@@ -239,7 +242,8 @@ class TestExtractionPartialFailure:
         ff = MagicMock()
         ff.list_recent_meetings.return_value = [{"id": "t2", "title": "Sync"}]
         ff.get_transcript.return_value = {
-            "id": "t2", "title": "Sync",
+            "id": "t2",
+            "title": "Sync",
             "sentences": [{"text": "Decision", "speaker_name": "A"}] * 5,
             "duration": 600,
         }
@@ -253,7 +257,10 @@ class TestExtractionPartialFailure:
         mc = MagicMock()
 
         job = ExtractFirefliesJob(
-            fireflies=ff, memory_client=mc, db=mem, anthropic_client=anthropic,
+            fireflies=ff,
+            memory_client=mc,
+            db=mem,
+            anthropic_client=anthropic,
         )
         job.run()
 
@@ -284,8 +291,11 @@ class TestExtractionPartialFailure:
 
         stakeholders = [{"name": "Alice", "email": "alice@x.com", "cadence": "daily"}]
         job = ExtractGmailJob(
-            gmail=gmail, memory_client=mc, db=mem,
-            anthropic_client=anthropic, stakeholders=stakeholders,
+            gmail=gmail,
+            memory_client=mc,
+            db=mem,
+            anthropic_client=anthropic,
+            stakeholders=stakeholders,
         )
         job.run()
 
@@ -311,8 +321,11 @@ class TestExtractionPartialFailure:
 
         stakeholders = [{"name": "Alice", "email": "alice@x.com", "cadence": "daily"}]
         job = ExtractGmailJob(
-            gmail=gmail, memory_client=mc, db=mem,
-            anthropic_client=anthropic, stakeholders=stakeholders,
+            gmail=gmail,
+            memory_client=mc,
+            db=mem,
+            anthropic_client=anthropic,
+            stakeholders=stakeholders,
         )
         job.run()
 
