@@ -69,8 +69,10 @@ def _circuit_breaker_tripped() -> bool:
 
 
 class AnthropicClient(Protocol):
-    messages: Any  # duck-typed against the real anthropic.Anthropic client
-    beta: Any  # for advisor calls via client.beta.messages.create
+    @property
+    def messages(self) -> Any: ...  # duck-typed against the real anthropic.Anthropic client
+    @property
+    def beta(self) -> Any: ...  # for advisor calls via client.beta.messages.create
 
 
 @dataclass

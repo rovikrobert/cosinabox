@@ -15,7 +15,7 @@ from cosinabox import defaults
 from cosinabox.agent.cost import CostTracker
 from cosinabox.agent.loop import AgentLoop
 from cosinabox.agent.routing import Router
-from cosinabox.jobs.base import JobContext
+from cosinabox.jobs.base import Job, JobContext
 from cosinabox.prompts.core import render_system_prompt
 from cosinabox.scheduler.runner import SchedulerRunner
 from cosinabox.stakeholders import get_stakeholders
@@ -112,14 +112,16 @@ class App:
             logger.warning("jobs.yaml not found in %s", self.config_dir)
             return {}
         data: dict[str, Any] = yaml.safe_load(path.read_text()) or {}
-        return data.get("jobs", {})
+        jobs = data.get("jobs", {})
+        return jobs if isinstance(jobs, dict) else {}
 
     def _load_integrations(self) -> dict[str, Any]:
         path = self.config_dir / "integrations.yaml"
         if not path.exists():
             return {}
         data: dict[str, Any] = yaml.safe_load(path.read_text()) or {}
-        return data.get("integrations", {})
+        integrations = data.get("integrations", {})
+        return integrations if isinstance(integrations, dict) else {}
 
     # ------------------------------------------------------------------
     # Tool auto-discovery from integrations
@@ -239,7 +241,7 @@ class App:
                 continue
 
             if job_name == "morning_briefing" and cfg.get("schedule"):
-                job = MorningBriefingJob(
+                job: Job = MorningBriefingJob(
                     gmail=gmail,
                     calendar=calendar,
                     agent_loop=loop,
@@ -303,7 +305,7 @@ class App:
 
             def _wrap(original: Any, name: str) -> Any:
                 def wrapped(ctx: JobContext | None = None) -> str:
-                    result = original(ctx or JobContext())
+                    result: str = original(ctx or JobContext())
                     if not result or not result.strip():
                         return result
                     if any(m in result.lower() for m in NO_OP):
@@ -316,7 +318,7 @@ class App:
 
                 return wrapped
 
-            registered_job.run = _wrap(orig, jname)
+            registered_job.run = _wrap(orig, jname)  # type: ignore[method-assign]  # monkey-patching for telegram output
 
     # ------------------------------------------------------------------
     # Main entry point
@@ -521,7 +523,7 @@ class App:
                 from cosinabox.jobs.inbound_email_check import InboundEmailCheckJob
 
                 google_cfg = integrations.get("google", {})
-                job = InboundEmailCheckJob(
+                job: Job = InboundEmailCheckJob(
                     gmail=gmail,
                     db=memory,
                     send_alert=send_telegram,
@@ -651,6 +653,8 @@ class App:
 
         async def handle_message(update: Update, _ctx: Any) -> None:
             if update.message is None or update.message.text is None:
+                return
+            if update.effective_chat is None:
                 return
             if str(update.effective_chat.id) != chat_id:
                 return
