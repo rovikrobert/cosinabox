@@ -94,9 +94,8 @@ def _check_temporary_approval(session_id: str, tool_name: str) -> bool:
             return False
         # Consume the token atomically
         del _pending_approvals[key]
-    if time.time() - granted_at > _APPROVAL_TTL_S:
-        return False  # expired
-    return True
+    # Token is expired if granted_at is older than TTL
+    return time.time() - granted_at <= _APPROVAL_TTL_S
 
 
 def clear_approvals() -> None:

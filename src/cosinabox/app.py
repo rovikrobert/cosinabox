@@ -428,7 +428,10 @@ class App:
         # Rela agent (created after loop so it can use it; needs to be wired
         # back into the loop's tool registry so rela_query is available in DMs)
         rela_agent = None
-        if any(jobs_config.get(j, {}).get("enabled") for j in ("post_meeting_debrief", "rela_daily_scan")):
+        if any(
+            jobs_config.get(j, {}).get("enabled")
+            for j in ("post_meeting_debrief", "rela_daily_scan")
+        ):
             from cosinabox.agent.rela import create_rela_agent
 
             rela_cfg = integrations.get("rela", {}) or {}

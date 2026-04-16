@@ -221,7 +221,9 @@ class TestAgentLoopMemoryIntegration:
         from cosinabox.agent.routing import Router
 
         mem.store_summary(
-            session_id="s1", summary="Previously discussed: project timeline.", messages_summarized=10,
+            session_id="s1",
+            summary="Previously discussed: project timeline.",
+            messages_summarized=10,
         )
 
         mock_client = MagicMock()

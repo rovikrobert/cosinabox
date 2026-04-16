@@ -75,7 +75,13 @@ class TestInboundEmailCheckJob:
 
     def test_dedup_prevents_double_alert(self, mem):
         from cosinabox.tools.google.gmail import GmailMessage
-        msg = GmailMessage(id="m1", sender="ceo@bigcorp.com", subject="Urgent", snippet="Help", date="2026-04-12")
+        msg = GmailMessage(
+            id="m1",
+            sender="ceo@bigcorp.com",
+            subject="Urgent",
+            snippet="Help",
+            date="2026-04-12",
+        )
         mock_gmail = MagicMock()
         mock_gmail.search.return_value = [msg]
         alert = MagicMock()

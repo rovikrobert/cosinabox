@@ -72,7 +72,12 @@ class TestPostMeetingDebriefJob:
         ended = now - timedelta(minutes=20)
         cal = MagicMock()
         cal.list_events.return_value = [
-            CalendarEvent(id="e1", summary="Standup", start=ended - timedelta(minutes=30), end=ended),
+            CalendarEvent(
+                id="e1",
+                summary="Standup",
+                start=ended - timedelta(minutes=30),
+                end=ended,
+            ),
         ]
 
         job = PostMeetingDebriefJob(

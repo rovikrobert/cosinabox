@@ -14,7 +14,11 @@ def client(tmp_path):
 
 class TestLocalMemoryClient:
     def test_store_returns_id(self, client):
-        mid = client.store(text="Decision: launch in Q3", metadata={"source": "meeting"}, namespace="default")
+        mid = client.store(
+            text="Decision: launch in Q3",
+            metadata={"source": "meeting"},
+            namespace="default",
+        )
         assert isinstance(mid, str)
         assert len(mid) > 0
 

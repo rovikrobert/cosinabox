@@ -317,7 +317,10 @@ FIREFLIES_TOOL_DEFINITIONS: list[dict[str, Any]] = [
 WEB_SEARCH_TOOL_DEFINITIONS: list[dict[str, Any]] = [
     {
         "name": "web_search",
-        "description": "Search the web via Google. Returns organic results with titles, links, and snippets.",
+        "description": (
+            "Search the web via Google. Returns organic results with titles, "
+            "links, and snippets."
+        ),
         "input_schema": {
             "type": "object",
             "properties": {

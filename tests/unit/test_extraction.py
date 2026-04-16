@@ -4,6 +4,8 @@ from unittest.mock import MagicMock
 
 import pytest
 
+from cosinabox.jobs.extract_fireflies import ExtractFirefliesJob
+from cosinabox.jobs.extract_gmail import ExtractGmailJob, build_stakeholder_query
 from cosinabox.jobs.extraction import (
     EXTRACTION_PROMPT,
     is_source_processed,
@@ -83,26 +85,37 @@ class TestExtractionPrompt:
         assert "instruction" in lower
 
 
-from cosinabox.jobs.extract_fireflies import ExtractFirefliesJob
-
-
 class TestExtractFirefliesJob:
     def test_skips_when_fireflies_none(self, mem):
-        job = ExtractFirefliesJob(fireflies=None, memory_client=MagicMock(), db=mem, anthropic_client=MagicMock())
+        job = ExtractFirefliesJob(
+            fireflies=None,
+            memory_client=MagicMock(),
+            db=mem,
+            anthropic_client=MagicMock(),
+        )
         result = job.run()
         assert "skipped" in result.lower()
 
     def test_skips_already_processed(self, mem):
         mark_source_processed(mem, "fireflies", "t1")
         ff = MagicMock()
-        ff.list_recent_meetings.return_value = [{"id": "t1", "title": "Sync", "date": "2026-04-13"}]
-        job = ExtractFirefliesJob(fireflies=ff, memory_client=MagicMock(), db=mem, anthropic_client=MagicMock())
+        ff.list_recent_meetings.return_value = [
+            {"id": "t1", "title": "Sync", "date": "2026-04-13"}
+        ]
+        job = ExtractFirefliesJob(
+            fireflies=ff,
+            memory_client=MagicMock(),
+            db=mem,
+            anthropic_client=MagicMock(),
+        )
         result = job.run()
         assert "0 facts" in result or "skipped" in result.lower()
 
     def test_extracts_from_transcript(self, mem):
         ff = MagicMock()
-        ff.list_recent_meetings.return_value = [{"id": "t1", "title": "Strategy", "date": "2026-04-13"}]
+        ff.list_recent_meetings.return_value = [
+            {"id": "t1", "title": "Strategy", "date": "2026-04-13"}
+        ]
         ff.get_transcript.return_value = {
             "id": "t1", "title": "Strategy",
             "sentences": [{"text": "We decided to launch in Q3", "speaker_name": "Alice"}] * 5,
@@ -118,13 +131,15 @@ class TestExtractFirefliesJob:
         anthropic.messages.create.return_value = mock_response
 
         mc = MagicMock()
-        job = ExtractFirefliesJob(fireflies=ff, memory_client=mc, db=mem, anthropic_client=anthropic)
-        result = job.run()
+        job = ExtractFirefliesJob(
+            fireflies=ff,
+            memory_client=mc,
+            db=mem,
+            anthropic_client=anthropic,
+        )
+        job.run()
         mc.store.assert_called_once()
         assert is_source_processed(mem, "fireflies", "t1")
-
-
-from cosinabox.jobs.extract_gmail import ExtractGmailJob, build_stakeholder_query
 
 
 class TestBuildStakeholderQuery:
@@ -150,14 +165,26 @@ class TestBuildStakeholderQuery:
 
 class TestExtractGmailJob:
     def test_skips_when_gmail_none(self, mem):
-        job = ExtractGmailJob(gmail=None, memory_client=MagicMock(), db=mem, anthropic_client=MagicMock(), stakeholders=[])
+        job = ExtractGmailJob(
+            gmail=None,
+            memory_client=MagicMock(),
+            db=mem,
+            anthropic_client=MagicMock(),
+            stakeholders=[],
+        )
         result = job.run()
         assert "skipped" in result.lower()
 
     def test_skips_when_no_matching_stakeholders(self, mem):
         gmail = MagicMock()
         stakeholders = [{"name": "Bob", "email": "bob@x.com", "cadence": "quarterly"}]
-        job = ExtractGmailJob(gmail=gmail, memory_client=MagicMock(), db=mem, anthropic_client=MagicMock(), stakeholders=stakeholders)
+        job = ExtractGmailJob(
+            gmail=gmail,
+            memory_client=MagicMock(),
+            db=mem,
+            anthropic_client=MagicMock(),
+            stakeholders=stakeholders,
+        )
         result = job.run()
         assert "0" in result
         gmail.search.assert_not_called()

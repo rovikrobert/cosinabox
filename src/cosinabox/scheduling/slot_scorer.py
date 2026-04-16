@@ -309,7 +309,8 @@ def compute_score(
     config = config or ScoringConfig()
     day = start_utc.astimezone(ZoneInfo(owner_tz)).date()
     return (
-        config.w_timezone_fairness * _score_timezone_fairness(start_utc, end_utc, participants, config)
+        config.w_timezone_fairness
+        * _score_timezone_fairness(start_utc, end_utc, participants, config)
         + config.w_owner_preference * _score_owner_preference(start_utc, owner_tz, config)
         + config.w_buffer * _score_buffer(start_utc, end_utc, busy)
         + config.w_day_balance * _score_day_balance(day, events_per_day)
@@ -353,8 +354,14 @@ def events_to_busy_intervals(
     tz = ZoneInfo(tz_name)
     busy: list[tuple[datetime, datetime]] = []
     for ev in events:
-        start_str = ev.get("start", {}).get("dateTime") if isinstance(ev.get("start"), dict) else None
-        end_str = ev.get("end", {}).get("dateTime") if isinstance(ev.get("end"), dict) else None
+        start_str = (
+            ev.get("start", {}).get("dateTime")
+            if isinstance(ev.get("start"), dict) else None
+        )
+        end_str = (
+            ev.get("end", {}).get("dateTime")
+            if isinstance(ev.get("end"), dict) else None
+        )
         if start_str and end_str:
             s = datetime.fromisoformat(start_str).astimezone(tz)
             e = datetime.fromisoformat(end_str).astimezone(tz)

@@ -124,7 +124,8 @@ CREATE TABLE IF NOT EXISTS scheduling_participants (
     outreach_sent_at TEXT,
     created_at TEXT NOT NULL
 );
-CREATE INDEX IF NOT EXISTS idx_scheduling_participants_request ON scheduling_participants(request_id);
+CREATE INDEX IF NOT EXISTS idx_scheduling_participants_request
+    ON scheduling_participants(request_id);
 
 CREATE TABLE IF NOT EXISTS scheduling_slots (
     id INTEGER PRIMARY KEY AUTOINCREMENT,

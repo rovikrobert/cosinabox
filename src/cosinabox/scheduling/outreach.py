@@ -19,6 +19,7 @@ Gmail adapter contract (sync) — matches cosinabox.tools.google.gmail.GmailTool
 
 from __future__ import annotations
 
+import contextlib
 import logging
 from datetime import datetime
 from typing import Any
@@ -298,12 +299,10 @@ def execute_outreach(
                     "reason": "no telegram bot configured",
                 }
                 if db is not None and participant.db_id is not None:
-                    try:
+                    with contextlib.suppress(Exception):
                         sched_db.update_participant_status(
                             db, participant.db_id, "skipped: no_telegram",
                         )
-                    except Exception:  # noqa: BLE001
-                        pass
                 skipped.append(
                     f"{participant.name} (telegram — no bot configured)"
                 )
@@ -328,12 +327,10 @@ def execute_outreach(
         elif channel == "gmail":
             if gmail is None:
                 if db is not None and participant.db_id is not None:
-                    try:
+                    with contextlib.suppress(Exception):
                         sched_db.update_participant_status(
                             db, participant.db_id, "skipped: no_gmail",
                         )
-                    except Exception:  # noqa: BLE001
-                        pass
                 skipped.append(
                     f"{participant.name} (gmail — no gmail configured)"
                 )

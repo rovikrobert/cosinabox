@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import logging
 from typing import Any
 
@@ -75,20 +76,21 @@ class ExtractFirefliesJob(Job):
                 response = self.anthropic.messages.create(
                     model=SONNET_MODEL_ID,
                     max_tokens=1024,
-                    messages=[{"role": "user", "content": EXTRACTION_PROMPT.format(content=content)}],
+                    messages=[{
+                        "role": "user",
+                        "content": EXTRACTION_PROMPT.format(content=content),
+                    }],
                 )
                 resp_text = "\n".join(b.text for b in response.content if b.type == "text")
                 # Track cost
                 if self.cost_tracker is not None:
                     from cosinabox.agent.cost import estimate_cost
-                    try:
+                    with contextlib.suppress(Exception):
                         self.cost_tracker.record(estimate_cost(
                             SONNET_MODEL_ID,
                             response.usage.input_tokens,
                             response.usage.output_tokens,
                         ))
-                    except Exception:
-                        pass
                 facts = parse_extraction_response(resp_text)
             except Exception:
                 logger.warning("Extraction failed for transcript %s", mid, exc_info=True)

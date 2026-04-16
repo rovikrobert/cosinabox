@@ -531,9 +531,9 @@ def test_handler_malformed_callback_shows_alert(mem):
         # answer is awaited
         called = {}
 
-        async def _answer(msg, show_alert=False):
-            called["msg"] = msg
-            called["alert"] = show_alert
+        async def _answer(msg, show_alert=False, _called=called):
+            _called["msg"] = msg
+            _called["alert"] = show_alert
 
         update.callback_query.answer = _answer
 

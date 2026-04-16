@@ -62,7 +62,10 @@ def get_job_health(db: Any, days: int = 7) -> dict[str, Any]:
         "GROUP BY job_name ORDER BY failures DESC LIMIT 5",
         (cutoff,),
     )
-    failing_jobs = [{"name": row["job_name"], "failures": row["failures"]} for row in cur.fetchall()]
+    failing_jobs = [
+        {"name": row["job_name"], "failures": row["failures"]}
+        for row in cur.fetchall()
+    ]
 
     return {"runs_today": runs_today, "failing_jobs": failing_jobs, "days": days}
 

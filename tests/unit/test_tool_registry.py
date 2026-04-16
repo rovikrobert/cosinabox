@@ -51,7 +51,11 @@ def _make_gmail() -> MagicMock:
 def _make_calendar() -> MagicMock:
     cal = MagicMock()
     cal.list_events.return_value = [
-        FakeEvent("e1", "Standup", datetime(2026, 4, 12, 9, 0, tzinfo=UTC), datetime(2026, 4, 12, 9, 30, tzinfo=UTC)),
+        FakeEvent(
+            "e1", "Standup",
+            datetime(2026, 4, 12, 9, 0, tzinfo=UTC),
+            datetime(2026, 4, 12, 9, 30, tzinfo=UTC),
+        ),
     ]
     cal.find_conflicts.return_value = []
     return cal
@@ -360,7 +364,9 @@ class TestAgentLoopToolDefinitions:
 
         # Verify tools were passed in the API call
         call_kwargs = mock_client.messages.create.call_args
-        assert "tools" in call_kwargs.kwargs or "tools" in (call_kwargs[1] if len(call_kwargs) > 1 else {})
+        assert "tools" in call_kwargs.kwargs or "tools" in (
+            call_kwargs[1] if len(call_kwargs) > 1 else {}
+        )
         # Access via kwargs
         passed_tools = call_kwargs.kwargs.get("tools") or call_kwargs[1].get("tools")
         assert passed_tools == fake_defs

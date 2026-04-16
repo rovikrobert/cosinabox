@@ -42,7 +42,8 @@ class TestAnalytics:
         ts = datetime.now(UTC).isoformat()
         for _ in range(5):
             mem._conn.execute(
-                "INSERT INTO tool_logs (session_id, tool_name, duration_ms, error_type, created_at) "
+                "INSERT INTO tool_logs "
+                "(session_id, tool_name, duration_ms, error_type, created_at) "
                 "VALUES (?, ?, ?, ?, ?)", ("s1", "gmail_search", 100, "none", ts),
             )
         mem._conn.execute(

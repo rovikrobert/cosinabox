@@ -108,7 +108,6 @@ class TestSubAgent:
             agent_loop=mock_loop, memory_client=MagicMock(),
             max_concurrent_ingests=bound,
         )
-        threads = []
         # Fire 10 ingests; peak must stay ≤ bound because the semaphore blocks
         # the 4th-10th workers until the first few release.
         for _ in range(10):
