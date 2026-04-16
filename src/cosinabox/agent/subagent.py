@@ -32,6 +32,9 @@ class _NamespacedMemoryClient:
         return self._inner.delete(memory_id=memory_id)
 
 
+DEFAULT_MAX_CONCURRENT_INGESTS = 3
+
+
 class SubAgent:
     def __init__(
         self,
@@ -42,6 +45,7 @@ class SubAgent:
         agent_loop: Any,
         memory_client: Any,
         allowed_tools: list[str] | None = None,
+        max_concurrent_ingests: int = DEFAULT_MAX_CONCURRENT_INGESTS,
     ) -> None:
         self.name = name
         self.namespace = namespace
@@ -52,25 +56,40 @@ class SubAgent:
         # rather than inherit the full parent registry (which could include
         # write tools like gmail_send that a read-only sub-agent must not reach).
         self.allowed_tools: list[str] = [] if allowed_tools is None else list(allowed_tools)
+        # Bounded fan-out: ingest() spawns daemon threads that each run a full
+        # AgentLoop (Sonnet + writes to shared SQLite). Without a bound, a
+        # 100-stakeholder scan could spawn 100 concurrent Sonnet calls. The
+        # semaphore caps live workers; extra ingest() calls queue behind it on
+        # their own thread until a slot is free.
+        if max_concurrent_ingests < 1:
+            raise ValueError("max_concurrent_ingests must be >= 1")
+        self.max_concurrent_ingests = max_concurrent_ingests
+        self._ingest_sem = threading.Semaphore(max_concurrent_ingests)
 
     def ingest(self, content: str) -> None:
-        """Fire-and-forget: process content in a background thread."""
+        """Fire-and-forget: process content in a background thread.
+
+        Concurrency is bounded by ``self._ingest_sem`` — if ``max_concurrent_ingests``
+        workers are already running, newly-spawned threads block on acquire()
+        until a slot frees up.
+        """
         def _run() -> None:
-            try:
-                session = f"{self.name}-ingest-{uuid.uuid4().hex[:8]}"
-                self._loop.run(
-                    prompt=content, session_id=session,
-                    system_prompt_override=self.system_prompt,
-                    allowed_tools=self.allowed_tools,
-                )
-            except Exception:
-                logger.warning("SubAgent %s ingest failed", self.name, exc_info=True)
+            with self._ingest_sem:
+                try:
+                    session = f"{self.name}-ingest-{uuid.uuid4().hex}"
+                    self._loop.run(
+                        prompt=content, session_id=session,
+                        system_prompt_override=self.system_prompt,
+                        allowed_tools=self.allowed_tools,
+                    )
+                except Exception:
+                    logger.warning("SubAgent %s ingest failed", self.name, exc_info=True)
         thread = threading.Thread(target=_run, daemon=True)
         thread.start()
 
     def query(self, question: str) -> str:
         """Synchronous query — blocks until response is ready."""
-        session = f"{self.name}-query-{uuid.uuid4().hex[:8]}"
+        session = f"{self.name}-query-{uuid.uuid4().hex}"
         result = self._loop.run(
             prompt=question, session_id=session,
             system_prompt_override=self.system_prompt,

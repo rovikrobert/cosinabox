@@ -215,7 +215,12 @@ def _score_timezone_fairness(
         tz = ZoneInfo(p.timezone)
         local_start = start_utc.astimezone(tz)
         local_end = end_utc.astimezone(tz)
-        mid_hour = (local_start.hour + local_end.hour) / 2.0
+        # Compute the midpoint as an absolute timestamp, then convert to a
+        # local hour-of-day. Averaging .hour across midnight (e.g. 23 + 0 = 11.5)
+        # scored "23:00→00:30" as peak work hours — see test
+        # test_timezone_fairness_midnight_wrap for the regression.
+        mid_dt = local_start + (local_end - local_start) / 2
+        mid_hour = mid_dt.hour + mid_dt.minute / 60.0
 
         if work_start <= mid_hour <= work_end:
             scores.append(1.0)

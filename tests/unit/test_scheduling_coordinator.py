@@ -186,6 +186,88 @@ def test_find_consensus_missing_participant_returns_none(mem):
     assert find_consensus(mem, rid) is None
 
 
+def test_find_consensus_rescores_against_fresh_calendar(mem):
+    """Slots stored .score at PROPOSING time. If the owner's calendar shifts
+    during POLLING (up to 48h), the stored scores can misrepresent today's
+    reality — a slot that was free may now conflict with a newly-booked event.
+
+    Given fresh calendar events passed to find_consensus, the function should
+    re-score qualifying slots and prefer the one with fewer fresh conflicts."""
+    # Manual setup so we can put both slots at equivalent local-time scores,
+    # so that the stored-score tiebreaker doesn't mask the rescore.
+    ps = [
+        Participant(name="P0", email="p0@x.com", timezone="UTC", channel="gmail"),
+        Participant(name="P1", email="p1@x.com", timezone="UTC", channel="gmail"),
+    ]
+    req = SchedulingRequest(
+        id="",
+        title="Rescore test",
+        duration_minutes=30,
+        date_range_start=date(2026, 4, 14),
+        date_range_end=date(2026, 4, 15),
+        preferred_timezone="UTC",
+        participants=ps,
+        status=SchedulingStatus.POLLING.value,
+    )
+    rid = sched_db.create_request(mem, req)
+    sched_db.update_request_status(mem, rid, SchedulingStatus.POLLING.value)
+    loaded = sched_db.get_request(mem, rid)
+
+    # Two slots at identical local-time profile (both 10:00 UTC peak), on
+    # different days → fresh-rescore is the only tiebreaker that matters.
+    slot_a = TimeSlot(
+        start_time=datetime(2026, 4, 14, 10, 0, tzinfo=UTC),
+        end_time=datetime(2026, 4, 14, 10, 30, tzinfo=UTC),
+        score=0.95,  # stored: slot A slightly higher
+    )
+    slot_b = TimeSlot(
+        start_time=datetime(2026, 4, 15, 10, 0, tzinfo=UTC),
+        end_time=datetime(2026, 4, 15, 10, 30, tzinfo=UTC),
+        score=0.90,
+    )
+    sid_a = sched_db.add_slot(mem, rid, slot_a)
+    sid_b = sched_db.add_slot(mem, rid, slot_b)
+
+    for p in loaded.participants:
+        for sid in (sid_a, sid_b):
+            sched_db.record_response(
+                mem, request_id=rid, participant_db_id=p.db_id,
+                slot_db_id=sid, response="yes",
+            )
+
+    # Without fresh calendar, stored score wins → slot A.
+    assert find_consensus(mem, rid).db_id == sid_a
+
+    # With fresh calendar showing a new event overlapping slot A, the rescore
+    # should prefer slot B (still clear today).
+    new_conflict = {
+        "start": {"dateTime": slot_a.start_time.isoformat()},
+        "end": {"dateTime": slot_a.end_time.isoformat()},
+    }
+    fresh_events = {
+        slot_a.start_time.date(): [new_conflict],
+        slot_b.start_time.date(): [],
+    }
+    result = find_consensus(mem, rid, owner_events_by_day=fresh_events)
+    assert result is not None
+    assert result.db_id == sid_b
+
+
+def test_find_consensus_without_fresh_calendar_uses_stored_scores(mem):
+    """Regression guard: the fresh-calendar path is opt-in. Without it,
+    find_consensus behaves exactly as before."""
+    rid, parts, slot_ids = _setup_polling_request(mem, n_slots=2)
+    for p in parts:
+        for sid in slot_ids:
+            sched_db.record_response(
+                mem, request_id=rid, participant_db_id=p.db_id,
+                slot_db_id=sid, response="yes",
+            )
+    result = find_consensus(mem, rid)
+    assert result is not None
+    assert result.db_id == slot_ids[0]  # highest stored score
+
+
 def test_find_consensus_picks_highest_score_slot(mem):
     rid, parts, slot_ids = _setup_polling_request(mem, n_slots=2)
     # Both slots are unanimous yes — pick higher-score one (slot 0, score=1.0).

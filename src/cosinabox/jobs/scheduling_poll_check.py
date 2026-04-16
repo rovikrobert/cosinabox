@@ -62,10 +62,12 @@ class SchedulingPollCheckJob(Job):
         anthropic_client: Any,
         send_fn: Callable[[str], None],
         gmail: Any | None = None,
+        calendar: Any | None = None,
         cost_tracker: Any | None = None,
     ) -> None:
         self.db = db
         self.gmail = gmail
+        self.calendar = calendar
         self.anthropic_client = anthropic_client
         self.cost_tracker = cost_tracker
         self.send_fn = send_fn
@@ -90,6 +92,7 @@ class SchedulingPollCheckJob(Job):
                     self.db,
                     req.id,
                     gmail=self.gmail,
+                    calendar=self.calendar,
                     anthropic_client=self.anthropic_client,
                     cost_tracker=self.cost_tracker,
                 )
@@ -98,8 +101,15 @@ class SchedulingPollCheckJob(Job):
                     "check_polling_status failed for %s", req.id,
                 )
 
-            # 2. Consensus?
-            consensus = find_consensus(self.db, req.id)
+            # 2. Consensus? Re-score against fresh calendar so we don't pick a
+            # slot that the owner has since booked over.
+            from cosinabox.scheduling.coordinator import (
+                _fetch_owner_events_for_slots,
+            )
+            fresh = _fetch_owner_events_for_slots(self.calendar, req)
+            consensus = find_consensus(
+                self.db, req.id, owner_events_by_day=fresh,
+            )
             if consensus is not None:
                 try:
                     transition(

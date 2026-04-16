@@ -43,6 +43,40 @@ class TestCrmEmailSyncJob:
         assert "1" in result
         attio.update_person.assert_called_once()
 
+    def test_get_recipients_uses_gmail_tool_in_prod(self):
+        """Default _get_recipients() asks Gmail for To/Cc headers."""
+        from cosinabox.tools.google.gmail import GmailMessage
+
+        gmail = MagicMock()
+        gmail.search.return_value = [
+            GmailMessage(id="m1", sender="me@co.com", subject="Hi", snippet="", date=""),
+        ]
+        gmail.get_recipients.return_value = ["alice@example.com"]
+
+        attio = MagicMock()
+        attio.search_people.return_value = [{"id": "p1"}]
+        attio.update_person.return_value = {"id": "p1"}
+
+        job = CrmEmailSyncJob(gmail=gmail, attio=attio)
+        job.run()
+        gmail.get_recipients.assert_called_once_with("m1")
+        attio.update_person.assert_called_once()
+
+    def test_get_recipients_without_gmail_tool_returns_empty(self):
+        """If gmail lacks get_recipients (unexpected), default to []."""
+        from cosinabox.tools.google.gmail import GmailMessage
+
+        gmail = MagicMock(spec=["search"])  # no get_recipients attribute
+        gmail.search.return_value = [
+            GmailMessage(id="m1", sender="me@co.com", subject="Hi", snippet="", date=""),
+        ]
+        attio = MagicMock()
+
+        job = CrmEmailSyncJob(gmail=gmail, attio=attio)
+        result = job.run()
+        attio.search_people.assert_not_called()
+        assert "0" in result
+
     def test_continues_on_individual_failure(self):
         from cosinabox.tools.google.gmail import GmailMessage
         gmail = MagicMock()

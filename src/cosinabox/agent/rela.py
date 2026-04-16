@@ -51,11 +51,25 @@ When asked about a stakeholder, respond with:
 """
 
 
-def create_rela_agent(*, agent_loop: Any, memory_client: Any) -> SubAgent:
-    return SubAgent(
-        name="rela",
-        namespace="rela",
-        system_prompt=RELA_SYSTEM_PROMPT,
-        agent_loop=agent_loop,
-        memory_client=memory_client,
-    )
+def create_rela_agent(
+    *,
+    agent_loop: Any,
+    memory_client: Any,
+    max_concurrent_ingests: int | None = None,
+) -> SubAgent:
+    """Create the Rela relationship-health sub-agent.
+
+    ``max_concurrent_ingests`` caps how many parallel ingests may run at once.
+    If ``None``, falls back to ``SubAgent``'s default (3). Configurable via
+    ``integrations.yaml``: ``rela.max_concurrent_ingests``.
+    """
+    kwargs: dict[str, Any] = {
+        "name": "rela",
+        "namespace": "rela",
+        "system_prompt": RELA_SYSTEM_PROMPT,
+        "agent_loop": agent_loop,
+        "memory_client": memory_client,
+    }
+    if max_concurrent_ingests is not None:
+        kwargs["max_concurrent_ingests"] = max_concurrent_ingests
+    return SubAgent(**kwargs)

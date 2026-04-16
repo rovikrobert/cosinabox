@@ -28,8 +28,19 @@ logger = logging.getLogger(__name__)
 # Scheduling requests
 # ---------------------------------------------------------------------------
 
-def create_request(db: Any, req: SchedulingRequest) -> str:
-    """Insert a scheduling request and its participants. Returns the request id."""
+def create_request(
+    db: Any,
+    req: SchedulingRequest,
+    *,
+    requested_by: str = "owner",
+) -> str:
+    """Insert a scheduling request and its participants. Returns the request id.
+
+    ``requested_by`` is an audit-trail column with a default of ``"owner"``
+    (matches the schema default). Callers (``start_scheduling``) pass the
+    configured ``owner_name`` so the row reflects the actual requester
+    rather than a hardcoded literal.
+    """
     req_id = req.id or uuid.uuid4().hex
     now = datetime.now(UTC).isoformat()
 
@@ -40,7 +51,7 @@ def create_request(db: Any, req: SchedulingRequest) -> str:
             created_at, updated_at)
            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
         (
-            req_id, req.title, req.duration_minutes, "owner",
+            req_id, req.title, req.duration_minutes, requested_by,
             req.date_range_start.isoformat(), req.date_range_end.isoformat(),
             req.status, req.preferred_timezone, req.notes, now, now,
         ),

@@ -60,9 +60,15 @@ class InboundEmailCheckJob(Job):
             ).isoformat()
 
         check_dt = datetime.fromisoformat(last_check)
-        after_str = check_dt.strftime("%Y/%m/%d")
+        # Use epoch seconds so `after:` narrows to the exact last-check
+        # moment instead of fetching the entire day (the date-level query
+        # would hit the 50-msg cap on busy inboxes and silently drop
+        # messages). Gmail documents `after:<unix-ts>` as a valid operator.
+        if check_dt.tzinfo is None:
+            check_dt = check_dt.replace(tzinfo=UTC)
+        after_epoch = int(check_dt.timestamp())
 
-        messages = self.gmail.search(f"after:{after_str}", max_results=50)
+        messages = self.gmail.search(f"after:{after_epoch}", max_results=50)
 
         alert_count = 0
         for msg in messages:

@@ -20,11 +20,27 @@ class CrmEmailSyncJob(Job):
         self.attio = attio
 
     def _get_recipients(self, msg: Any) -> list[str]:
-        """Extract To + CC recipients from a GmailMessage.
+        """Extract To + Cc recipients for a GmailMessage.
 
-        Override in tests. In production, this would fetch full headers.
+        In production, delegates to ``gmail.get_recipients(msg.id)`` which
+        fetches the message's To/Cc headers via the Gmail API. Tests can
+        override this method directly.
+
+        Returns ``[]`` if the adapter does not expose ``get_recipients`` —
+        keeping the job a no-op rather than crashing when paired with a
+        non-standard adapter.
         """
-        return []
+        get_recipients = getattr(self.gmail, "get_recipients", None)
+        if not callable(get_recipients):
+            return []
+        try:
+            result = get_recipients(msg.id)
+        except Exception:
+            logger.warning(
+                "get_recipients failed for %s", getattr(msg, "id", "?"), exc_info=True,
+            )
+            return []
+        return list(result or [])
 
     def run(self, context: Any = None) -> str:
         if self.gmail is None:
