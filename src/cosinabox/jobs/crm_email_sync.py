@@ -56,7 +56,10 @@ class CrmEmailSyncJob(Job):
         consecutive_429s = 0
 
         seen_emails: set[str] = set()
+        aborted = False
         for msg in sent:
+            if aborted:
+                break
             recipients = self._get_recipients(msg)
             for email in recipients:
                 if email in seen_emails:
@@ -90,6 +93,7 @@ class CrmEmailSyncJob(Job):
                         consecutive_429s += 1
                         if consecutive_429s >= 3:
                             logger.warning("CRM sync aborted: 3 consecutive rate limits")
+                            aborted = True
                             break
                         time.sleep(2)
                     else:
