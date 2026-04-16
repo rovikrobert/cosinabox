@@ -3,13 +3,18 @@ from __future__ import annotations
 import os
 import shutil
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
 
 TEMPLATE = Path(__file__).resolve().parents[2] / "src" / "cosinabox" / "templates" / "user-repo"
 REPO_ROOT = Path(__file__).resolve().parents[2]
-VENV_BIN = REPO_ROOT / ".venv" / "bin"
+# Resolve the installed `cosinabox` entry point. Works in both activated venvs
+# (shutil.which finds it on PATH) and bare `pip install -e` environments like CI
+# (fall back to the Python interpreter's bin dir, where pip drops entry points).
+COSINABOX_BIN = shutil.which("cosinabox") or str(Path(sys.executable).parent / "cosinabox")
+COSINABOX_BIN_DIR = str(Path(COSINABOX_BIN).parent)
 
 
 @pytest.fixture
@@ -46,14 +51,14 @@ def _hook_env() -> dict[str, str]:
     """Build env with venv bin prepended so cosinabox is resolvable."""
     env = {**os.environ}
     original_path = env.get("PATH", "")
-    env["PATH"] = f"{VENV_BIN}:{original_path}"
+    env["PATH"] = f"{COSINABOX_BIN_DIR}:{original_path}"
     return env
 
 
 def test_validate_passes_on_template(fresh_user_repo: Path) -> None:
     """Confirm that the template files pass cosinabox validate."""
     result = subprocess.run(
-        [str(VENV_BIN / "cosinabox"), "--config-dir", str(fresh_user_repo), "validate"],
+        [COSINABOX_BIN, "--config-dir", str(fresh_user_repo), "validate"],
         capture_output=True,
         text=True,
     )
