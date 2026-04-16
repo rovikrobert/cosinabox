@@ -5,6 +5,7 @@ from __future__ import annotations
 import re
 from abc import ABC, abstractmethod
 from pathlib import Path
+from typing import Any
 
 import yaml
 
@@ -97,7 +98,7 @@ class StakeholdersStep(Step):
 
     def apply(self, answer: str, config_dir: Path) -> None:
         path = config_dir / "stakeholders.yaml"
-        existing = (
+        existing: dict[str, Any] = (
             yaml.safe_load(path.read_text())
             if path.exists()
             else {"schema_version": 1, "stakeholders": []}
@@ -131,7 +132,7 @@ class CalendarRealityStep(Step):
 
     def apply(self, answer: str, config_dir: Path) -> None:
         path = config_dir / "jobs.yaml"
-        data = (
+        data: dict[str, Any] = (
             yaml.safe_load(path.read_text()) if path.exists() else {"schema_version": 1, "jobs": {}}
         )
         skips = (
@@ -155,7 +156,7 @@ class JobStagingStep(Step):
 
     def apply(self, answer: str, config_dir: Path) -> None:
         path = config_dir / "jobs.yaml"
-        data = (
+        data: dict[str, Any] = (
             yaml.safe_load(path.read_text()) if path.exists() else {"schema_version": 1, "jobs": {}}
         )
         for j in ("morning_briefing", "pre_meeting_prep"):
