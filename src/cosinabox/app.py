@@ -25,24 +25,26 @@ logger = logging.getLogger("cosinabox")
 _FRONTMATTER_RE = re.compile(r"^---\n(.*?)\n---\n(.*)", re.DOTALL)
 
 
-_APPROVAL_PHRASES: frozenset[str] = frozenset({
-    "yes",
-    "yep",
-    "yeah",
-    "y",
-    "go ahead",
-    "approved",
-    "do it",
-    "send it",
-    "ok",
-    "okay",
-    "k",
-    "sure",
-    "confirm",
-    "approve",
-    "absolutely",
-    "definitely",
-})
+_APPROVAL_PHRASES: frozenset[str] = frozenset(
+    {
+        "yes",
+        "yep",
+        "yeah",
+        "y",
+        "go ahead",
+        "approved",
+        "do it",
+        "send it",
+        "ok",
+        "okay",
+        "k",
+        "sure",
+        "confirm",
+        "approve",
+        "absolutely",
+        "definitely",
+    }
+)
 
 
 def is_approval(text: str, *, has_pending_tool: bool) -> bool:
@@ -124,7 +126,8 @@ class App:
     # ------------------------------------------------------------------
 
     def _build_tools(
-        self, integrations: dict[str, Any],
+        self,
+        integrations: dict[str, Any],
     ) -> tuple[dict[str, Any], dict[str, Any], list[str]]:
         """Build tool instances and handler dict from integrations.yaml.
 
@@ -395,7 +398,7 @@ class App:
                 "coordinator_ctx": {
                     "anthropic_client": _Anthropic(),
                     "cost_tracker": None,  # filled after loop is created
-                    "bot": None,           # filled after tg_app is created
+                    "bot": None,  # filled after tg_app is created
                     "gmail": tool_instances.get("gmail"),
                 },
                 "owner_name": name,
@@ -428,13 +431,17 @@ class App:
         # Rela agent (created after loop so it can use it; needs to be wired
         # back into the loop's tool registry so rela_query is available in DMs)
         rela_agent = None
-        if any(jobs_config.get(j, {}).get("enabled") for j in ("post_meeting_debrief", "rela_daily_scan")):
+        if any(
+            jobs_config.get(j, {}).get("enabled")
+            for j in ("post_meeting_debrief", "rela_daily_scan")
+        ):
             from cosinabox.agent.rela import create_rela_agent
 
             rela_cfg = integrations.get("rela", {}) or {}
             max_ingests = rela_cfg.get("max_concurrent_ingests")
             rela_agent = create_rela_agent(
-                agent_loop=loop, memory_client=memory_client,
+                agent_loop=loop,
+                memory_client=memory_client,
                 max_concurrent_ingests=max_ingests,
             )
 
@@ -501,8 +508,7 @@ class App:
             alert_body = "\n\n".join(f"- {e}" for e in auth_errors)
             try:
                 send_telegram(
-                    "[cosinabox startup] Integration auth issues detected:\n\n"
-                    f"{alert_body}"
+                    f"[cosinabox startup] Integration auth issues detected:\n\n{alert_body}"
                 )
             except Exception:  # noqa: BLE001
                 logger.exception("Failed to send auth-error alert via Telegram")
@@ -529,7 +535,8 @@ class App:
                 from cosinabox.jobs.crm_email_sync import CrmEmailSyncJob
 
                 job = CrmEmailSyncJob(
-                    gmail=gmail, attio=tool_instances.get("attio"),
+                    gmail=gmail,
+                    attio=tool_instances.get("attio"),
                 )
                 cron = cfg.get("schedule", "45 17 * * *")
                 scheduler.add_job(job, cron=cron)
@@ -674,11 +681,7 @@ class App:
             try:
                 result = loop.run(prompt=user_text, session_id=session)
                 reply = result.final_text or "(no response)"
-                blocked = [
-                    tc.name
-                    for tc in result.tool_calls
-                    if "APPROVAL REQUIRED" in tc.result
-                ]
+                blocked = [tc.name for tc in result.tool_calls if "APPROVAL REQUIRED" in tc.result]
             except Exception:
                 logger.exception("Agent loop failed")
                 reply = "(error processing message)"

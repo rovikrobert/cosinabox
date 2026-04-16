@@ -97,15 +97,15 @@ class InboundEmailCheckJob(Job):
         # so the next poll's `after:` window moves forward. Without this, a
         # quiet inbox would re-query the same window on every run.
         self.db._conn.execute(
-            "INSERT OR REPLACE INTO gmail_poll_state (account_index, last_check_ts) "
-            "VALUES (0, ?)",
+            "INSERT OR REPLACE INTO gmail_poll_state (account_index, last_check_ts) VALUES (0, ?)",
             (poll_start_ts,),
         )
         self.db._conn.commit()
 
         cutoff = (datetime.now(UTC) - timedelta(days=7)).isoformat()
         self.db._conn.execute(
-            "DELETE FROM processed_message_ids WHERE created_at < ?", (cutoff,),
+            "DELETE FROM processed_message_ids WHERE created_at < ?",
+            (cutoff,),
         )
         self.db._conn.commit()
 

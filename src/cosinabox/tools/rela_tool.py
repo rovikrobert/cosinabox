@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 RELA_QUERY_DEFINITION = {
     "name": "rela_query",
@@ -15,7 +16,9 @@ RELA_QUERY_DEFINITION = {
         "properties": {
             "query": {
                 "type": "string",
-                "description": "Question about a stakeholder (e.g., 'How is my relationship with Alice?')",
+                "description": (
+                    "Question about a stakeholder (e.g., 'How is my relationship with Alice?')"
+                ),
             },
         },
         "required": ["query"],

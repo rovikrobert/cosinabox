@@ -2,7 +2,12 @@ from __future__ import annotations
 
 import pytest
 
-from cosinabox.agent.analytics import get_cost_summary, get_error_summary, get_job_health, get_tool_stats
+from cosinabox.agent.analytics import (
+    get_cost_summary,
+    get_error_summary,
+    get_job_health,
+    get_tool_stats,
+)
 from cosinabox.memory import Memory
 
 
@@ -19,10 +24,12 @@ class TestAnalytics:
 
     def test_cost_summary_with_data(self, mem):
         from datetime import UTC, datetime
+
         today = datetime.now(UTC).date().isoformat()
         mem._conn.execute(
             "INSERT INTO daily_costs (date, total_cost, opus_calls, sonnet_calls, tool_calls) "
-            "VALUES (?, ?, ?, ?, ?)", (today, 3.50, 2, 10, 15),
+            "VALUES (?, ?, ?, ?, ?)",
+            (today, 3.50, 2, 10, 15),
         )
         mem._conn.commit()
         result = get_cost_summary(mem)
@@ -34,15 +41,19 @@ class TestAnalytics:
 
     def test_tool_stats_with_data(self, mem):
         from datetime import UTC, datetime
+
         ts = datetime.now(UTC).isoformat()
         for _ in range(5):
             mem._conn.execute(
-                "INSERT INTO tool_logs (session_id, tool_name, duration_ms, error_type, created_at) "
-                "VALUES (?, ?, ?, ?, ?)", ("s1", "gmail_search", 100, "none", ts),
+                "INSERT INTO tool_logs "
+                "(session_id, tool_name, duration_ms, error_type, created_at) "
+                "VALUES (?, ?, ?, ?, ?)",
+                ("s1", "gmail_search", 100, "none", ts),
             )
         mem._conn.execute(
             "INSERT INTO tool_logs (session_id, tool_name, duration_ms, error_type, created_at) "
-            "VALUES (?, ?, ?, ?, ?)", ("s1", "gmail_search", 200, "rate_limit", ts),
+            "VALUES (?, ?, ?, ?, ?)",
+            ("s1", "gmail_search", 200, "rate_limit", ts),
         )
         mem._conn.commit()
         result = get_tool_stats(mem)

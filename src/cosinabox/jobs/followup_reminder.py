@@ -25,8 +25,11 @@ class FollowupReminderJob(Job):
 
     def run(self, context: JobContext) -> str:
         cadence_map = {
-            "daily": 1, "weekly": 7, "biweekly": 14,
-            "monthly": 30, "quarterly": 90,
+            "daily": 1,
+            "weekly": 7,
+            "biweekly": 14,
+            "monthly": 30,
+            "quarterly": 90,
         }
         stale: list[str] = []
         for s in self.stakeholders:
@@ -43,15 +46,9 @@ class FollowupReminderJob(Job):
             if days > threshold:
                 name = s.get("name", "?")
                 role = s.get("role", "")
-                stale.append(
-                    f"- {name} ({role}) — {days}d since last contact, "
-                    f"cadence: {cadence}"
-                )
+                stale.append(f"- {name} ({role}) — {days}d since last contact, cadence: {cadence}")
 
         if not stale:
             return ""  # Empty = no message sent
 
-        return (
-            f"Follow-up reminder ({len(stale)} contacts cooling):\n\n"
-            + "\n".join(stale)
-        )
+        return f"Follow-up reminder ({len(stale)} contacts cooling):\n\n" + "\n".join(stale)

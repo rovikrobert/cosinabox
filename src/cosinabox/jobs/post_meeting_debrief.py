@@ -76,7 +76,8 @@ class PostMeetingDebriefJob(Job):
 
     def _is_debriefed(self, uid: str) -> bool:
         cur = self.db._conn.execute(
-            "SELECT 1 FROM debrief_state WHERE ical_uid = ?", (uid,),
+            "SELECT 1 FROM debrief_state WHERE ical_uid = ?",
+            (uid,),
         )
         return cur.fetchone() is not None
 
@@ -116,10 +117,13 @@ class PostMeetingDebriefJob(Job):
                     transcripts = self.fireflies.list_recent_meetings(hours=24)
                     cal_emails: set[str] = {a.lower() for a in (evt.attendees or [])}
                     candidates = [
-                        t for t in transcripts
+                        t
+                        for t in transcripts
                         if _transcript_matches(
-                            t, cal_title=evt.summary,
-                            cal_emails=cal_emails, cal_start=evt.start,
+                            t,
+                            cal_title=evt.summary,
+                            cal_emails=cal_emails,
+                            cal_start=evt.start,
                         )
                     ]
                     if candidates:

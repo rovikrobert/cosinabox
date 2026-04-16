@@ -3,8 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime, timezone
-from typing import Any
+from datetime import UTC, datetime
 from unittest.mock import MagicMock
 
 from cosinabox.tools.registry import (
@@ -17,10 +16,10 @@ from cosinabox.tools.registry import (
     build_tool_registry,
 )
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 @dataclass
 class FakeEmail:
@@ -53,7 +52,12 @@ def _make_gmail() -> MagicMock:
 def _make_calendar() -> MagicMock:
     cal = MagicMock()
     cal.list_events.return_value = [
-        FakeEvent("e1", "Standup", datetime(2026, 4, 12, 9, 0, tzinfo=timezone.utc), datetime(2026, 4, 12, 9, 30, tzinfo=timezone.utc)),
+        FakeEvent(
+            "e1",
+            "Standup",
+            datetime(2026, 4, 12, 9, 0, tzinfo=UTC),
+            datetime(2026, 4, 12, 9, 30, tzinfo=UTC),
+        ),
     ]
     cal.find_conflicts.return_value = []
     return cal
@@ -84,6 +88,7 @@ def _make_web_search() -> MagicMock:
 # build_tool_registry tests
 # ---------------------------------------------------------------------------
 
+
 class TestBuildToolRegistry:
     def test_empty_instances_returns_empty(self) -> None:
         defs, handlers = build_tool_registry({})
@@ -94,15 +99,20 @@ class TestBuildToolRegistry:
         defs, handlers = build_tool_registry({"gmail": _make_gmail()})
         assert len(defs) == len(GMAIL_TOOL_DEFINITIONS)
         assert set(handlers.keys()) == {
-            "gmail_search", "gmail_list_recent", "gmail_compose", "gmail_send",
+            "gmail_search",
+            "gmail_list_recent",
+            "gmail_compose",
+            "gmail_send",
         }
 
     def test_calendar_only(self) -> None:
         defs, handlers = build_tool_registry({"calendar": _make_calendar()})
         assert len(defs) == len(CALENDAR_TOOL_DEFINITIONS)
         assert set(handlers.keys()) == {
-            "calendar_list_events", "calendar_find_conflicts",
-            "calendar_create_event", "calendar_find_free_time",
+            "calendar_list_events",
+            "calendar_find_conflicts",
+            "calendar_create_event",
+            "calendar_find_free_time",
         }
 
     def test_attio_only(self) -> None:
@@ -184,6 +194,7 @@ class TestBuildToolRegistry:
 # Handler execution tests
 # ---------------------------------------------------------------------------
 
+
 class TestHandlerExecution:
     def test_gmail_search_calls_tool(self) -> None:
         gmail = _make_gmail()
@@ -250,9 +261,10 @@ class TestHandlerExecution:
     def test_calendar_create_event_success(self) -> None:
         cal = _make_calendar()
         created = FakeEvent(
-            "new-1", "Team Sync",
-            datetime(2026, 4, 14, 14, 0, tzinfo=timezone.utc),
-            datetime(2026, 4, 14, 15, 0, tzinfo=timezone.utc),
+            "new-1",
+            "Team Sync",
+            datetime(2026, 4, 14, 14, 0, tzinfo=UTC),
+            datetime(2026, 4, 14, 15, 0, tzinfo=UTC),
         )
         cal.create_event.return_value = created
         _, handlers = build_tool_registry({"calendar": cal})
@@ -271,9 +283,10 @@ class TestHandlerExecution:
         cal = _make_calendar()
         conflicts = [
             FakeEvent(
-                "e1", "Standup",
-                datetime(2026, 4, 14, 14, 0, tzinfo=timezone.utc),
-                datetime(2026, 4, 14, 14, 30, tzinfo=timezone.utc),
+                "e1",
+                "Standup",
+                datetime(2026, 4, 14, 14, 0, tzinfo=UTC),
+                datetime(2026, 4, 14, 14, 30, tzinfo=UTC),
             )
         ]
         cal.create_event.side_effect = CalendarConflict(conflicts)
@@ -290,12 +303,12 @@ class TestHandlerExecution:
         cal = _make_calendar()
         cal.find_free_time.return_value = [
             (
-                datetime(2026, 4, 14, 9, 0, tzinfo=timezone.utc),
-                datetime(2026, 4, 14, 10, 0, tzinfo=timezone.utc),
+                datetime(2026, 4, 14, 9, 0, tzinfo=UTC),
+                datetime(2026, 4, 14, 10, 0, tzinfo=UTC),
             ),
             (
-                datetime(2026, 4, 14, 11, 0, tzinfo=timezone.utc),
-                datetime(2026, 4, 14, 22, 0, tzinfo=timezone.utc),
+                datetime(2026, 4, 14, 11, 0, tzinfo=UTC),
+                datetime(2026, 4, 14, 22, 0, tzinfo=UTC),
             ),
         ]
         _, handlers = build_tool_registry({"calendar": cal})
@@ -320,6 +333,7 @@ class TestHandlerExecution:
 # ---------------------------------------------------------------------------
 # AgentLoop tool_definitions wiring test
 # ---------------------------------------------------------------------------
+
 
 class TestAgentLoopToolDefinitions:
     def test_loop_passes_tool_definitions_to_api(self) -> None:
@@ -362,7 +376,9 @@ class TestAgentLoopToolDefinitions:
 
         # Verify tools were passed in the API call
         call_kwargs = mock_client.messages.create.call_args
-        assert "tools" in call_kwargs.kwargs or "tools" in (call_kwargs[1] if len(call_kwargs) > 1 else {})
+        assert "tools" in call_kwargs.kwargs or "tools" in (
+            call_kwargs[1] if len(call_kwargs) > 1 else {}
+        )
         # Access via kwargs
         passed_tools = call_kwargs.kwargs.get("tools") or call_kwargs[1].get("tools")
         assert passed_tools == fake_defs
@@ -402,6 +418,7 @@ class TestAgentLoopToolDefinitions:
 # Timezone handling tests
 # ---------------------------------------------------------------------------
 
+
 class TestTimezoneHandling:
     def test_find_free_time_uses_configured_timezone(self) -> None:
         """Handler uses the timezone passed to build_tool_registry, not UTC."""
@@ -415,10 +432,12 @@ class TestTimezoneHandling:
             ),
         ]
         _, handlers = build_tool_registry(
-            {"calendar": cal}, timezone="Asia/Singapore",
+            {"calendar": cal},
+            timezone="Asia/Singapore",
         )
         handlers["calendar_find_free_time"](
-            date="2026-04-14", duration_minutes=30,
+            date="2026-04-14",
+            duration_minutes=30,
         )
         # Verify the datetime passed to CalendarTool has SGT timezone
         call_args = cal.find_free_time.call_args
@@ -428,13 +447,13 @@ class TestTimezoneHandling:
 
     def test_find_free_time_defaults_to_utc(self) -> None:
         """Without explicit timezone, handler uses UTC."""
-        from zoneinfo import ZoneInfo
 
         cal = _make_calendar()
         cal.find_free_time.return_value = []
         _, handlers = build_tool_registry({"calendar": cal})
         handlers["calendar_find_free_time"](
-            date="2026-04-14", duration_minutes=30,
+            date="2026-04-14",
+            duration_minutes=30,
         )
         call_args = cal.find_free_time.call_args
         passed_date = call_args.kwargs["date"]
@@ -444,6 +463,7 @@ class TestTimezoneHandling:
 # ---------------------------------------------------------------------------
 # _serialize edge case tests
 # ---------------------------------------------------------------------------
+
 
 class TestSerializeEdgeCases:
     def test_serialize_empty_list(self) -> None:
@@ -462,19 +482,27 @@ class TestSerializeEdgeCases:
 
     def test_serialize_dataclass_in_dict_values(self) -> None:
         """Dataclass values in dicts are properly serialized, not repr'd."""
-        result = _serialize({"event": FakeEvent(
-            "e1", "Standup",
-            datetime(2026, 4, 12, 9, 0, tzinfo=timezone.utc),
-            datetime(2026, 4, 12, 9, 30, tzinfo=timezone.utc),
-        )})
+        result = _serialize(
+            {
+                "event": FakeEvent(
+                    "e1",
+                    "Standup",
+                    datetime(2026, 4, 12, 9, 0, tzinfo=UTC),
+                    datetime(2026, 4, 12, 9, 30, tzinfo=UTC),
+                )
+            }
+        )
         assert "Standup" in result
         assert "FakeEvent" not in result  # Should not be repr()
 
     def test_serialize_single_dataclass(self) -> None:
-        result = _serialize(FakeEvent(
-            "e1", "Standup",
-            datetime(2026, 4, 12, 9, 0, tzinfo=timezone.utc),
-            datetime(2026, 4, 12, 9, 30, tzinfo=timezone.utc),
-        ))
+        result = _serialize(
+            FakeEvent(
+                "e1",
+                "Standup",
+                datetime(2026, 4, 12, 9, 0, tzinfo=UTC),
+                datetime(2026, 4, 12, 9, 30, tzinfo=UTC),
+            )
+        )
         assert "Standup" in result
         assert "e1" in result

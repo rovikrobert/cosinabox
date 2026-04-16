@@ -8,7 +8,9 @@ from cosinabox.scheduling.participant import resolve_channel, resolve_timezone
 class TestResolveTimezone:
     def test_explicit_tz_wins(self):
         tz = resolve_timezone(
-            email="alice@x.com", org="Acme", explicit_tz="Europe/Berlin",
+            email="alice@x.com",
+            org="Acme",
+            explicit_tz="Europe/Berlin",
             default_tz="UTC",
             domain_map={"x.com": "Asia/Tokyo"},
             org_map={"Acme": "America/Los_Angeles"},
@@ -17,7 +19,9 @@ class TestResolveTimezone:
 
     def test_explicit_tz_equal_to_default_falls_through(self):
         tz = resolve_timezone(
-            email="alice@x.com", org=None, explicit_tz="UTC",
+            email="alice@x.com",
+            org=None,
+            explicit_tz="UTC",
             default_tz="UTC",
             domain_map={"x.com": "Asia/Tokyo"},
         )
@@ -25,7 +29,9 @@ class TestResolveTimezone:
 
     def test_org_match(self):
         tz = resolve_timezone(
-            email=None, org="Acme Corp Ltd", explicit_tz=None,
+            email=None,
+            org="Acme Corp Ltd",
+            explicit_tz=None,
             default_tz="UTC",
             org_map={"acme": "America/Los_Angeles"},
         )
@@ -33,7 +39,9 @@ class TestResolveTimezone:
 
     def test_domain_match_exact(self):
         tz = resolve_timezone(
-            email="alice@example.com", org=None, explicit_tz=None,
+            email="alice@example.com",
+            org=None,
+            explicit_tz=None,
             default_tz="UTC",
             domain_map={"example.com": "America/New_York"},
         )
@@ -41,7 +49,9 @@ class TestResolveTimezone:
 
     def test_domain_match_subdomain(self):
         tz = resolve_timezone(
-            email="alice@mail.example.com", org=None, explicit_tz=None,
+            email="alice@mail.example.com",
+            org=None,
+            explicit_tz=None,
             default_tz="UTC",
             domain_map={"example.com": "America/New_York"},
         )
@@ -49,21 +59,28 @@ class TestResolveTimezone:
 
     def test_fallback_to_default(self):
         tz = resolve_timezone(
-            email="alice@unknown.com", org=None, explicit_tz=None,
+            email="alice@unknown.com",
+            org=None,
+            explicit_tz=None,
             default_tz="Asia/Singapore",
         )
         assert tz == "Asia/Singapore"
 
     def test_empty_maps_no_crash(self):
         tz = resolve_timezone(
-            email="alice@x.com", org="Acme", explicit_tz=None,
+            email="alice@x.com",
+            org="Acme",
+            explicit_tz=None,
             default_tz="UTC",
         )
         assert tz == "UTC"
 
     def test_no_email_skips_domain(self):
         tz = resolve_timezone(
-            email=None, org=None, explicit_tz=None, default_tz="UTC",
+            email=None,
+            org=None,
+            explicit_tz=None,
+            default_tz="UTC",
             domain_map={"x.com": "Asia/Tokyo"},
         )
         assert tz == "UTC"

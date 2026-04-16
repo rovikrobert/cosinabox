@@ -124,7 +124,8 @@ CREATE TABLE IF NOT EXISTS scheduling_participants (
     outreach_sent_at TEXT,
     created_at TEXT NOT NULL
 );
-CREATE INDEX IF NOT EXISTS idx_scheduling_participants_request ON scheduling_participants(request_id);
+CREATE INDEX IF NOT EXISTS idx_scheduling_participants_request
+    ON scheduling_participants(request_id);
 
 CREATE TABLE IF NOT EXISTS scheduling_slots (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -216,12 +217,14 @@ class Memory:
         return cur.fetchone()[0]
 
     def oldest_messages(
-        self, *, session_id: str, count: int,
+        self,
+        *,
+        session_id: str,
+        count: int,
     ) -> list[dict[str, Any]]:
         """Return the oldest N messages for a session (for summarization)."""
         cur = self._conn.execute(
-            "SELECT id, role, content FROM messages "
-            "WHERE session_id = ? ORDER BY id ASC LIMIT ?",
+            "SELECT id, role, content FROM messages WHERE session_id = ? ORDER BY id ASC LIMIT ?",
             (session_id, count),
         )
         return [dict(row) for row in cur.fetchall()]
@@ -231,7 +234,8 @@ class Memory:
             return 0
         placeholders = ",".join("?" * len(ids))
         cur = self._conn.execute(
-            f"DELETE FROM messages WHERE id IN ({placeholders})", ids,
+            f"DELETE FROM messages WHERE id IN ({placeholders})",
+            ids,
         )
         self._conn.commit()
         return cur.rowcount
@@ -249,7 +253,8 @@ class Memory:
     ) -> None:
         # Keep only the latest summary per session
         self._conn.execute(
-            "DELETE FROM summaries WHERE session_id = ?", (session_id,),
+            "DELETE FROM summaries WHERE session_id = ?",
+            (session_id,),
         )
         ts = datetime.now(UTC).isoformat()
         self._conn.execute(
@@ -261,8 +266,7 @@ class Memory:
 
     def get_latest_summary(self, *, session_id: str) -> str | None:
         cur = self._conn.execute(
-            "SELECT summary FROM summaries WHERE session_id = ? "
-            "ORDER BY id DESC LIMIT 1",
+            "SELECT summary FROM summaries WHERE session_id = ? ORDER BY id DESC LIMIT 1",
             (session_id,),
         )
         row = cur.fetchone()

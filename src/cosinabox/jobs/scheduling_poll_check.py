@@ -74,7 +74,8 @@ class SchedulingPollCheckJob(Job):
 
     def run(self, context: Any = None) -> str:
         active = sched_db.get_active_requests(
-            self.db, status_filter=[SchedulingStatus.POLLING.value],
+            self.db,
+            status_filter=[SchedulingStatus.POLLING.value],
         )
         if not active:
             return "skipped — no active polls"
@@ -98,7 +99,8 @@ class SchedulingPollCheckJob(Job):
                 )
             except Exception:  # noqa: BLE001
                 logger.exception(
-                    "check_polling_status failed for %s", req.id,
+                    "check_polling_status failed for %s",
+                    req.id,
                 )
 
             # 2. Consensus? Re-score against fresh calendar so we don't pick a
@@ -106,15 +108,20 @@ class SchedulingPollCheckJob(Job):
             from cosinabox.scheduling.coordinator import (
                 _fetch_owner_events_for_slots,
             )
+
             fresh = _fetch_owner_events_for_slots(self.calendar, req)
             consensus = find_consensus(
-                self.db, req.id, owner_events_by_day=fresh,
+                self.db,
+                req.id,
+                owner_events_by_day=fresh,
             )
             if consensus is not None:
                 try:
                     transition(
-                        self.db, req.id,
-                        SchedulingStatus.POLLING, SchedulingStatus.CONVERGED,
+                        self.db,
+                        req.id,
+                        SchedulingStatus.POLLING,
+                        SchedulingStatus.CONVERGED,
                     )
                     converged += 1
                     local_start = consensus.start_time
@@ -125,7 +132,8 @@ class SchedulingPollCheckJob(Job):
                     )
                 except InvalidTransition:
                     logger.warning(
-                        "Could not transition %s to converged", req.id,
+                        "Could not transition %s to converged",
+                        req.id,
                     )
                 continue
 
@@ -144,7 +152,8 @@ class SchedulingPollCheckJob(Job):
                     continue
 
                 sent_at = sched_db.get_participant_outreach_sent_at(
-                    self.db, p.db_id,
+                    self.db,
+                    p.db_id,
                 )
                 if sent_at is None:
                     # Outreach never sent (or draft-only Gmail). Skip.
@@ -174,14 +183,18 @@ class SchedulingPollCheckJob(Job):
                         "Consider reaching out directly."
                     )
                     sched_db.update_participant_status(
-                        self.db, p.db_id, "nudged",
+                        self.db,
+                        p.db_id,
+                        "nudged",
                     )
                     nudged_names.append(p.name)
                     remaining_active += 1
                 elif in_expire_window:
                     # Either already nudged, or past safety cap — expire.
                     sched_db.update_participant_status(
-                        self.db, p.db_id, "no_response",
+                        self.db,
+                        p.db_id,
+                        "no_response",
                     )
                     expired_names.append(p.name)
                 elif in_nudge_window and p.status == "sent":
@@ -191,7 +204,9 @@ class SchedulingPollCheckJob(Job):
                         "Consider reaching out directly."
                     )
                     sched_db.update_participant_status(
-                        self.db, p.db_id, "nudged",
+                        self.db,
+                        p.db_id,
+                        "nudged",
                     )
                     nudged_names.append(p.name)
                     remaining_active += 1
@@ -207,7 +222,8 @@ class SchedulingPollCheckJob(Job):
                 # Escalate regardless — owner should decide next step.
                 try:
                     transition(
-                        self.db, req.id,
+                        self.db,
+                        req.id,
                         SchedulingStatus.POLLING,
                         SchedulingStatus.OWNER_REVIEW,
                     )
@@ -219,7 +235,8 @@ class SchedulingPollCheckJob(Job):
                     )
                 except InvalidTransition:
                     logger.warning(
-                        "Could not transition %s to owner_review", req.id,
+                        "Could not transition %s to owner_review",
+                        req.id,
                     )
 
         parts = [

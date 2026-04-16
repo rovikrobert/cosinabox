@@ -34,6 +34,7 @@ class MemoryServiceError(RuntimeError):
     and decide whether to skip-and-retry or abort.
     """
 
+
 _MEMORY_SCHEMA = """
 CREATE TABLE IF NOT EXISTS memories (
     id TEXT PRIMARY KEY,
@@ -68,7 +69,8 @@ class LocalMemoryClient:
         self.db_path = Path(db_path)
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         self._conn = sqlite3.connect(
-            self.db_path, check_same_thread=False,
+            self.db_path,
+            check_same_thread=False,
         )
         self._conn.execute("PRAGMA journal_mode=WAL")
         self._conn.row_factory = sqlite3.Row
@@ -141,9 +143,14 @@ class RemoteMemoryClient:
 
     def store(self, *, text: str, metadata: dict[str, Any], namespace: str) -> str:
         try:
-            data = self._post("/memories", {
-                "text": text, "metadata": metadata, "namespace": namespace,
-            })
+            data = self._post(
+                "/memories",
+                {
+                    "text": text,
+                    "metadata": metadata,
+                    "namespace": namespace,
+                },
+            )
         except Exception as exc:
             logger.warning("Memory service store failed", exc_info=True)
             raise MemoryServiceError(f"store failed: {exc}") from exc
@@ -151,9 +158,14 @@ class RemoteMemoryClient:
 
     def recall(self, *, query: str, namespace: str, limit: int = 5) -> list[dict[str, Any]]:
         try:
-            data = self._post("/recall", {
-                "query": query, "namespace": namespace, "limit": limit,
-            })
+            data = self._post(
+                "/recall",
+                {
+                    "query": query,
+                    "namespace": namespace,
+                    "limit": limit,
+                },
+            )
         except Exception as exc:
             logger.warning("Memory service recall failed", exc_info=True)
             raise MemoryServiceError(f"recall failed: {exc}") from exc
@@ -161,9 +173,13 @@ class RemoteMemoryClient:
 
     def search(self, *, query: str, namespace: str) -> list[dict[str, Any]]:
         try:
-            data = self._post("/search", {
-                "query": query, "namespace": namespace,
-            })
+            data = self._post(
+                "/search",
+                {
+                    "query": query,
+                    "namespace": namespace,
+                },
+            )
         except Exception as exc:
             logger.warning("Memory service search failed", exc_info=True)
             raise MemoryServiceError(f"search failed: {exc}") from exc

@@ -41,7 +41,10 @@ def _make_polling_request(mem, *, slots_spec, n_participants=2, owner_tz="UTC"):
     """slots_spec: list of (start_dt, end_dt, score) tuples."""
     ps = [
         Participant(
-            name=f"P{i}", email=f"p{i}@x.com", timezone=owner_tz, channel="gmail",
+            name=f"P{i}",
+            email=f"p{i}@x.com",
+            timezone=owner_tz,
+            channel="gmail",
         )
         for i in range(n_participants)
     ]
@@ -62,15 +65,20 @@ def _make_polling_request(mem, *, slots_spec, n_participants=2, owner_tz="UTC"):
     slot_ids: list[int] = []
     for start, end, score in slots_spec:
         sid = sched_db.add_slot(
-            mem, rid, TimeSlot(start_time=start, end_time=end, score=score),
+            mem,
+            rid,
+            TimeSlot(start_time=start, end_time=end, score=score),
         )
         slot_ids.append(sid)
 
     for p in loaded.participants:
         for sid in slot_ids:
             sched_db.record_response(
-                mem, request_id=rid, participant_db_id=p.db_id,
-                slot_db_id=sid, response="yes",
+                mem,
+                request_id=rid,
+                participant_db_id=p.db_id,
+                slot_db_id=sid,
+                response="yes",
             )
     return rid, loaded.participants, slot_ids
 
@@ -86,8 +94,7 @@ class TestCrmStressP1_1:
 
         gmail = MagicMock()
         gmail.search.return_value = [
-            GmailMessage(id=m, sender="me@co.com", subject="", snippet="", date="")
-            for m in msgs
+            GmailMessage(id=m, sender="me@co.com", subject="", snippet="", date="") for m in msgs
         ]
         if recipient_map is not None:
             gmail.get_recipients.side_effect = lambda mid: recipient_map.get(mid, [])
@@ -162,8 +169,11 @@ class TestSubAgentStressP1_2:
         from cosinabox.agent.subagent import SubAgent
 
         return SubAgent(
-            name="rela", namespace="rela", system_prompt="",
-            agent_loop=MagicMock(), memory_client=MagicMock(),
+            name="rela",
+            namespace="rela",
+            system_prompt="",
+            agent_loop=MagicMock(),
+            memory_client=MagicMock(),
             max_concurrent_ingests=bound,
         )
 
@@ -173,8 +183,11 @@ class TestSubAgentStressP1_2:
         for bad in (0, -1, -100):
             with pytest.raises(ValueError):
                 SubAgent(
-                    name="r", namespace="r", system_prompt="",
-                    agent_loop=MagicMock(), memory_client=MagicMock(),
+                    name="r",
+                    namespace="r",
+                    system_prompt="",
+                    agent_loop=MagicMock(),
+                    memory_client=MagicMock(),
                     max_concurrent_ingests=bad,
                 )
 
@@ -250,12 +263,15 @@ class TestAuthVisibilityStressP1_3:
             "google": {"enabled": True},
             "attio": {"enabled": True},
         }
-        with patch(
-            "cosinabox.tools.google.gmail.GmailTool",
-            side_effect=GoogleAuthError("google broken"),
-        ), patch(
-            "cosinabox.tools.attio.AttioClient",
-            side_effect=Exception("attio broken"),
+        with (
+            patch(
+                "cosinabox.tools.google.gmail.GmailTool",
+                side_effect=GoogleAuthError("google broken"),
+            ),
+            patch(
+                "cosinabox.tools.attio.AttioClient",
+                side_effect=Exception("attio broken"),
+            ),
         ):
             tools, _, errors = app._build_tools(integrations)
         assert tools == {}
@@ -277,9 +293,12 @@ class TestAuthVisibilityStressP1_3:
         assert any("FIREFLIES_API_KEY" in e for e in errors_missing)
 
         # Present key, but ctor raises
-        with patch("os.getenv", return_value="key-123"), patch(
-            "cosinabox.tools.fireflies.FirefliesTool",
-            side_effect=Exception("network down"),
+        with (
+            patch("os.getenv", return_value="key-123"),
+            patch(
+                "cosinabox.tools.fireflies.FirefliesTool",
+                side_effect=Exception("network down"),
+            ),
         ):
             _, _, errors_init = app._build_tools(
                 {"fireflies": {"enabled": True}},
@@ -375,8 +394,10 @@ class TestMidnightWrapStressP2_5:
         end_local = datetime(2026, 3, 8, 3, 30, tzinfo=tz)
         p = Participant(name="A", timezone="America/New_York")
         score = _score_timezone_fairness(
-            start_local.astimezone(UTC), end_local.astimezone(UTC),
-            [p], ScoringConfig(),
+            start_local.astimezone(UTC),
+            end_local.astimezone(UTC),
+            [p],
+            ScoringConfig(),
         )
         # Just want no crash + some finite score.
         assert 0.0 <= score <= 1.0
@@ -396,7 +417,8 @@ class TestFreshRescoreStressP2_6:
         start1 = datetime(2026, 4, 14, 12, 0, tzinfo=UTC)
         end1 = start1 + timedelta(minutes=30)
         rid, _, slot_ids = _make_polling_request(
-            mem, slots_spec=[(start0, end0, 1.0), (start1, end1, 0.9)],
+            mem,
+            slots_spec=[(start0, end0, 1.0), (start1, end1, 0.9)],
         )
         result = find_consensus(mem, rid, owner_events_by_day={})
         assert result is not None
@@ -414,7 +436,8 @@ class TestFreshRescoreStressP2_6:
         s1 = datetime(2026, 4, 15, 10, 0, tzinfo=UTC)
         e1 = s1 + timedelta(minutes=30)
         rid, _, slot_ids = _make_polling_request(
-            mem, slots_spec=[(s0, e0, 0.95), (s1, e1, 0.90)],
+            mem,
+            slots_spec=[(s0, e0, 0.95), (s1, e1, 0.90)],
         )
         # 1-minute partial overlap on slot0 only.
         conflict = {
@@ -422,7 +445,9 @@ class TestFreshRescoreStressP2_6:
             "end": {"dateTime": (s0 + timedelta(minutes=40)).isoformat()},
         }
         result = find_consensus(
-            mem, rid, owner_events_by_day={s0.date(): [conflict]},
+            mem,
+            rid,
+            owner_events_by_day={s0.date(): [conflict]},
         )
         assert result is not None
         # Shipped semantics: slot1 (no fresh conflict) now beats slot0
@@ -436,14 +461,13 @@ class TestFreshRescoreStressP2_6:
         s1 = datetime(2026, 4, 14, 12, 0, tzinfo=UTC)
         e1 = s1 + timedelta(minutes=30)
         rid, _, slot_ids = _make_polling_request(
-            mem, slots_spec=[(s0, e0, 1.0), (s1, e1, 0.9)],
+            mem,
+            slots_spec=[(s0, e0, 1.0), (s1, e1, 0.9)],
         )
         events = {
             s0.date(): [
-                {"start": {"dateTime": s0.isoformat()},
-                 "end": {"dateTime": e0.isoformat()}},
-                {"start": {"dateTime": s1.isoformat()},
-                 "end": {"dateTime": e1.isoformat()}},
+                {"start": {"dateTime": s0.isoformat()}, "end": {"dateTime": e0.isoformat()}},
+                {"start": {"dateTime": s1.isoformat()}, "end": {"dateTime": e1.isoformat()}},
             ],
         }
         result = find_consensus(mem, rid, owner_events_by_day=events)
@@ -459,7 +483,8 @@ class TestFreshRescoreStressP2_6:
         s1 = datetime(2026, 4, 14, 12, 0, tzinfo=UTC)
         e1 = s1 + timedelta(minutes=30)
         rid, _, slot_ids = _make_polling_request(
-            mem, slots_spec=[(s0, e0, 1.0), (s1, e1, 0.9)],
+            mem,
+            slots_spec=[(s0, e0, 1.0), (s1, e1, 0.9)],
         )
         # Event ends at 10:00, slot0 starts at 10:00 — adjacent.
         adjacent = {
@@ -467,7 +492,9 @@ class TestFreshRescoreStressP2_6:
             "end": {"dateTime": s0.isoformat()},
         }
         result = find_consensus(
-            mem, rid, owner_events_by_day={s0.date(): [adjacent]},
+            mem,
+            rid,
+            owner_events_by_day={s0.date(): [adjacent]},
         )
         assert result is not None
         assert result.db_id == slot_ids[0]  # slot0 still wins
@@ -478,7 +505,8 @@ class TestFreshRescoreStressP2_6:
         s1 = datetime(2026, 4, 14, 12, 0, tzinfo=UTC)
         e1 = s1 + timedelta(minutes=30)
         rid, _, slot_ids = _make_polling_request(
-            mem, slots_spec=[(s0, e0, 1.0), (s1, e1, 0.9)],
+            mem,
+            slots_spec=[(s0, e0, 1.0), (s1, e1, 0.9)],
         )
         # Event on a DIFFERENT day; must not affect today's slots.
         other_day = date(2026, 5, 1)
@@ -487,7 +515,9 @@ class TestFreshRescoreStressP2_6:
             "end": {"dateTime": datetime(2026, 5, 1, 10, 30, tzinfo=UTC).isoformat()},
         }
         result = find_consensus(
-            mem, rid, owner_events_by_day={other_day: [unrelated]},
+            mem,
+            rid,
+            owner_events_by_day={other_day: [unrelated]},
         )
         assert result is not None
         assert result.db_id == slot_ids[0]
@@ -498,12 +528,15 @@ class TestFreshRescoreStressP2_6:
         s0 = datetime(2026, 4, 14, 10, 0, tzinfo=UTC)
         e0 = s0 + timedelta(minutes=30)
         rid, _, slot_ids = _make_polling_request(
-            mem, slots_spec=[(s0, e0, 1.0)],
+            mem,
+            slots_spec=[(s0, e0, 1.0)],
         )
         # All-day "event" — only "date" keys, no "dateTime".
         allday = {"start": {"date": "2026-04-14"}, "end": {"date": "2026-04-15"}}
         result = find_consensus(
-            mem, rid, owner_events_by_day={s0.date(): [allday]},
+            mem,
+            rid,
+            owner_events_by_day={s0.date(): [allday]},
         )
         assert result is not None
         assert result.db_id == slot_ids[0]
@@ -567,8 +600,11 @@ def test_subagent_session_ids_unique_across_many():
     loop = MagicMock()
     loop.run.side_effect = capture
     agent = SubAgent(
-        name="rela", namespace="rela", system_prompt="",
-        agent_loop=loop, memory_client=MagicMock(),
+        name="rela",
+        namespace="rela",
+        system_prompt="",
+        agent_loop=loop,
+        memory_client=MagicMock(),
         max_concurrent_ingests=8,
     )
     # Mix queries (sync) and ingests (async).
@@ -603,8 +639,11 @@ class TestGmailPollingStressP3_9:
         gmail = MagicMock()
         gmail.search.return_value = []
         job = InboundEmailCheckJob(
-            gmail=gmail, db=mem, send_alert=MagicMock(),
-            urgent_senders=[], poll_interval_minutes=5,
+            gmail=gmail,
+            db=mem,
+            send_alert=MagicMock(),
+            urgent_senders=[],
+            poll_interval_minutes=5,
         )
 
         job.run()
@@ -633,8 +672,11 @@ class TestGmailPollingStressP3_9:
         gmail = MagicMock()
         gmail.search.return_value = []
         job = InboundEmailCheckJob(
-            gmail=gmail, db=mem, send_alert=MagicMock(),
-            urgent_senders=[], poll_interval_minutes=5,
+            gmail=gmail,
+            db=mem,
+            send_alert=MagicMock(),
+            urgent_senders=[],
+            poll_interval_minutes=5,
         )
         job.run()
         query = gmail.search.call_args.args[0]
@@ -652,20 +694,27 @@ class TestGmailPollingStressP3_9:
 class TestRequestedByStressP3_10:
     def _req(self):
         return SchedulingRequest(
-            id="", title="x", duration_minutes=30,
+            id="",
+            title="x",
+            duration_minutes=30,
             date_range_start=date(2026, 4, 14),
             date_range_end=date(2026, 4, 21),
             preferred_timezone="UTC",
             participants=[
                 Participant(
-                    name="A", email="a@x.com", timezone="UTC", channel="gmail",
+                    name="A",
+                    email="a@x.com",
+                    timezone="UTC",
+                    channel="gmail",
                 ),
             ],
         )
 
     def test_unicode_owner_name_stored_verbatim(self, mem):
         rid = sched_db.create_request(
-            mem, self._req(), requested_by="Pōhutukawa 桜 🌸",
+            mem,
+            self._req(),
+            requested_by="Pōhutukawa 桜 🌸",
         )
         row = mem._conn.execute(
             "SELECT requested_by FROM scheduling_requests WHERE id = ?",

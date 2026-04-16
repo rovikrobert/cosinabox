@@ -97,7 +97,8 @@ class CostTracker:
         if self._db is not None:
             today = datetime.now(UTC).date().isoformat()
             cur = self._db._conn.execute(
-                "SELECT total_cost FROM daily_costs WHERE date = ?", (today,),
+                "SELECT total_cost FROM daily_costs WHERE date = ?",
+                (today,),
             )
             row = cur.fetchone()
             if row:

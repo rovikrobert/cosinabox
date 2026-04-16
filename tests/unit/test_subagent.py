@@ -14,8 +14,11 @@ class TestSubAgent:
         mock_loop.run.return_value = mock_result
 
         agent = SubAgent(
-            name="rela", namespace="rela", system_prompt="You are Rela.",
-            agent_loop=mock_loop, memory_client=MagicMock(),
+            name="rela",
+            namespace="rela",
+            system_prompt="You are Rela.",
+            agent_loop=mock_loop,
+            memory_client=MagicMock(),
         )
         answer = agent.query("How's Alice?")
         assert "75" in answer
@@ -28,8 +31,11 @@ class TestSubAgent:
         mock_loop.run.return_value = mock_result
 
         agent = SubAgent(
-            name="rela", namespace="rela", system_prompt="You are Rela.",
-            agent_loop=mock_loop, memory_client=MagicMock(),
+            name="rela",
+            namespace="rela",
+            system_prompt="You are Rela.",
+            agent_loop=mock_loop,
+            memory_client=MagicMock(),
         )
         agent.ingest("Meeting context: Alice was engaged")
         time.sleep(0.2)
@@ -38,8 +44,11 @@ class TestSubAgent:
     def test_namespace_forced_on_memory_store(self):
         mc = MagicMock()
         agent = SubAgent(
-            name="rela", namespace="rela", system_prompt="You are Rela.",
-            agent_loop=MagicMock(), memory_client=mc,
+            name="rela",
+            namespace="rela",
+            system_prompt="You are Rela.",
+            agent_loop=MagicMock(),
+            memory_client=mc,
         )
         agent._namespaced_client.store(text="fact", metadata={}, namespace="wrong")
         mc.store.assert_called_once()
@@ -50,8 +59,11 @@ class TestSubAgent:
         mc = MagicMock()
         mc.recall.return_value = []
         agent = SubAgent(
-            name="rela", namespace="rela", system_prompt="test",
-            agent_loop=MagicMock(), memory_client=mc,
+            name="rela",
+            namespace="rela",
+            system_prompt="test",
+            agent_loop=MagicMock(),
+            memory_client=mc,
         )
         agent._namespaced_client.recall(query="test", namespace="wrong")
         mc.recall.assert_called_once()
@@ -61,8 +73,11 @@ class TestSubAgent:
         mock_loop = MagicMock()
         mock_loop.run.return_value = MagicMock(final_text="ok")
         agent = SubAgent(
-            name="rela", namespace="rela", system_prompt="test",
-            agent_loop=mock_loop, memory_client=MagicMock(),
+            name="rela",
+            namespace="rela",
+            system_prompt="test",
+            agent_loop=mock_loop,
+            memory_client=MagicMock(),
             allowed_tools=[],
         )
         agent.query("any")
@@ -72,8 +87,11 @@ class TestSubAgent:
         mock_loop = MagicMock()
         mock_loop.run.return_value = MagicMock(final_text="ok")
         agent = SubAgent(
-            name="rela", namespace="rela", system_prompt="test",
-            agent_loop=mock_loop, memory_client=MagicMock(),
+            name="rela",
+            namespace="rela",
+            system_prompt="test",
+            agent_loop=mock_loop,
+            memory_client=MagicMock(),
         )
         agent.query("any")
         assert mock_loop.run.call_args.kwargs.get("allowed_tools") == []
@@ -104,17 +122,20 @@ class TestSubAgent:
         mock_loop.run.side_effect = fake_run
 
         agent = SubAgent(
-            name="rela", namespace="rela", system_prompt="test",
-            agent_loop=mock_loop, memory_client=MagicMock(),
+            name="rela",
+            namespace="rela",
+            system_prompt="test",
+            agent_loop=mock_loop,
+            memory_client=MagicMock(),
             max_concurrent_ingests=bound,
         )
-        threads = []
         # Fire 10 ingests; peak must stay ≤ bound because the semaphore blocks
         # the 4th-10th workers until the first few release.
         for _ in range(10):
             agent.ingest("content")
         # Let things settle, then release workers to finish
         import time
+
         # Give threads time to start up to the semaphore limit
         for _ in range(50):
             if current["n"] >= bound:
@@ -133,22 +154,28 @@ class TestSubAgent:
         mock_loop = MagicMock()
         mock_loop.run.return_value = MagicMock(final_text="ok")
         agent = SubAgent(
-            name="rela", namespace="rela", system_prompt="test",
-            agent_loop=mock_loop, memory_client=MagicMock(),
+            name="rela",
+            namespace="rela",
+            system_prompt="test",
+            agent_loop=mock_loop,
+            memory_client=MagicMock(),
         )
         agent.query("q")
         sid = mock_loop.run.call_args.kwargs["session_id"]
         prefix = "rela-query-"
         assert sid.startswith(prefix)
-        hex_part = sid[len(prefix):]
+        hex_part = sid[len(prefix) :]
         assert len(hex_part) == 32, f"Expected full uuid hex (32 chars), got {hex_part!r}"
 
     def test_query_session_ids_are_unique(self):
         mock_loop = MagicMock()
         mock_loop.run.return_value = MagicMock(final_text="ok")
         agent = SubAgent(
-            name="rela", namespace="rela", system_prompt="test",
-            agent_loop=mock_loop, memory_client=MagicMock(),
+            name="rela",
+            namespace="rela",
+            system_prompt="test",
+            agent_loop=mock_loop,
+            memory_client=MagicMock(),
         )
         agent.query("q1")
         agent.query("q2")

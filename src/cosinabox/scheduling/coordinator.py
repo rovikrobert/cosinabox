@@ -116,9 +116,7 @@ def transition(
     # transitions from the same source state don't both "win".
     ok = sched_db.update_request_status_guarded(db, request_id, frm.value, to.value)
     if not ok:
-        raise InvalidTransition(
-            f"Concurrent transition — status is no longer {frm.value!r}"
-        )
+        raise InvalidTransition(f"Concurrent transition — status is no longer {frm.value!r}")
 
 
 # ---------------------------------------------------------------------------
@@ -179,7 +177,9 @@ def start_scheduling(
         transition(db, req_id, SchedulingStatus.PROPOSING, SchedulingStatus.CANCELLED)
         logger.info(
             "start_scheduling: no viable slots for %s (%s..%s); cancelled",
-            req_id, date_range_start, date_range_end,
+            req_id,
+            date_range_start,
+            date_range_end,
         )
         hydrated = sched_db.get_request(db, req_id)
         return hydrated or req
@@ -188,7 +188,8 @@ def start_scheduling(
         sched_db.add_slot(db, req_id, slot)
 
     transition(
-        db, req_id,
+        db,
+        req_id,
         SchedulingStatus.PROPOSING,
         SchedulingStatus.OWNER_REVIEW,
     )
@@ -228,10 +229,13 @@ def _fetch_owner_events_for_slots(
     # Fetch one range covering all slot days.
     try:
         from zoneinfo import ZoneInfo
+
         utc = ZoneInfo("UTC")
         start = datetime.combine(slot_dates[0], datetime.min.time(), tzinfo=utc)
         end = datetime.combine(
-            slot_dates[-1], datetime.min.time(), tzinfo=utc,
+            slot_dates[-1],
+            datetime.min.time(),
+            tzinfo=utc,
         ) + timedelta(days=1)
         raw_events = list_events(start=start, end=end)
     except Exception:  # noqa: BLE001
@@ -247,10 +251,12 @@ def _fetch_owner_events_for_slots(
         d = s.date() if hasattr(s, "date") else None
         if d is None:
             continue
-        events_by_day.setdefault(d, []).append({
-            "start": {"dateTime": s.isoformat()},
-            "end": {"dateTime": e.isoformat()},
-        })
+        events_by_day.setdefault(d, []).append(
+            {
+                "start": {"dateTime": s.isoformat()},
+                "end": {"dateTime": e.isoformat()},
+            }
+        )
     return events_by_day
 
 
@@ -350,9 +356,7 @@ def check_polling_status(
                 continue
 
             if "counter_proposal" in parsed:
-                parse_errors.append(
-                    f"{p.name}: counter-proposal — {parsed['counter_proposal']}"
-                )
+                parse_errors.append(f"{p.name}: counter-proposal — {parsed['counter_proposal']}")
                 continue
 
             responses_map = parsed.get("responses") or {}
@@ -390,7 +394,8 @@ def check_polling_status(
     # re-score path picks a slot that is actually still free today.
     owner_events = _fetch_owner_events_for_slots(calendar, req)
     consensus_slot = find_consensus(
-        db, request_id,
+        db,
+        request_id,
         owner_events_by_day=owner_events,
         scoring_config=scoring_config,
     )
@@ -487,9 +492,11 @@ def find_consensus(
         events_per_day[d] = len(events)
 
     def _find_conflict_fresh(
-        start: datetime, end: datetime,
+        start: datetime,
+        end: datetime,
     ) -> str | None:
         from zoneinfo import ZoneInfo
+
         local_day = start.astimezone(ZoneInfo(owner_tz)).date()
         for bs, be in busy_by_day.get(local_day, []):
             if start < be and end > bs:
@@ -499,14 +506,18 @@ def find_consensus(
     rescored: list[tuple[TimeSlot, float]] = []
     for slot in qualifying:
         from zoneinfo import ZoneInfo
+
         local_day = slot.start_time.astimezone(ZoneInfo(owner_tz)).date()
         busy_today = busy_by_day.get(local_day, [])
         requires_move = _find_conflict_fresh(slot.start_time, slot.end_time)
         fresh_score = compute_score(
-            slot.start_time, slot.end_time, req.participants,
+            slot.start_time,
+            slot.end_time,
+            req.participants,
             busy=busy_today,
             events_per_day=events_per_day,
-            range_start=range_start, range_end=range_end,
+            range_start=range_start,
+            range_end=range_end,
             owner_tz=owner_tz,
             requires_move=requires_move,
             config=config,

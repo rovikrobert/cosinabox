@@ -1,7 +1,8 @@
 from __future__ import annotations
 
-import pytest
 from unittest.mock import MagicMock, patch
+
+import pytest
 
 from cosinabox.memory.client import LocalMemoryClient
 
@@ -13,7 +14,11 @@ def client(tmp_path):
 
 class TestLocalMemoryClient:
     def test_store_returns_id(self, client):
-        mid = client.store(text="Decision: launch in Q3", metadata={"source": "meeting"}, namespace="default")
+        mid = client.store(
+            text="Decision: launch in Q3",
+            metadata={"source": "meeting"},
+            namespace="default",
+        )
         assert isinstance(mid, str)
         assert len(mid) > 0
 
@@ -58,6 +63,7 @@ class TestLocalMemoryClient:
 class TestRemoteMemoryClient:
     def test_store_calls_api(self):
         from cosinabox.memory.client import RemoteMemoryClient
+
         client = RemoteMemoryClient(base_url="https://mem.example.com", api_key="key123")
         with patch("cosinabox.memory.client.httpx") as mock_httpx:
             mock_resp = MagicMock()
@@ -74,6 +80,7 @@ class TestRemoteMemoryClient:
         than returning []. Silent [] previously caused callers to treat a
         service outage as 'no memories exist'."""
         from cosinabox.memory.client import MemoryServiceError, RemoteMemoryClient
+
         client = RemoteMemoryClient(base_url="https://mem.example.com", api_key="key123")
         with patch("cosinabox.memory.client.httpx") as mock_httpx:
             mock_httpx.post.side_effect = Exception("Network error")
@@ -81,8 +88,9 @@ class TestRemoteMemoryClient:
                 client.recall(query="test", namespace="ns")
 
     def test_store_raises_on_503(self):
-        from cosinabox.memory.client import MemoryServiceError, RemoteMemoryClient
         import httpx as real_httpx  # noqa: F401
+
+        from cosinabox.memory.client import MemoryServiceError, RemoteMemoryClient
 
         client = RemoteMemoryClient(base_url="https://mem.example.com", api_key="key123")
         with patch("cosinabox.memory.client.httpx") as mock_httpx:
@@ -94,6 +102,7 @@ class TestRemoteMemoryClient:
 
     def test_search_raises_on_failure(self):
         from cosinabox.memory.client import MemoryServiceError, RemoteMemoryClient
+
         client = RemoteMemoryClient(base_url="https://mem.example.com", api_key="key123")
         with patch("cosinabox.memory.client.httpx") as mock_httpx:
             mock_httpx.post.side_effect = Exception("Network error")
@@ -104,12 +113,14 @@ class TestRemoteMemoryClient:
 class TestResolveMemoryClient:
     def test_returns_local_when_no_url(self, tmp_path, monkeypatch):
         from cosinabox.memory.client import resolve_memory_client
+
         monkeypatch.delenv("MEMORY_SERVICE_URL", raising=False)
         client = resolve_memory_client(db_path=tmp_path / "mem.db")
         assert isinstance(client, LocalMemoryClient)
 
     def test_returns_remote_when_url_set(self, monkeypatch):
         from cosinabox.memory.client import RemoteMemoryClient, resolve_memory_client
+
         monkeypatch.setenv("MEMORY_SERVICE_URL", "https://mem.example.com")
         monkeypatch.setenv("MEMORY_API_KEY", "key123")
         client = resolve_memory_client(db_path="/tmp/unused.db")
@@ -119,6 +130,7 @@ class TestResolveMemoryClient:
         """If the user sets MEMORY_SERVICE_URL but forgets MEMORY_API_KEY,
         fail at startup rather than silently dropping every memory."""
         from cosinabox.memory.client import resolve_memory_client
+
         monkeypatch.setenv("MEMORY_SERVICE_URL", "https://mem.example.com")
         monkeypatch.delenv("MEMORY_API_KEY", raising=False)
         with pytest.raises(ValueError, match="MEMORY_API_KEY"):

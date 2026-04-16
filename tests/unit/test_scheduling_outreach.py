@@ -16,7 +16,6 @@ from cosinabox.scheduling.outreach import (
     send_telegram_poll,
 )
 
-
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
@@ -130,8 +129,12 @@ class TestSendTelegramPoll:
         request = _make_request([participant])
 
         send_telegram_poll(
-            bot=bot, participant=participant, request=request, slots=slots,
-            owner_timezone="Asia/Singapore", owner_name="Keevs McTest",
+            bot=bot,
+            participant=participant,
+            request=request,
+            slots=slots,
+            owner_timezone="Asia/Singapore",
+            owner_name="Keevs McTest",
         )
         text = bot.send_poll.call_args.kwargs["text"]
         assert "Keevs McTest" in text
@@ -141,15 +144,23 @@ class TestSendTelegramPoll:
     def test_no_telegram_id_returns_error(self):
         bot = MagicMock()
         participant = Participant(
-            name="X", email="x@y.com", telegram_id=None,
-            timezone="UTC", channel="telegram", db_id=1,
+            name="X",
+            email="x@y.com",
+            telegram_id=None,
+            timezone="UTC",
+            channel="telegram",
+            db_id=1,
         )
         slots = _make_slots(1)
         request = _make_request([participant])
 
         result = send_telegram_poll(
-            bot=bot, participant=participant, request=request, slots=slots,
-            owner_timezone="UTC", owner_name="Owner",
+            bot=bot,
+            participant=participant,
+            request=request,
+            slots=slots,
+            owner_timezone="UTC",
+            owner_name="Owner",
         )
         assert result["status"] == "error"
         bot.send_poll.assert_not_called()
@@ -162,8 +173,12 @@ class TestSendTelegramPoll:
         request = _make_request([participant])
 
         result = send_telegram_poll(
-            bot=bot, participant=participant, request=request, slots=slots,
-            owner_timezone="UTC", owner_name="Owner",
+            bot=bot,
+            participant=participant,
+            request=request,
+            slots=slots,
+            owner_timezone="UTC",
+            owner_name="Owner",
         )
         assert result["status"] == "error"
         assert "boom" in result["reason"]
@@ -207,15 +222,23 @@ class TestSendGmailDraft:
     def test_no_email_returns_error(self):
         gmail = MagicMock()
         participant = Participant(
-            name="X", email=None, telegram_id=None,
-            timezone="UTC", channel="gmail", db_id=1,
+            name="X",
+            email=None,
+            telegram_id=None,
+            timezone="UTC",
+            channel="gmail",
+            db_id=1,
         )
         slots = _make_slots(1)
         request = _make_request([participant])
 
         result = send_gmail_draft(
-            gmail=gmail, participant=participant, request=request, slots=slots,
-            owner_name="Owner", owner_timezone="UTC",
+            gmail=gmail,
+            participant=participant,
+            request=request,
+            slots=slots,
+            owner_name="Owner",
+            owner_timezone="UTC",
         )
         assert result["status"] == "error"
         gmail.compose_draft.assert_not_called()
@@ -228,8 +251,12 @@ class TestSendGmailDraft:
         request = _make_request([participant])
 
         result = send_gmail_draft(
-            gmail=gmail, participant=participant, request=request, slots=slots,
-            owner_name="Owner", owner_timezone="UTC",
+            gmail=gmail,
+            participant=participant,
+            request=request,
+            slots=slots,
+            owner_name="Owner",
+            owner_timezone="UTC",
         )
         assert result["status"] == "error"
         assert "api down" in result["reason"]
@@ -251,8 +278,12 @@ class TestExecuteOutreach:
         slots = _make_slots(2)
 
         summary = execute_outreach(
-            request=request, slots=slots, bot=bot, gmail=gmail,
-            owner_name="Rovik", owner_timezone="Asia/Singapore",
+            request=request,
+            slots=slots,
+            bot=bot,
+            gmail=gmail,
+            owner_name="Rovik",
+            owner_timezone="Asia/Singapore",
         )
         assert "Alice Chen" in summary
         assert "Bob Lee" in summary
@@ -270,8 +301,12 @@ class TestExecuteOutreach:
         slots = _make_slots(1)
 
         summary = execute_outreach(
-            request=request, slots=slots, bot=None, gmail=gmail,
-            owner_name="Owner", owner_timezone="UTC",
+            request=request,
+            slots=slots,
+            bot=None,
+            gmail=gmail,
+            owner_name="Owner",
+            owner_timezone="UTC",
         )
         assert "Skipped" in summary
         assert "Alice Chen" in summary  # in skipped line
@@ -288,8 +323,12 @@ class TestExecuteOutreach:
         slots = _make_slots(1)
 
         summary = execute_outreach(
-            request=request, slots=slots, bot=bot, gmail=None,
-            owner_name="Owner", owner_timezone="UTC",
+            request=request,
+            slots=slots,
+            bot=bot,
+            gmail=None,
+            owner_name="Owner",
+            owner_timezone="UTC",
         )
         assert "Telegram sent" in summary
         assert "Skipped" in summary
@@ -303,8 +342,12 @@ class TestExecuteOutreach:
         slots = _make_slots(1)
 
         summary = execute_outreach(
-            request=request, slots=slots, bot=None, gmail=None,
-            owner_name="Owner", owner_timezone="UTC",
+            request=request,
+            slots=slots,
+            bot=None,
+            gmail=None,
+            owner_name="Owner",
+            owner_timezone="UTC",
         )
         assert "error" in summary.lower()
 
@@ -315,7 +358,11 @@ class TestExecuteOutreach:
         gmail = MagicMock()
 
         summary = execute_outreach(
-            request=request, slots=slots, bot=bot, gmail=gmail,
-            owner_name="Owner", owner_timezone="UTC",
+            request=request,
+            slots=slots,
+            bot=bot,
+            gmail=gmail,
+            owner_name="Owner",
+            owner_timezone="UTC",
         )
         assert "error" in summary.lower()

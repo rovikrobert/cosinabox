@@ -163,6 +163,7 @@ class AgentLoop:
         self._tool_logger = None
         if self.memory is not None:
             from cosinabox.agent.logging import ToolLogger
+
             self._tool_logger = ToolLogger(db=self.memory)
 
     def run(
@@ -203,9 +204,7 @@ class AgentLoop:
         # Load conversation history from memory (if available)
         messages: list[dict[str, Any]] = []
         effective_system = (
-            system_prompt_override
-            if system_prompt_override is not None
-            else self.system_prompt
+            system_prompt_override if system_prompt_override is not None else self.system_prompt
         )
         if self.memory is not None:
             # Compact old messages before loading (runs Sonnet if threshold exceeded)
@@ -355,10 +354,8 @@ class AgentLoop:
                     for block in tool_blocks
                 ]
 
-
                 any_blocked = any(
-                    p.decision in (Decision.DENY, Decision.REQUIRE_APPROVAL)
-                    for _, p in policies
+                    p.decision in (Decision.DENY, Decision.REQUIRE_APPROVAL) for _, p in policies
                 )
 
                 tool_results: list[dict[str, Any]] = []

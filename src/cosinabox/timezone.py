@@ -50,8 +50,7 @@ def resolve_timezone(raw: str) -> str | None:
 
     # Prefer matches where the city part (after /) matches exactly
     city_matches = [
-        tz for tz in matches
-        if tz.rsplit("/", 1)[-1].lower() == query.rsplit("/", 1)[-1].lower()
+        tz for tz in matches if tz.rsplit("/", 1)[-1].lower() == query.rsplit("/", 1)[-1].lower()
     ]
     if len(city_matches) == 1:
         return city_matches[0]

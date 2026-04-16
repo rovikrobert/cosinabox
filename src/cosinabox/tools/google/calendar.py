@@ -140,7 +140,6 @@ class CalendarTool:
         """
         hint = time_hint.lower().strip()
         window = self._TIME_WINDOWS.get(hint, self._TIME_WINDOWS["any"])
-        tz = date.tzinfo
         day = date.replace(hour=0, minute=0, second=0, microsecond=0)
         work_start = day.replace(hour=window[0], minute=window[1])
         work_end = day.replace(hour=window[2], minute=window[3])

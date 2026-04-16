@@ -1,10 +1,8 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from types import SimpleNamespace
 from unittest.mock import MagicMock
-
-import pytest
 
 from cosinabox.scheduling.models import TimeSlot
 from cosinabox.scheduling.response_parser import (
@@ -12,15 +10,14 @@ from cosinabox.scheduling.response_parser import (
     parse_response,
 )
 
-
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
 
 
 def _slot(db_id: int, hour: int) -> TimeSlot:
-    start = datetime(2026, 4, 20, hour, 0, tzinfo=timezone.utc)
-    end = datetime(2026, 4, 20, hour + 1, 0, tzinfo=timezone.utc)
+    start = datetime(2026, 4, 20, hour, 0, tzinfo=UTC)
+    end = datetime(2026, 4, 20, hour + 1, 0, tzinfo=UTC)
     return TimeSlot(start_time=start, end_time=end, db_id=db_id)
 
 
@@ -65,9 +62,7 @@ def test_parse_response_truncates_very_long_reply() -> None:
 
 def test_parse_response_valid_json_returns_responses() -> None:
     slots = [_slot(10, 9), _slot(11, 14)]
-    client = _fake_client(
-        '{"responses": {"10": "yes", "11": "no"}}'
-    )
+    client = _fake_client('{"responses": {"10": "yes", "11": "no"}}')
 
     out = parse_response(
         participant_name="Alice",
@@ -84,9 +79,7 @@ def test_parse_response_valid_json_returns_responses() -> None:
 
 def test_parse_response_counter_proposal() -> None:
     slots = [_slot(1, 9)]
-    client = _fake_client(
-        '{"counter_proposal": "How about Friday afternoon instead?"}'
-    )
+    client = _fake_client('{"counter_proposal": "How about Friday afternoon instead?"}')
 
     out = parse_response(
         participant_name="Bob",
@@ -100,9 +93,7 @@ def test_parse_response_counter_proposal() -> None:
 
 def test_parse_response_strips_markdown_code_fence() -> None:
     slots = [_slot(7, 10)]
-    client = _fake_client(
-        '```json\n{"responses": {"7": "yes"}}\n```'
-    )
+    client = _fake_client('```json\n{"responses": {"7": "yes"}}\n```')
 
     out = parse_response(
         participant_name="Carol",

@@ -45,9 +45,7 @@ class SyncSchedulingBotAdapter:
         ``RuntimeError`` on non-200 responses or ``ok: false`` payloads.
         """
         url = f"https://api.telegram.org/bot{self._bot_token}/sendMessage"
-        inline_keyboard = [
-            [{"text": label, "callback_data": data}] for label, data in buttons
-        ]
+        inline_keyboard = [[{"text": label, "callback_data": data}] for label, data in buttons]
         payload: dict[str, Any] = {
             "chat_id": chat_id,
             "text": text,
@@ -55,9 +53,7 @@ class SyncSchedulingBotAdapter:
         }
         resp = httpx.post(url, json=payload, timeout=15.0)
         if resp.status_code != 200:
-            raise RuntimeError(
-                f"Telegram sendMessage failed: HTTP {resp.status_code}"
-            )
+            raise RuntimeError(f"Telegram sendMessage failed: HTTP {resp.status_code}")
         body = resp.json()
         if not body.get("ok"):
             raise RuntimeError(

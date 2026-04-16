@@ -11,7 +11,6 @@ from cosinabox.scheduling.backchannel import (
 )
 from cosinabox.scheduling.models import TimeSlot
 
-
 # A fixed "now" well in the past relative to the events we construct,
 # so proximity guard never fires unintentionally.
 NOW = datetime(2026, 4, 14, 10, 0, tzinfo=UTC)
@@ -143,13 +142,15 @@ class TestProposeMoves:
         slots = [self._slot(48 + i * 2, score=0.9 - i * 0.1) for i in range(5)]
         events = []
         for s in slots:
-            events.append({
-                "summary": "focus block",
-                "status": "confirmed",
-                "start": {"dateTime": s.start_time.isoformat()},
-                "end": {"dateTime": s.end_time.isoformat()},
-                "attendees": [],
-            })
+            events.append(
+                {
+                    "summary": "focus block",
+                    "status": "confirmed",
+                    "start": {"dateTime": s.start_time.isoformat()},
+                    "end": {"dateTime": s.end_time.isoformat()},
+                    "attendees": [],
+                }
+            )
         proposals = propose_moves(
             candidate_slots=slots,
             owner_events=events,

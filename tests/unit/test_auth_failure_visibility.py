@@ -40,9 +40,7 @@ class TestAuthFailureVisibility:
         # Simulate 401 returned by the OAuth token endpoint.
         with patch(
             "cosinabox.tools.google.gmail.GmailTool",
-            side_effect=Exception(
-                "invalid_grant: 401 Unauthorized — refresh token revoked"
-            ),
+            side_effect=Exception("invalid_grant: 401 Unauthorized — refresh token revoked"),
         ):
             tools, _, errors = app._build_tools(integrations)
 
@@ -96,10 +94,7 @@ class TestAuthFailureVisibility:
 
         if errors:
             alert_body = "\n\n".join(f"- {e}" for e in errors)
-            send_telegram(
-                "[cosinabox startup] Integration auth issues detected:\n\n"
-                f"{alert_body}"
-            )
+            send_telegram(f"[cosinabox startup] Integration auth issues detected:\n\n{alert_body}")
 
         assert len(sent) == 1
         assert "auth" in sent[0].lower()

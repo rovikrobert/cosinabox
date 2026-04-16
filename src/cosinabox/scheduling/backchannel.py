@@ -216,12 +216,20 @@ def _find_alternative_time(
     """
     tz = ZoneInfo(owner_tz)
     day_start = datetime(
-        day.year, day.month, day.day,
-        config.alt_search_day_start_hour, 0, tzinfo=tz,
+        day.year,
+        day.month,
+        day.day,
+        config.alt_search_day_start_hour,
+        0,
+        tzinfo=tz,
     )
     day_end = datetime(
-        day.year, day.month, day.day,
-        config.alt_search_day_end_hour, 0, tzinfo=tz,
+        day.year,
+        day.month,
+        day.day,
+        config.alt_search_day_end_hour,
+        0,
+        tzinfo=tz,
     )
 
     busy: list[tuple[datetime, datetime]] = []
@@ -311,20 +319,26 @@ def propose_moves(
 
             ev_duration = ev_end - ev_start
             alternative = _find_alternative_time(
-                ev_start.date(), ev_duration,
-                slot_start, slot_end, owner_events,
-                owner_timezone, config,
+                ev_start.date(),
+                ev_duration,
+                slot_start,
+                slot_end,
+                owner_events,
+                owner_timezone,
+                config,
             )
 
-            proposals.append({
-                "slot": slot,
-                "conflict_event": ev,
-                "priority": priority,
-                "alternative_time": alternative,
-                # Small bonus — freeing a preferred slot is worth a little
-                # more than the raw score. Kept intentionally modest.
-                "score_if_moved": slot.score + 0.15,
-            })
+            proposals.append(
+                {
+                    "slot": slot,
+                    "conflict_event": ev,
+                    "priority": priority,
+                    "alternative_time": alternative,
+                    # Small bonus — freeing a preferred slot is worth a little
+                    # more than the raw score. Kept intentionally modest.
+                    "score_if_moved": slot.score + 0.15,
+                }
+            )
 
             if len(proposals) >= config.max_moves_per_request:
                 break

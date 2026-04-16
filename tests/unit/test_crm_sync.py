@@ -2,8 +2,6 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock
 
-import pytest
-
 from cosinabox.jobs.crm_email_sync import CrmEmailSyncJob
 
 
@@ -28,6 +26,7 @@ class TestCrmEmailSyncJob:
 
     def test_updates_matching_recipients(self):
         from cosinabox.tools.google.gmail import GmailMessage
+
         gmail = MagicMock()
         gmail.search.return_value = [
             GmailMessage(id="m1", sender="me@co.com", subject="Hi", snippet="", date="2026-04-12"),
@@ -79,6 +78,7 @@ class TestCrmEmailSyncJob:
 
     def test_continues_on_individual_failure(self):
         from cosinabox.tools.google.gmail import GmailMessage
+
         gmail = MagicMock()
         gmail.search.return_value = [
             GmailMessage(id="m1", sender="me@co.com", subject="Hi", snippet="", date="2026-04-12"),

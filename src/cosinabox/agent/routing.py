@@ -101,9 +101,7 @@ class Router:
                 return SONNET_MODEL_ID, THINKING_ADAPTIVE, False
 
         # Conversation escalation — if recent context is strategically dense
-        if conversation_context and _conversation_is_strategic(
-            conversation_context
-        ):
+        if conversation_context and _conversation_is_strategic(conversation_context):
             if defaults.ADVISOR_ENABLED:
                 return SONNET_MODEL_ID, None, True
             return OPUS_MODEL_ID, THINKING_ADAPTIVE, False

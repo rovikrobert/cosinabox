@@ -27,7 +27,9 @@ def test_send_poll_posts_correct_url_and_payload():
     with patch("cosinabox.bot.sync_scheduling_adapter.httpx.post") as post:
         post.return_value = _fake_response(message_id=42)
         result = adapter.send_poll(
-            chat_id=12345, text="pick a slot", buttons=buttons,
+            chat_id=12345,
+            text="pick a slot",
+            buttons=buttons,
         )
 
     assert result == {"message_id": 42}
@@ -54,7 +56,7 @@ def test_send_poll_raises_on_non_200():
 
     with patch("cosinabox.bot.sync_scheduling_adapter.httpx.post") as post:
         post.return_value = _fake_response(ok=False, status_code=400)
-        with pytest.raises(Exception):
+        with pytest.raises(RuntimeError):
             adapter.send_poll(chat_id=1, text="x", buttons=[("A", "cb:a")])
 
 

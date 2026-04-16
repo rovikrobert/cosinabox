@@ -7,10 +7,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import date, datetime
-from enum import Enum
+from enum import StrEnum
 
 
-class SchedulingStatus(str, Enum):
+class SchedulingStatus(StrEnum):
     """Status values for a scheduling request state machine."""
 
     PROPOSING = "proposing"

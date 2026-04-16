@@ -44,8 +44,11 @@ class TestInboundEmailCheckJob:
         mock_gmail = MagicMock()
         mock_gmail.search.return_value = []
         job = InboundEmailCheckJob(
-            gmail=mock_gmail, db=mem, send_alert=MagicMock(),
-            urgent_senders=[], poll_interval_minutes=5,
+            gmail=mock_gmail,
+            db=mem,
+            send_alert=MagicMock(),
+            urgent_senders=[],
+            poll_interval_minutes=5,
         )
         job.run()
         mock_gmail.search.assert_called()
@@ -57,8 +60,11 @@ class TestInboundEmailCheckJob:
         mock_gmail = MagicMock()
         mock_gmail.search.return_value = []
         job = InboundEmailCheckJob(
-            gmail=mock_gmail, db=mem, send_alert=MagicMock(),
-            urgent_senders=[], poll_interval_minutes=5,
+            gmail=mock_gmail,
+            db=mem,
+            send_alert=MagicMock(),
+            urgent_senders=[],
+            poll_interval_minutes=5,
         )
         job.run()
         # The query passed to gmail.search must use epoch seconds, not a date.
@@ -67,21 +73,28 @@ class TestInboundEmailCheckJob:
         assert query.startswith("after:")
         after_val = query.split("after:", 1)[1].split()[0]
         # Must be integer epoch seconds, not YYYY/MM/DD.
-        assert after_val.isdigit(), (
-            f"Expected epoch seconds after:..., got after:{after_val}"
-        )
+        assert after_val.isdigit(), f"Expected epoch seconds after:..., got after:{after_val}"
         # Sanity: at least 10 digits (epoch > 2001)
         assert len(after_val) >= 10
 
     def test_dedup_prevents_double_alert(self, mem):
         from cosinabox.tools.google.gmail import GmailMessage
-        msg = GmailMessage(id="m1", sender="ceo@bigcorp.com", subject="Urgent", snippet="Help", date="2026-04-12")
+
+        msg = GmailMessage(
+            id="m1",
+            sender="ceo@bigcorp.com",
+            subject="Urgent",
+            snippet="Help",
+            date="2026-04-12",
+        )
         mock_gmail = MagicMock()
         mock_gmail.search.return_value = [msg]
         alert = MagicMock()
 
         job = InboundEmailCheckJob(
-            gmail=mock_gmail, db=mem, send_alert=alert,
+            gmail=mock_gmail,
+            db=mem,
+            send_alert=alert,
             urgent_senders=["@bigcorp.com"],
         )
         job.run()

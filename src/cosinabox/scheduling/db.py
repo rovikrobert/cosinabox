@@ -7,17 +7,15 @@ Uses the Memory class's sqlite3 connection (WAL mode, thread-safe).
 from __future__ import annotations
 
 import logging
+import sqlite3
 import uuid
 from datetime import UTC, date, datetime
 from typing import Any
-
-import sqlite3
 
 from cosinabox.scheduling.models import (
     Participant,
     SchedulingRequest,
     SchedulingStateError,
-    SchedulingStatus,
     TimeSlot,
 )
 
@@ -27,6 +25,7 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 # Scheduling requests
 # ---------------------------------------------------------------------------
+
 
 def create_request(
     db: Any,
@@ -51,9 +50,17 @@ def create_request(
             created_at, updated_at)
            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
         (
-            req_id, req.title, req.duration_minutes, requested_by,
-            req.date_range_start.isoformat(), req.date_range_end.isoformat(),
-            req.status, req.preferred_timezone, req.notes, now, now,
+            req_id,
+            req.title,
+            req.duration_minutes,
+            requested_by,
+            req.date_range_start.isoformat(),
+            req.date_range_end.isoformat(),
+            req.status,
+            req.preferred_timezone,
+            req.notes,
+            now,
+            now,
         ),
     )
 
@@ -74,7 +81,8 @@ def create_request(
 def get_request(db: Any, request_id: str) -> SchedulingRequest | None:
     """Load a scheduling request with its participants and slots."""
     cur = db._conn.execute(
-        "SELECT * FROM scheduling_requests WHERE id = ?", (request_id,),
+        "SELECT * FROM scheduling_requests WHERE id = ?",
+        (request_id,),
     )
     row = cur.fetchone()
     if not row:
@@ -111,7 +119,10 @@ def update_request_status(db: Any, request_id: str, status: str) -> None:
 
 
 def update_request_status_guarded(
-    db: Any, request_id: str, expected_old: str, new_status: str,
+    db: Any,
+    request_id: str,
+    expected_old: str,
+    new_status: str,
 ) -> bool:
     """Optimistic-concurrency status update.
 
@@ -122,8 +133,7 @@ def update_request_status_guarded(
     now = datetime.now(UTC).isoformat()
     try:
         cur = db._conn.execute(
-            "UPDATE scheduling_requests SET status = ?, updated_at = ? "
-            "WHERE id = ? AND status = ?",
+            "UPDATE scheduling_requests SET status = ?, updated_at = ? WHERE id = ? AND status = ?",
             (new_status, now, request_id, expected_old),
         )
         db._conn.commit()
@@ -133,7 +143,9 @@ def update_request_status_guarded(
 
 
 def get_active_requests(
-    db: Any, *, status_filter: list[str] | None = None,
+    db: Any,
+    *,
+    status_filter: list[str] | None = None,
 ) -> list[SchedulingRequest]:
     """Get all requests, optionally filtered by status."""
     if status_filter:
@@ -157,6 +169,7 @@ def get_active_requests(
 # ---------------------------------------------------------------------------
 # Participants
 # ---------------------------------------------------------------------------
+
 
 def get_participant_by_db_id(db: Any, participant_db_id: int) -> Participant | None:
     cur = db._conn.execute(
@@ -205,8 +218,11 @@ def get_participants(db: Any, request_id: str) -> list[Participant]:
 
 
 def update_participant_status(
-    db: Any, participant_db_id: int, status: str,
-    *, gmail_thread_id: str | None = None,
+    db: Any,
+    participant_db_id: int,
+    status: str,
+    *,
+    gmail_thread_id: str | None = None,
     gmail_draft_id: str | None = None,
     mark_outreach_sent: bool = False,
 ) -> None:
@@ -231,7 +247,8 @@ def update_participant_status(
 
 
 def get_participant_outreach_sent_at(
-    db: Any, participant_db_id: int,
+    db: Any,
+    participant_db_id: int,
 ) -> datetime | None:
     cur = db._conn.execute(
         "SELECT outreach_sent_at FROM scheduling_participants WHERE id = ?",
@@ -247,6 +264,7 @@ def get_participant_outreach_sent_at(
 # Slots
 # ---------------------------------------------------------------------------
 
+
 def add_slot(db: Any, request_id: str, slot: TimeSlot) -> int:
     now = datetime.now(UTC).isoformat()
     cur = db._conn.execute(
@@ -254,8 +272,13 @@ def add_slot(db: Any, request_id: str, slot: TimeSlot) -> int:
            (request_id, start_time, end_time, score, requires_move, move_approved, created_at)
            VALUES (?, ?, ?, ?, ?, ?, ?)""",
         (
-            request_id, slot.start_time.isoformat(), slot.end_time.isoformat(),
-            slot.score, slot.requires_move, int(slot.move_approved), now,
+            request_id,
+            slot.start_time.isoformat(),
+            slot.end_time.isoformat(),
+            slot.score,
+            slot.requires_move,
+            int(slot.move_approved),
+            now,
         ),
     )
     db._conn.commit()
@@ -284,7 +307,8 @@ def get_slots(db: Any, request_id: str) -> list[TimeSlot]:
 
 def approve_slot_move(db: Any, slot_db_id: int) -> None:
     db._conn.execute(
-        "UPDATE scheduling_slots SET move_approved = 1 WHERE id = ?", (slot_db_id,),
+        "UPDATE scheduling_slots SET move_approved = 1 WHERE id = ?",
+        (slot_db_id,),
     )
     db._conn.commit()
 
@@ -293,9 +317,14 @@ def approve_slot_move(db: Any, slot_db_id: int) -> None:
 # Responses
 # ---------------------------------------------------------------------------
 
+
 def record_response(
-    db: Any, *, request_id: str, participant_db_id: int,
-    slot_db_id: int, response: str,
+    db: Any,
+    *,
+    request_id: str,
+    participant_db_id: int,
+    slot_db_id: int,
+    response: str,
 ) -> None:
     if response not in ("yes", "if_needed", "no"):
         raise ValueError(f"Invalid response: {response}")
@@ -321,7 +350,8 @@ def record_response(
 
 def get_responses(db: Any, request_id: str) -> list[dict[str, Any]]:
     cur = db._conn.execute(
-        "SELECT * FROM scheduling_responses WHERE request_id = ?", (request_id,),
+        "SELECT * FROM scheduling_responses WHERE request_id = ?",
+        (request_id,),
     )
     return [dict(row) for row in cur.fetchall()]
 
@@ -330,10 +360,16 @@ def get_responses(db: Any, request_id: str) -> list[dict[str, Any]]:
 # Moves (undo log)
 # ---------------------------------------------------------------------------
 
+
 def record_move(
-    db: Any, *, request_id: str, event_id: str,
-    original_start: datetime, original_end: datetime,
-    new_start: datetime, new_end: datetime,
+    db: Any,
+    *,
+    request_id: str,
+    event_id: str,
+    original_start: datetime,
+    original_end: datetime,
+    new_start: datetime,
+    new_end: datetime,
 ) -> int:
     now = datetime.now(UTC).isoformat()
     cur = db._conn.execute(
@@ -342,9 +378,13 @@ def record_move(
             new_start, new_end, created_at)
            VALUES (?, ?, ?, ?, ?, ?, ?)""",
         (
-            request_id, event_id,
-            original_start.isoformat(), original_end.isoformat(),
-            new_start.isoformat(), new_end.isoformat(), now,
+            request_id,
+            event_id,
+            original_start.isoformat(),
+            original_end.isoformat(),
+            new_start.isoformat(),
+            new_end.isoformat(),
+            now,
         ),
     )
     db._conn.commit()
@@ -353,6 +393,7 @@ def record_move(
 
 def mark_move_undone(db: Any, move_id: int) -> None:
     db._conn.execute(
-        "UPDATE scheduling_moves SET undone = 1 WHERE id = ?", (move_id,),
+        "UPDATE scheduling_moves SET undone = 1 WHERE id = ?",
+        (move_id,),
     )
     db._conn.commit()

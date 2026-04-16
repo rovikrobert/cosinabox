@@ -23,7 +23,9 @@ def mem(tmp_path):
 class TestMemorySummaries:
     def test_store_and_retrieve_summary(self, mem: Memory) -> None:
         mem.store_summary(
-            session_id="s1", summary="Key decisions were made.", messages_summarized=10,
+            session_id="s1",
+            summary="Key decisions were made.",
+            messages_summarized=10,
         )
         assert mem.get_latest_summary(session_id="s1") == "Key decisions were made."
 
@@ -221,7 +223,9 @@ class TestAgentLoopMemoryIntegration:
         from cosinabox.agent.routing import Router
 
         mem.store_summary(
-            session_id="s1", summary="Previously discussed: project timeline.", messages_summarized=10,
+            session_id="s1",
+            summary="Previously discussed: project timeline.",
+            messages_summarized=10,
         )
 
         mock_client = MagicMock()

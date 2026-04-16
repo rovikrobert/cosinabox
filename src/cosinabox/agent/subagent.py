@@ -9,7 +9,7 @@ from typing import Any
 
 logger = logging.getLogger(__name__)
 
-_AGENTS: dict[str, "SubAgent"] = {}
+_AGENTS: dict[str, SubAgent] = {}
 
 
 class _NamespacedMemoryClient:
@@ -73,17 +73,20 @@ class SubAgent:
         workers are already running, newly-spawned threads block on acquire()
         until a slot frees up.
         """
+
         def _run() -> None:
             with self._ingest_sem:
                 try:
                     session = f"{self.name}-ingest-{uuid.uuid4().hex}"
                     self._loop.run(
-                        prompt=content, session_id=session,
+                        prompt=content,
+                        session_id=session,
                         system_prompt_override=self.system_prompt,
                         allowed_tools=self.allowed_tools,
                     )
                 except Exception:
                     logger.warning("SubAgent %s ingest failed", self.name, exc_info=True)
+
         thread = threading.Thread(target=_run, daemon=True)
         thread.start()
 
@@ -91,7 +94,8 @@ class SubAgent:
         """Synchronous query — blocks until response is ready."""
         session = f"{self.name}-query-{uuid.uuid4().hex}"
         result = self._loop.run(
-            prompt=question, session_id=session,
+            prompt=question,
+            session_id=session,
             system_prompt_override=self.system_prompt,
             allowed_tools=self.allowed_tools,
         )

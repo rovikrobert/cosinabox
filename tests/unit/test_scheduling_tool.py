@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import date, datetime
+from datetime import date
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -13,7 +13,6 @@ from cosinabox.tools.scheduling_tool import (
     build_scheduling_handlers,
     build_scheduling_tool_definitions,
 )
-
 
 # ---------------------------------------------------------------------------
 # Tool definitions
@@ -152,7 +151,9 @@ class TestSchedulingStatusHandler:
     def test_lists_active_requests_when_no_id(self):
         handlers, db = _make_handlers()
         req = SchedulingRequest(
-            id="abc", title="T", duration_minutes=30,
+            id="abc",
+            title="T",
+            duration_minutes=30,
             date_range_start=date(2026, 5, 1),
             date_range_end=date(2026, 5, 2),
             status="polling",
@@ -169,17 +170,22 @@ class TestSchedulingStatusHandler:
     def test_detail_when_id_supplied(self):
         handlers, db = _make_handlers()
         req = SchedulingRequest(
-            id="abc", title="Sync", duration_minutes=30,
+            id="abc",
+            title="Sync",
+            duration_minutes=30,
             date_range_start=date(2026, 5, 1),
             date_range_end=date(2026, 5, 2),
             status="polling",
         )
-        with patch(
-            "cosinabox.tools.scheduling_tool.sched_db.get_request",
-            return_value=req,
-        ), patch(
-            "cosinabox.tools.scheduling_tool.sched_db.get_responses",
-            return_value=[],
+        with (
+            patch(
+                "cosinabox.tools.scheduling_tool.sched_db.get_request",
+                return_value=req,
+            ),
+            patch(
+                "cosinabox.tools.scheduling_tool.sched_db.get_responses",
+                return_value=[],
+            ),
         ):
             result = handlers["scheduling_status"](request_id="abc")
             assert "Sync" in result
@@ -203,7 +209,8 @@ class TestSchedulingRespondHandler:
             return_value={"status": "ok", "action": "approve", "new_status": "polling"},
         ) as mock_rd:
             result = handlers["scheduling_respond"](
-                request_id="abc", action="approve",
+                request_id="abc",
+                action="approve",
             )
             mock_rd.assert_called_once()
             args, kwargs = mock_rd.call_args
@@ -220,7 +227,9 @@ class TestSchedulingRespondHandler:
             return_value={"status": "ok", "action": "book", "new_status": "booked"},
         ):
             result = handlers["scheduling_respond"](
-                request_id="abc", action="book", slot_id=7,
+                request_id="abc",
+                action="book",
+                slot_id=7,
             )
         assert "Plan 5" in result
         assert "manually" in result.lower()
@@ -233,7 +242,8 @@ class TestSchedulingRespondHandler:
             return_value={"status": "error", "reason": "wrong state"},
         ):
             result = handlers["scheduling_respond"](
-                request_id="abc", action="approve",
+                request_id="abc",
+                action="approve",
             )
         assert "rejected" in result.lower()
         assert "wrong state" in result
