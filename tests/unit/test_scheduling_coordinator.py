@@ -7,10 +7,11 @@ from datetime import UTC, date, datetime, timedelta
 import pytest
 
 from cosinabox.memory import Memory
-from cosinabox.scheduling import coordinator, db as sched_db
+from cosinabox.scheduling import coordinator
+from cosinabox.scheduling import db as sched_db
 from cosinabox.scheduling.coordinator import (
-    InvalidTransition,
     _TRANSITIONS,
+    InvalidTransition,
     find_consensus,
     record_decision,
     start_scheduling,
@@ -22,7 +23,6 @@ from cosinabox.scheduling.models import (
     SchedulingStatus,
     TimeSlot,
 )
-
 
 # ---------------------------------------------------------------------------
 # Fixtures

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import date, datetime
+from datetime import date
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -13,7 +13,6 @@ from cosinabox.tools.scheduling_tool import (
     build_scheduling_handlers,
     build_scheduling_tool_definitions,
 )
-
 
 # ---------------------------------------------------------------------------
 # Tool definitions

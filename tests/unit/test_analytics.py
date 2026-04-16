@@ -2,7 +2,12 @@ from __future__ import annotations
 
 import pytest
 
-from cosinabox.agent.analytics import get_cost_summary, get_error_summary, get_job_health, get_tool_stats
+from cosinabox.agent.analytics import (
+    get_cost_summary,
+    get_error_summary,
+    get_job_health,
+    get_tool_stats,
+)
 from cosinabox.memory import Memory
 
 

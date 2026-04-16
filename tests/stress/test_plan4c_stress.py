@@ -13,10 +13,9 @@ from unittest.mock import MagicMock
 import pytest
 
 from cosinabox.memory import Memory
-from cosinabox.scheduling import coordinator, db as sched_db
+from cosinabox.scheduling import db as sched_db
 from cosinabox.scheduling.coordinator import (
     InvalidTransition,
-    _TRANSITIONS,
     check_polling_status,
     find_consensus,
     record_decision,
@@ -34,7 +33,6 @@ from cosinabox.scheduling.response_parser import (
     parse_callback_data,
     parse_response,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -480,6 +478,7 @@ def test_dst_boundary_no_crash(mem):
     # Should produce slots without crashing and tz labels should work
     assert len(req.slots) > 0
     from zoneinfo import ZoneInfo
+
     from cosinabox.scheduling.outreach import _tz_label
     # Mimic the caller: pass a datetime already-in-participant-tz.
     tz = ZoneInfo("America/Los_Angeles")

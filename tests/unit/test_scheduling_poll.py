@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from datetime import UTC, date, datetime, timedelta
-from typing import Any
 
 import pytest
 
@@ -16,7 +15,6 @@ from cosinabox.scheduling.models import (
     SchedulingStatus,
     TimeSlot,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers

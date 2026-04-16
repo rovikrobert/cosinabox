@@ -3,8 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime, timezone
-from typing import Any
+from datetime import UTC, datetime
 from unittest.mock import MagicMock
 
 from cosinabox.tools.registry import (
@@ -16,7 +15,6 @@ from cosinabox.tools.registry import (
     _serialize,
     build_tool_registry,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -53,7 +51,7 @@ def _make_gmail() -> MagicMock:
 def _make_calendar() -> MagicMock:
     cal = MagicMock()
     cal.list_events.return_value = [
-        FakeEvent("e1", "Standup", datetime(2026, 4, 12, 9, 0, tzinfo=timezone.utc), datetime(2026, 4, 12, 9, 30, tzinfo=timezone.utc)),
+        FakeEvent("e1", "Standup", datetime(2026, 4, 12, 9, 0, tzinfo=UTC), datetime(2026, 4, 12, 9, 30, tzinfo=UTC)),
     ]
     cal.find_conflicts.return_value = []
     return cal
@@ -251,8 +249,8 @@ class TestHandlerExecution:
         cal = _make_calendar()
         created = FakeEvent(
             "new-1", "Team Sync",
-            datetime(2026, 4, 14, 14, 0, tzinfo=timezone.utc),
-            datetime(2026, 4, 14, 15, 0, tzinfo=timezone.utc),
+            datetime(2026, 4, 14, 14, 0, tzinfo=UTC),
+            datetime(2026, 4, 14, 15, 0, tzinfo=UTC),
         )
         cal.create_event.return_value = created
         _, handlers = build_tool_registry({"calendar": cal})
@@ -272,8 +270,8 @@ class TestHandlerExecution:
         conflicts = [
             FakeEvent(
                 "e1", "Standup",
-                datetime(2026, 4, 14, 14, 0, tzinfo=timezone.utc),
-                datetime(2026, 4, 14, 14, 30, tzinfo=timezone.utc),
+                datetime(2026, 4, 14, 14, 0, tzinfo=UTC),
+                datetime(2026, 4, 14, 14, 30, tzinfo=UTC),
             )
         ]
         cal.create_event.side_effect = CalendarConflict(conflicts)
@@ -290,12 +288,12 @@ class TestHandlerExecution:
         cal = _make_calendar()
         cal.find_free_time.return_value = [
             (
-                datetime(2026, 4, 14, 9, 0, tzinfo=timezone.utc),
-                datetime(2026, 4, 14, 10, 0, tzinfo=timezone.utc),
+                datetime(2026, 4, 14, 9, 0, tzinfo=UTC),
+                datetime(2026, 4, 14, 10, 0, tzinfo=UTC),
             ),
             (
-                datetime(2026, 4, 14, 11, 0, tzinfo=timezone.utc),
-                datetime(2026, 4, 14, 22, 0, tzinfo=timezone.utc),
+                datetime(2026, 4, 14, 11, 0, tzinfo=UTC),
+                datetime(2026, 4, 14, 22, 0, tzinfo=UTC),
             ),
         ]
         _, handlers = build_tool_registry({"calendar": cal})
@@ -428,7 +426,6 @@ class TestTimezoneHandling:
 
     def test_find_free_time_defaults_to_utc(self) -> None:
         """Without explicit timezone, handler uses UTC."""
-        from zoneinfo import ZoneInfo
 
         cal = _make_calendar()
         cal.find_free_time.return_value = []
@@ -464,8 +461,8 @@ class TestSerializeEdgeCases:
         """Dataclass values in dicts are properly serialized, not repr'd."""
         result = _serialize({"event": FakeEvent(
             "e1", "Standup",
-            datetime(2026, 4, 12, 9, 0, tzinfo=timezone.utc),
-            datetime(2026, 4, 12, 9, 30, tzinfo=timezone.utc),
+            datetime(2026, 4, 12, 9, 0, tzinfo=UTC),
+            datetime(2026, 4, 12, 9, 30, tzinfo=UTC),
         )})
         assert "Standup" in result
         assert "FakeEvent" not in result  # Should not be repr()
@@ -473,8 +470,8 @@ class TestSerializeEdgeCases:
     def test_serialize_single_dataclass(self) -> None:
         result = _serialize(FakeEvent(
             "e1", "Standup",
-            datetime(2026, 4, 12, 9, 0, tzinfo=timezone.utc),
-            datetime(2026, 4, 12, 9, 30, tzinfo=timezone.utc),
+            datetime(2026, 4, 12, 9, 0, tzinfo=UTC),
+            datetime(2026, 4, 12, 9, 30, tzinfo=UTC),
         ))
         assert "Standup" in result
         assert "e1" in result

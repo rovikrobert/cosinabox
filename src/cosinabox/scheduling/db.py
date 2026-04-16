@@ -7,17 +7,15 @@ Uses the Memory class's sqlite3 connection (WAL mode, thread-safe).
 from __future__ import annotations
 
 import logging
+import sqlite3
 import uuid
 from datetime import UTC, date, datetime
 from typing import Any
-
-import sqlite3
 
 from cosinabox.scheduling.models import (
     Participant,
     SchedulingRequest,
     SchedulingStateError,
-    SchedulingStatus,
     TimeSlot,
 )
 

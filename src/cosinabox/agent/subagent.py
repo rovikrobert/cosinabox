@@ -9,7 +9,7 @@ from typing import Any
 
 logger = logging.getLogger(__name__)
 
-_AGENTS: dict[str, "SubAgent"] = {}
+_AGENTS: dict[str, SubAgent] = {}
 
 
 class _NamespacedMemoryClient:

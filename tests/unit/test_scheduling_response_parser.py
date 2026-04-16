@@ -1,10 +1,8 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from types import SimpleNamespace
 from unittest.mock import MagicMock
-
-import pytest
 
 from cosinabox.scheduling.models import TimeSlot
 from cosinabox.scheduling.response_parser import (
@@ -12,15 +10,14 @@ from cosinabox.scheduling.response_parser import (
     parse_response,
 )
 
-
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
 
 
 def _slot(db_id: int, hour: int) -> TimeSlot:
-    start = datetime(2026, 4, 20, hour, 0, tzinfo=timezone.utc)
-    end = datetime(2026, 4, 20, hour + 1, 0, tzinfo=timezone.utc)
+    start = datetime(2026, 4, 20, hour, 0, tzinfo=UTC)
+    end = datetime(2026, 4, 20, hour + 1, 0, tzinfo=UTC)
     return TimeSlot(start_time=start, end_time=end, db_id=db_id)
 
 

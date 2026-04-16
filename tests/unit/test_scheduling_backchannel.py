@@ -11,7 +11,6 @@ from cosinabox.scheduling.backchannel import (
 )
 from cosinabox.scheduling.models import TimeSlot
 
-
 # A fixed "now" well in the past relative to the events we construct,
 # so proximity guard never fires unintentionally.
 NOW = datetime(2026, 4, 14, 10, 0, tzinfo=UTC)

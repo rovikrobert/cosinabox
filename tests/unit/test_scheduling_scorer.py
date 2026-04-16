@@ -5,8 +5,6 @@ from __future__ import annotations
 from datetime import UTC, date, datetime, timedelta
 from zoneinfo import ZoneInfo
 
-import pytest
-
 from cosinabox.scheduling.models import Participant
 from cosinabox.scheduling.slot_scorer import (
     ScoringConfig,

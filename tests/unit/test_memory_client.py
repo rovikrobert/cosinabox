@@ -1,7 +1,8 @@
 from __future__ import annotations
 
-import pytest
 from unittest.mock import MagicMock, patch
+
+import pytest
 
 from cosinabox.memory.client import LocalMemoryClient
 
@@ -81,8 +82,9 @@ class TestRemoteMemoryClient:
                 client.recall(query="test", namespace="ns")
 
     def test_store_raises_on_503(self):
-        from cosinabox.memory.client import MemoryServiceError, RemoteMemoryClient
         import httpx as real_httpx  # noqa: F401
+
+        from cosinabox.memory.client import MemoryServiceError, RemoteMemoryClient
 
         client = RemoteMemoryClient(base_url="https://mem.example.com", api_key="key123")
         with patch("cosinabox.memory.client.httpx") as mock_httpx:

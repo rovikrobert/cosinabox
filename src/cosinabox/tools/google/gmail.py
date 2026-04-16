@@ -164,8 +164,8 @@ class GmailTool:
 
         Returns dict with draft_id and message.
         """
-        from email.mime.text import MIMEText
         import base64
+        from email.mime.text import MIMEText
 
         msg = MIMEText(body)
         msg["to"] = to
