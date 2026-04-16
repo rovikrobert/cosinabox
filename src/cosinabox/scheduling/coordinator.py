@@ -33,7 +33,12 @@ from cosinabox.scheduling.models import (
 )
 from cosinabox.scheduling.outreach import execute_outreach
 from cosinabox.scheduling.response_parser import parse_response
-from cosinabox.scheduling.slot_scorer import ScoringConfig, find_candidate_slots
+from cosinabox.scheduling.slot_scorer import (
+    ScoringConfig,
+    compute_score,
+    events_to_busy_intervals,
+    find_candidate_slots,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -158,7 +163,7 @@ def start_scheduling(
         notes=notes,
     )
 
-    req_id = sched_db.create_request(db, req)
+    req_id = sched_db.create_request(db, req, requested_by=owner_name)
 
     slots = find_candidate_slots(
         participants=participants,
@@ -199,6 +204,56 @@ def start_scheduling(
 # ---------------------------------------------------------------------------
 
 
+def _fetch_owner_events_for_slots(
+    calendar: Any | None,
+    req: SchedulingRequest,
+) -> dict[date, list[dict[str, Any]]] | None:
+    """Best-effort fetch of owner calendar events covering the request's
+    slot dates. Returns ``None`` if no calendar adapter was supplied or the
+    fetch fails — callers treat ``None`` as "skip fresh re-score".
+
+    Adapter contract: ``calendar.list_events(start=datetime, end=datetime)``
+    returns objects with ``.start`` / ``.end`` attributes (CalendarEvent).
+    We re-shape them into the ``dict`` format ``find_consensus`` expects.
+    """
+    if calendar is None or not req.slots:
+        return None
+    list_events = getattr(calendar, "list_events", None)
+    if not callable(list_events):
+        return None
+    # Compute day window from slot range.
+    slot_dates = sorted({s.start_time.date() for s in req.slots})
+    if not slot_dates:
+        return None
+    # Fetch one range covering all slot days.
+    try:
+        from zoneinfo import ZoneInfo
+        utc = ZoneInfo("UTC")
+        start = datetime.combine(slot_dates[0], datetime.min.time(), tzinfo=utc)
+        end = datetime.combine(
+            slot_dates[-1], datetime.min.time(), tzinfo=utc,
+        ) + timedelta(days=1)
+        raw_events = list_events(start=start, end=end)
+    except Exception:  # noqa: BLE001
+        logger.warning("calendar.list_events failed", exc_info=True)
+        return None
+
+    events_by_day: dict[date, list[dict[str, Any]]] = {d: [] for d in slot_dates}
+    for ev in raw_events or []:
+        s = getattr(ev, "start", None)
+        e = getattr(ev, "end", None)
+        if s is None or e is None:
+            continue
+        d = s.date() if hasattr(s, "date") else None
+        if d is None:
+            continue
+        events_by_day.setdefault(d, []).append({
+            "start": {"dateTime": s.isoformat()},
+            "end": {"dateTime": e.isoformat()},
+        })
+    return events_by_day
+
+
 def _fetch_gmail_replies(gmail: Any, thread_id: str) -> list[dict[str, Any]]:
     """Best-effort reply fetch. Adapter contract:
         gmail.list_thread_messages(thread_id) -> list[dict{'body': str, ...}]
@@ -225,6 +280,8 @@ def check_polling_status(
     gmail: Any | None = None,
     anthropic_client: Any | None = None,
     cost_tracker: Any | None = None,
+    calendar: Any | None = None,
+    scoring_config: ScoringConfig | None = None,
 ) -> dict[str, Any]:
     """Check a POLLING request for new Gmail replies and summarise state.
 
@@ -329,7 +386,14 @@ def check_polling_status(
     responded = sum(1 for p in req.participants if p.db_id in responded_ids)
     pending = total - responded
 
-    consensus_slot = find_consensus(db, request_id)
+    # Pass fresh calendar events (if a calendar tool was injected) so the
+    # re-score path picks a slot that is actually still free today.
+    owner_events = _fetch_owner_events_for_slots(calendar, req)
+    consensus_slot = find_consensus(
+        db, request_id,
+        owner_events_by_day=owner_events,
+        scoring_config=scoring_config,
+    )
 
     return {
         "request_id": request_id,
@@ -348,13 +412,26 @@ def check_polling_status(
 # ---------------------------------------------------------------------------
 
 
-def find_consensus(db: Any, request_id: str) -> TimeSlot | None:
+def find_consensus(
+    db: Any,
+    request_id: str,
+    *,
+    owner_events_by_day: dict[date, list[dict[str, Any]]] | None = None,
+    scoring_config: ScoringConfig | None = None,
+) -> TimeSlot | None:
     """Return the slot where ALL participants voted ``yes`` or ``if_needed``.
 
     - A participant who has not responded at all counts as "not yes" for
       every slot (returns None while anyone is pending).
     - A single ``no`` for a slot disqualifies that slot.
     - If multiple slots qualify, the highest-scoring one is returned.
+
+    If ``owner_events_by_day`` is provided, qualifying slots are re-scored
+    against the fresh calendar before picking a winner. Stored ``.score``
+    values were computed at PROPOSING time and can go stale during POLLING
+    (up to 48h) as the owner accepts new meetings that overlap proposed
+    slots. Passing fresh events lets the coordinator prefer a slot that is
+    still actually free today.
 
     Returns None if no slot has unanimous acceptance yet.
     """
@@ -389,7 +466,57 @@ def find_consensus(db: Any, request_id: str) -> TimeSlot | None:
 
     if not qualifying:
         return None
-    return max(qualifying, key=lambda s: s.score)
+
+    if owner_events_by_day is None:
+        return max(qualifying, key=lambda s: s.score)
+
+    # --- Fresh re-score pass -------------------------------------------------
+    # Recompute scores against the caller-provided calendar snapshot. We
+    # don't mutate the persisted slots — this is a read-time correction
+    # that stays local to this call.
+    config = scoring_config or ScoringConfig()
+    owner_tz = req.preferred_timezone or "UTC"
+    range_start = req.date_range_start
+    range_end = req.date_range_end
+
+    # Pre-compute per-day busy intervals + event counts from the fresh feed.
+    busy_by_day: dict[date, list[tuple[datetime, datetime]]] = {}
+    events_per_day: dict[date, int] = {}
+    for d, events in owner_events_by_day.items():
+        busy_by_day[d] = events_to_busy_intervals(events, owner_tz)
+        events_per_day[d] = len(events)
+
+    def _find_conflict_fresh(
+        start: datetime, end: datetime,
+    ) -> str | None:
+        from zoneinfo import ZoneInfo
+        local_day = start.astimezone(ZoneInfo(owner_tz)).date()
+        for bs, be in busy_by_day.get(local_day, []):
+            if start < be and end > bs:
+                return f"conflict:{bs.isoformat()}"
+        return None
+
+    rescored: list[tuple[TimeSlot, float]] = []
+    for slot in qualifying:
+        from zoneinfo import ZoneInfo
+        local_day = slot.start_time.astimezone(ZoneInfo(owner_tz)).date()
+        busy_today = busy_by_day.get(local_day, [])
+        requires_move = _find_conflict_fresh(slot.start_time, slot.end_time)
+        fresh_score = compute_score(
+            slot.start_time, slot.end_time, req.participants,
+            busy=busy_today,
+            events_per_day=events_per_day,
+            range_start=range_start, range_end=range_end,
+            owner_tz=owner_tz,
+            requires_move=requires_move,
+            config=config,
+        )
+        rescored.append((slot, fresh_score))
+
+    # Prefer the highest fresh score. Tie-breaker: fall back to stored score
+    # so this remains deterministic even when the fresh calendar is empty.
+    rescored.sort(key=lambda ss: (ss[1], ss[0].score), reverse=True)
+    return rescored[0][0]
 
 
 # ---------------------------------------------------------------------------

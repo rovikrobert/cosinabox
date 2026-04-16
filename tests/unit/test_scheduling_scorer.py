@@ -109,6 +109,41 @@ class TestScoring:
         )
         assert score < peak_score
 
+    def test_timezone_fairness_midnight_wrap(self):
+        """A slot 23:00 → 00:30 local is NOT peak work hours, even though
+        (23 + 0) / 2 = 11.5 makes the naive midpoint look like 11:30am.
+
+        Compute the midpoint in absolute seconds, not by averaging hour()
+        values: the correct local midpoint is 23:45, deep into the 22-6
+        penalty band (score 0.1), not peak (1.0).
+        """
+        from cosinabox.scheduling.slot_scorer import _score_timezone_fairness
+
+        # Participant in UTC. Slot runs 23:00 UTC → 00:30 UTC next day.
+        start = datetime(2026, 4, 14, 23, 0, tzinfo=UTC)
+        end = datetime(2026, 4, 15, 0, 30, tzinfo=UTC)
+        config = ScoringConfig()
+        p = Participant(name="A", timezone="UTC")
+        score = _score_timezone_fairness(start, end, [p], config)
+        # Pre-fix, the bug gave score=1.0 (peak). Midpoint is 23:45, outside
+        # 8-19 work window and outside 6-work_start and work_end-22 bands.
+        # So the score should fall into the "else" branch (0.1).
+        assert score < 0.2, (
+            f"Midnight-wrap slot must not be treated as work hours (got {score})"
+        )
+
+    def test_timezone_fairness_normal_daytime_unchanged(self):
+        """Regression guard: the fix must not change scoring for normal
+        daytime slots."""
+        from cosinabox.scheduling.slot_scorer import _score_timezone_fairness
+
+        # 10:00 → 10:30 UTC, midpoint 10:15 — squarely within work hours.
+        start = datetime(2026, 4, 14, 10, 0, tzinfo=UTC)
+        end = datetime(2026, 4, 14, 10, 30, tzinfo=UTC)
+        p = Participant(name="A", timezone="UTC")
+        score = _score_timezone_fairness(start, end, [p], ScoringConfig())
+        assert score == 1.0
+
     def test_move_cost_penalty(self):
         start = datetime(2026, 4, 14, 10, 0, tzinfo=UTC)
         end = start + timedelta(minutes=30)

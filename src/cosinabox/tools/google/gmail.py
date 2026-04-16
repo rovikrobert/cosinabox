@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+import logging
+import re
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
+from email.utils import getaddresses
 from typing import Any
 
 try:
@@ -14,6 +17,8 @@ except ImportError as e:
     ) from e
 
 from cosinabox.tools.google.auth import build_all_credentials
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -35,8 +40,6 @@ def _header(payload: dict[str, Any], name: str) -> str:
 def _fetch_messages(service: Resource, q: str, max_results: int) -> list[GmailMessage]:
     # Gmail search index lags up to 1 hour on sent mail.
     # Use labelIds=["SENT"] for reliable sent mail queries.
-    import re
-
     if re.search(r"\bin:sent\b", q):
         stripped_q = re.sub(r"\bin:sent\b", "", q).strip()
         resp = (
@@ -94,6 +97,49 @@ class GmailTool:
                     seen.add(msg.id)
                     out.append(msg)
         return out
+
+    def get_recipients(self, message_id: str) -> list[str]:
+        """Fetch the To + Cc email addresses for a single message.
+
+        Returns a deduplicated list of lowercased email addresses parsed from
+        the message's To and Cc headers. Uses format=metadata with
+        metadataHeaders=['To','Cc'] to minimise the API payload.
+
+        Returns ``[]`` on any API error so callers (e.g. CrmEmailSyncJob) stay
+        robust when a single message fails.
+        """
+        # Try each configured account until one returns the message. This mirrors
+        # _fetch_messages which dedupes across accounts.
+        for svc in self._services:
+            try:
+                full = (
+                    svc.users()
+                    .messages()
+                    .get(
+                        userId="me",
+                        id=message_id,
+                        format="metadata",
+                        metadataHeaders=["To", "Cc"],
+                    )
+                    .execute()
+                )
+            except Exception:
+                logger.debug("get_recipients failed for %s", message_id, exc_info=True)
+                continue
+            payload = full.get("payload", {}) if isinstance(full, dict) else {}
+            to_raw = _header(payload, "To")
+            cc_raw = _header(payload, "Cc")
+            # email.utils.getaddresses is the canonical RFC 5322 parser.
+            pairs = getaddresses([to_raw, cc_raw])
+            seen: set[str] = set()
+            out: list[str] = []
+            for _, addr in pairs:
+                addr = addr.strip().lower()
+                if addr and addr not in seen:
+                    seen.add(addr)
+                    out.append(addr)
+            return out
+        return []
 
     def search(self, query: str, *, max_results: int = 25) -> list[GmailMessage]:
         seen: set[str] = set()

@@ -56,6 +56,28 @@ class TestCreateAndGet:
     def test_get_missing_returns_none(self, mem):
         assert sched_db.get_request(mem, "nonexistent") is None
 
+    def test_requested_by_defaults_to_owner(self, mem, sample_request):
+        """Plan 4 polish item 10: requested_by defaults to 'owner' (the
+        existing column value). Callers can override via kwarg."""
+        rid = sched_db.create_request(mem, sample_request)
+        row = mem._conn.execute(
+            "SELECT requested_by FROM scheduling_requests WHERE id = ?",
+            (rid,),
+        ).fetchone()
+        assert row["requested_by"] == "owner"
+
+    def test_requested_by_parametrized_from_kwarg(self, mem, sample_request):
+        """Plan 4 polish item 10: callers (start_scheduling) can pass a
+        parameter so the column reflects the actual owner_name."""
+        rid = sched_db.create_request(
+            mem, sample_request, requested_by="Parvati",
+        )
+        row = mem._conn.execute(
+            "SELECT requested_by FROM scheduling_requests WHERE id = ?",
+            (rid,),
+        ).fetchone()
+        assert row["requested_by"] == "Parvati"
+
 
 class TestStatusUpdates:
     def test_update_status(self, mem, sample_request):

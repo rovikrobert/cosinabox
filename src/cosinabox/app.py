@@ -25,6 +25,48 @@ logger = logging.getLogger("cosinabox")
 _FRONTMATTER_RE = re.compile(r"^---\n(.*?)\n---\n(.*)", re.DOTALL)
 
 
+_APPROVAL_PHRASES: frozenset[str] = frozenset({
+    "yes",
+    "yep",
+    "yeah",
+    "y",
+    "go ahead",
+    "approved",
+    "do it",
+    "send it",
+    "ok",
+    "okay",
+    "k",
+    "sure",
+    "confirm",
+    "approve",
+    "absolutely",
+    "definitely",
+})
+
+
+def is_approval(text: str, *, has_pending_tool: bool) -> bool:
+    """Return True iff ``text`` is an approval for a pending tool call.
+
+    Tightened semantics (Plan 4 polish, item 7):
+      1. The text must EXACTLY match a phrase in ``_APPROVAL_PHRASES``
+         after whitespace-strip + lowercase. The previous first-word
+         fallback accepted "yes but actually no" as approval (bug).
+      2. There must be a pending tool waiting in the session. Bare "ok"
+         or "k" mid-conversation (with no tool waiting) is NOT an
+         approval — ``has_pending_tool`` is the caller's guard.
+
+    Both conditions must hold, because either alone leaves a footgun:
+      - Without (1), "yes but let's hold off" slips through.
+      - Without (2), "k" as a casual ack could silently re-approve a
+        stale tool.
+    """
+    if not has_pending_tool:
+        return False
+    normalized = " ".join(text.strip().lower().split())
+    return normalized in _APPROVAL_PHRASES
+
+
 class App:
     """Compose personality + stakeholders + jobs and run the bot + scheduler.
 
@@ -81,14 +123,20 @@ class App:
     # Tool auto-discovery from integrations
     # ------------------------------------------------------------------
 
-    def _build_tools(self, integrations: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
+    def _build_tools(
+        self, integrations: dict[str, Any],
+    ) -> tuple[dict[str, Any], dict[str, Any], list[str]]:
         """Build tool instances and handler dict from integrations.yaml.
 
-        Returns (tool_instances, tool_handlers).
-        tool_instances: {"gmail": GmailTool, "calendar": CalendarTool, ...}
-        tool_handlers: {} (empty for now — tools wired as agent functions later)
+        Returns ``(tool_instances, tool_handlers, auth_errors)``.
+        ``auth_errors`` contains human-readable alert strings for each tool
+        that failed to initialise (missing env var, OAuth refresh failure,
+        etc.). The caller surfaces these via ``send_telegram`` once the bot
+        is up — logs alone are invisible to a deployed agent's user
+        (feedback_flag_oauth_failures).
         """
         tools: dict[str, Any] = {}
+        errors: list[str] = []
 
         google_cfg = integrations.get("google", {})
         if google_cfg.get("enabled"):
@@ -99,43 +147,55 @@ class App:
                 tools["gmail"] = GmailTool()
                 tools["calendar"] = CalendarTool()
                 logger.info("Google tools loaded (Gmail + Calendar)")
-            except Exception:
+            except Exception as exc:
                 logger.warning(
                     "Google tools unavailable — check OAuth tokens",
                     exc_info=True,
+                )
+                errors.append(
+                    f"Google (Gmail + Calendar) auth failed: {exc}. "
+                    "Run `cosinabox auth google` to refresh tokens."
                 )
 
         if integrations.get("fireflies", {}).get("enabled"):
             api_key = os.getenv("FIREFLIES_API_KEY")
             if not api_key:
-                logger.warning(
-                    "Fireflies enabled in integrations.yaml but FIREFLIES_API_KEY "
-                    "not set in .env — skipping. Meeting transcripts will be unavailable."
+                msg = (
+                    "Fireflies enabled in integrations.yaml but "
+                    "FIREFLIES_API_KEY not set in .env — skipping. "
+                    "Meeting transcripts will be unavailable."
                 )
+                logger.warning(msg)
+                errors.append(msg)
             else:
                 try:
                     from cosinabox.tools.fireflies import FirefliesTool
 
                     tools["fireflies"] = FirefliesTool(api_key=api_key)
                     logger.info("Fireflies tool loaded")
-                except Exception:
+                except Exception as exc:
                     logger.warning("Fireflies unavailable", exc_info=True)
+                    errors.append(f"Fireflies init failed: {exc}")
 
         if integrations.get("web_search", {}).get("enabled"):
             api_key = os.getenv("SERPER_API_KEY")
             if not api_key:
-                logger.warning(
-                    "Web search enabled in integrations.yaml but SERPER_API_KEY "
-                    "not set in .env — skipping. Web search will be unavailable."
+                msg = (
+                    "Web search enabled in integrations.yaml but "
+                    "SERPER_API_KEY not set in .env — skipping. "
+                    "Web search will be unavailable."
                 )
+                logger.warning(msg)
+                errors.append(msg)
             else:
                 try:
                     from cosinabox.tools.web_search import WebSearchTool
 
                     tools["web_search"] = WebSearchTool(api_key=api_key)
                     logger.info("Web search tool loaded")
-                except Exception:
+                except Exception as exc:
                     logger.warning("Web search unavailable", exc_info=True)
+                    errors.append(f"Web search init failed: {exc}")
 
         if integrations.get("attio", {}).get("enabled"):
             try:
@@ -143,10 +203,11 @@ class App:
 
                 tools["attio"] = AttioClient()
                 logger.info("Attio CRM tool loaded")
-            except Exception:
+            except Exception as exc:
                 logger.warning("Attio CRM unavailable", exc_info=True)
+                errors.append(f"Attio CRM init failed: {exc}")
 
-        return tools, {}
+        return tools, {}, errors
 
     # ------------------------------------------------------------------
     # Job registration
@@ -294,7 +355,7 @@ class App:
             raise SystemExit(1)
 
         # --- Build components ---
-        tool_instances, _ = self._build_tools(integrations)
+        tool_instances, _, auth_errors = self._build_tools(integrations)
         stakeholders = get_stakeholders(config_dir=self.config_dir, integrations=integrations)
 
         system_prompt = render_system_prompt(
@@ -370,8 +431,11 @@ class App:
         if any(jobs_config.get(j, {}).get("enabled") for j in ("post_meeting_debrief", "rela_daily_scan")):
             from cosinabox.agent.rela import create_rela_agent
 
+            rela_cfg = integrations.get("rela", {}) or {}
+            max_ingests = rela_cfg.get("max_concurrent_ingests")
             rela_agent = create_rela_agent(
                 agent_loop=loop, memory_client=memory_client,
+                max_concurrent_ingests=max_ingests,
             )
 
         # Now that the loop (and its cost tracker) exists, plug it into the
@@ -430,6 +494,18 @@ class App:
                     tg_url,
                     json={"chat_id": chat_id, "text": text[i : i + 4000]},
                 )
+
+        # --- Surface any auth / tool init failures collected at startup ---
+        # Per feedback_flag_oauth_failures: never silently drop accounts.
+        if auth_errors:
+            alert_body = "\n\n".join(f"- {e}" for e in auth_errors)
+            try:
+                send_telegram(
+                    "[cosinabox startup] Integration auth issues detected:\n\n"
+                    f"{alert_body}"
+                )
+            except Exception:  # noqa: BLE001
+                logger.exception("Failed to send auth-error alert via Telegram")
 
         # --- Register jobs that need send_telegram ---
         for job_name, cfg in jobs_config.items():
@@ -513,6 +589,7 @@ class App:
                 job = SchedulingPollCheckJob(
                     db=scheduling_ctx["db"],
                     gmail=scheduling_ctx["coordinator_ctx"]["gmail"],
+                    calendar=tool_instances.get("calendar"),
                     anthropic_client=scheduling_ctx["coordinator_ctx"]["anthropic_client"],
                     cost_tracker=scheduling_ctx["coordinator_ctx"]["cost_tracker"],
                     send_fn=send_telegram,
@@ -565,33 +642,6 @@ class App:
                 for sid in expired:
                     del _pending_tools[sid]
 
-        _APPROVAL_PHRASES = {
-            "yes",
-            "yep",
-            "yeah",
-            "y",
-            "go ahead",
-            "approved",
-            "do it",
-            "send it",
-            "ok",
-            "k",
-            "sure",
-            "confirm",
-            "approve",
-            "absolutely",
-            "definitely",
-        }
-
-        def _is_approval(text: str) -> bool:
-            """Check if user text is an approval (exact match or common prefix)."""
-            normalized = text.strip().lower()
-            if normalized in _APPROVAL_PHRASES:
-                return True
-            # Handle phrases like "yes please", "ok thanks", "sure thing"
-            first_word = normalized.split()[0] if normalized else ""
-            return first_word in _APPROVAL_PHRASES
-
         async def handle_message(update: Update, _ctx: Any) -> None:
             if update.message is None or update.message.text is None:
                 return
@@ -604,10 +654,13 @@ class App:
 
             _sweep_pending_tools()
 
-            # Check if this message is an approval for pending tools
+            # Check if this message is an approval for pending tools. Both
+            # conditions (exact-match normalised phrase AND session has a
+            # pending tool) are enforced by ``is_approval``.
             tool_names_to_grant: list[str] = []
             with _pending_tools_lock:
-                if session in _pending_tools and _is_approval(user_text):
+                has_pending = session in _pending_tools
+                if has_pending and is_approval(user_text, has_pending_tool=True):
                     tool_names, _ts = _pending_tools.pop(session)
                     tool_names_to_grant = tool_names
             if tool_names_to_grant:
