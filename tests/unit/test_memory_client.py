@@ -109,6 +109,45 @@ class TestRemoteMemoryClient:
             with pytest.raises(MemoryServiceError):
                 client.search(query="test", namespace="ns")
 
+    def test_delete_returns_false_on_404(self):
+        """delete() must check HTTP status and return False on error responses."""
+        from cosinabox.memory.client import RemoteMemoryClient
+
+        client = RemoteMemoryClient(base_url="https://mem.example.com", api_key="key123")
+        with patch("cosinabox.memory.client.httpx") as mock_httpx:
+            mock_resp = MagicMock()
+            mock_resp.status_code = 404
+            mock_resp.is_success = False
+            mock_resp.raise_for_status.side_effect = Exception("404 Not Found")
+            mock_httpx.delete.return_value = mock_resp
+            assert client.delete(memory_id="nonexistent") is False
+
+    def test_delete_returns_false_on_500(self):
+        """delete() must return False when the API returns a server error."""
+        from cosinabox.memory.client import RemoteMemoryClient
+
+        client = RemoteMemoryClient(base_url="https://mem.example.com", api_key="key123")
+        with patch("cosinabox.memory.client.httpx") as mock_httpx:
+            mock_resp = MagicMock()
+            mock_resp.status_code = 500
+            mock_resp.is_success = False
+            mock_resp.raise_for_status.side_effect = Exception("500 Server Error")
+            mock_httpx.delete.return_value = mock_resp
+            assert client.delete(memory_id="err") is False
+
+    def test_delete_returns_true_on_success(self):
+        """delete() must return True only when the API returns 2xx."""
+        from cosinabox.memory.client import RemoteMemoryClient
+
+        client = RemoteMemoryClient(base_url="https://mem.example.com", api_key="key123")
+        with patch("cosinabox.memory.client.httpx") as mock_httpx:
+            mock_resp = MagicMock()
+            mock_resp.status_code = 200
+            mock_resp.is_success = True
+            mock_resp.raise_for_status = MagicMock()  # no exception
+            mock_httpx.delete.return_value = mock_resp
+            assert client.delete(memory_id="valid-id") is True
+
 
 class TestResolveMemoryClient:
     def test_returns_local_when_no_url(self, tmp_path, monkeypatch):

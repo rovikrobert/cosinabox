@@ -40,16 +40,22 @@ def make_loop(anthropic_responses: list, tools: dict | None = None) -> AgentLoop
     )
 
 
-def _text_response(text: str):
+def _text_response(text: str, input_tokens: int = 100, output_tokens: int = 50):
     resp = MagicMock()
     resp.stop_reason = "end_turn"
     resp.content = [MagicMock(type="text", text=text)]
-    resp.usage.input_tokens = 100
-    resp.usage.output_tokens = 50
+    resp.usage.input_tokens = input_tokens
+    resp.usage.output_tokens = output_tokens
     return resp
 
 
-def _tool_call_response(name: str, tool_use_id: str, args: dict):
+def _tool_call_response(
+    name: str,
+    tool_use_id: str,
+    args: dict,
+    input_tokens: int = 100,
+    output_tokens: int = 50,
+):
     resp = MagicMock()
     resp.stop_reason = "tool_use"
     # NOTE: `name` is a reserved MagicMock constructor kwarg (sets the mock's
@@ -57,8 +63,8 @@ def _tool_call_response(name: str, tool_use_id: str, args: dict):
     block = MagicMock(type="tool_use", id=tool_use_id, input=args)
     block.name = name
     resp.content = [block]
-    resp.usage.input_tokens = 100
-    resp.usage.output_tokens = 50
+    resp.usage.input_tokens = input_tokens
+    resp.usage.output_tokens = output_tokens
     return resp
 
 
@@ -149,3 +155,48 @@ def test_max_iterations_breaks_loop() -> None:
     result = loop.run(prompt="loop forever", session_id="s1")
     assert result.stopped_reason == "max_iterations"
     assert len(result.tool_calls) == 3
+
+
+def test_no_synthetic_tool_result_in_budget_warning() -> None:
+    """Budget warning must NOT inject a synthetic tool_result block.
+
+    Fabricating tool_result blocks with fake tool_use_ids is a prompt
+    injection vector: the model sees it as real tool output. The budget
+    warning must use a plain text message instead.
+    """
+    # Use high token counts so the first call's cost ($1.05) exceeds 70% of
+    # per_message_cap ($1.40 * 0.70 = $0.98). The pre-check estimate uses
+    # 2000/1000 tokens (~$0.021) which stays under $1.40.
+    client = MagicMock()
+    client.messages.create.side_effect = [
+        _tool_call_response(
+            "weather",
+            "tu_1",
+            {"city": "SF"},
+            input_tokens=100_000,
+            output_tokens=50_000,
+        ),
+        _text_response("done"),
+    ]
+    loop = AgentLoop(
+        anthropic_client=client,
+        router=Router(available_tools={"weather"}),
+        cost_tracker=CostTracker(per_message_cap_usd=1.40, daily_cap_usd=100),
+        tools={"weather": MagicMock(return_value="sunny")},
+        tool_definitions=[{"name": "weather", "description": "x", "input_schema": {}}],
+    )
+    loop.run(prompt="weather?", session_id="s1")
+
+    # Inspect all messages sent to the API. No user message should contain
+    # a tool_result block with a fabricated tool_use_id.
+    for call in client.messages.create.call_args_list:
+        msgs = call.kwargs.get("messages", call.args[0] if call.args else [])
+        for msg in msgs:
+            content = msg.get("content")
+            if isinstance(content, list):
+                for block in content:
+                    if isinstance(block, dict) and block.get("type") == "tool_result":
+                        assert block["tool_use_id"] != "budget_warning", (
+                            "Synthetic tool_result with fake tool_use_id 'budget_warning' "
+                            "found in message history. This is a prompt injection vector."
+                        )

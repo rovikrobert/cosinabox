@@ -416,21 +416,23 @@ class AgentLoop:
                     )
                 messages.append({"role": "assistant", "content": response.content})
 
-                # Budget warning: inject wrap-up hint at 70%
+                messages.append({"role": "user", "content": tool_results})
+
+                # Budget warning: inject wrap-up hint at 70% as a separate
+                # user message. Never fabricate tool_result blocks with fake
+                # tool_use_ids — the model treats them as real tool output,
+                # which is a prompt injection vector.
                 warning_threshold = self.cost.per_message_cap_usd * _BUDGET_WARNING_RATIO
                 if session_cost > warning_threshold:
-                    tool_results.append(
+                    messages.append(
                         {
-                            "type": "tool_result",
-                            "tool_use_id": "budget_warning",
+                            "role": "user",
                             "content": (
-                                "[SYSTEM] You are approaching the budget limit. "
+                                "[system] You are approaching the budget limit. "
                                 "Wrap up your response — do not make more tool calls."
                             ),
                         }
                     )
-
-                messages.append({"role": "user", "content": tool_results})
 
                 # Opus→Sonnet downgrade after iteration 1
                 # Strategic reasoning is for the first turn; tool-loops are mechanical
