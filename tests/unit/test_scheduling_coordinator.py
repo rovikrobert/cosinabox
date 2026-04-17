@@ -434,7 +434,7 @@ def test_record_decision_book_requires_converged(mem):
     result = record_decision(mem, rid, "book", slot_id=1)
     assert result["status"] == "ok"
     assert result["new_status"] == SchedulingStatus.BOOKED.value
-    assert "Phase B" in result["phase_b_note"]
+    assert "calendar_note" in result
 
 
 def test_record_decision_rework_polling_to_owner_review(mem):

@@ -223,15 +223,22 @@ class TestSchedulingRespondHandler:
         handlers, _ = _make_handlers()
         with patch(
             "cosinabox.tools.scheduling_tool.sched_coordinator.record_decision",
-            return_value={"status": "ok", "action": "book", "new_status": "booked"},
+            return_value={
+                "status": "ok",
+                "action": "book",
+                "new_status": "booked",
+                "calendar_note": (
+                    "No calendar provider configured. "
+                    "Please create the event manually in your calendar."
+                ),
+            },
         ):
             result = handlers["scheduling_respond"](
                 request_id="abc",
                 action="book",
                 slot_id=7,
             )
-        assert "Plan 5" in result
-        assert "manually" in result.lower()
+        assert "booked" in result
         assert "calendar" in result.lower()
 
     def test_error_result_surfaced(self):

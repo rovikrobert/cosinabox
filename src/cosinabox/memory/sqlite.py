@@ -103,6 +103,7 @@ CREATE TABLE IF NOT EXISTS scheduling_requests (
         )),
     preferred_timezone TEXT DEFAULT 'UTC',
     notes TEXT,
+    booked_event_id TEXT,
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL
 );
@@ -185,6 +186,23 @@ class Memory:
         self._conn.row_factory = sqlite3.Row
         self._conn.executescript(_SCHEMA)
         self._conn.commit()
+        self._migrate()
+
+    def _migrate(self) -> None:
+        """Run additive schema migrations for existing databases."""
+        # M5: booked_event_id column on scheduling_requests
+        try:
+            self._conn.execute("ALTER TABLE scheduling_requests ADD COLUMN booked_event_id TEXT")
+            self._conn.commit()
+        except sqlite3.OperationalError:
+            pass  # Column already exists
+
+        # M6: nudged_at column on scheduling_participants
+        try:
+            self._conn.execute("ALTER TABLE scheduling_participants ADD COLUMN nudged_at TEXT")
+            self._conn.commit()
+        except sqlite3.OperationalError:
+            pass  # Column already exists
 
     def store_message(
         self,

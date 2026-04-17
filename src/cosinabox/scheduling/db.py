@@ -102,6 +102,7 @@ def get_request(db: Any, request_id: str) -> SchedulingRequest | None:
         preferred_timezone=row["preferred_timezone"] or "UTC",
         notes=row["notes"],
         slots=slots,
+        booked_event_id=row["booked_event_id"],
     )
 
 
