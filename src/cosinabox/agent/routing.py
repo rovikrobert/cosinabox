@@ -3,6 +3,8 @@
 When ADVISOR_ENABLED, strategic prompts route to Sonnet + Opus advisor
 instead of direct Opus. Includes conversation escalation — if the last
 4 messages are all strategic, escalate even if the current message isn't.
+Short follow-up messages ("yes", "ok", "continue") inherit the strategic
+classification from recent context so the model doesn't downgrade mid-thread.
 """
 
 from __future__ import annotations
@@ -40,6 +42,35 @@ SONNET_MODEL_ID = defaults.SONNET_MODEL_ID
 OPUS_MODEL_ID = defaults.OPUS_MODEL_ID
 
 THINKING_ADAPTIVE = {"type": "adaptive"}
+
+# Short follow-up messages that should inherit the conversation's routing
+# rather than being classified on their own (they carry no signal).
+_SHORT_FOLLOWUP_MAX_WORDS = 4
+
+
+def _is_short_followup(prompt: str) -> bool:
+    """Return True if the message is too short/ambiguous to classify on its own."""
+    words = prompt.strip().split()
+    return len(words) <= _SHORT_FOLLOWUP_MAX_WORDS
+
+
+def _context_has_strategic_signal(context: list[dict[str, Any]]) -> bool:
+    """Return True if ANY recent message matches OPUS or MODERATE signals.
+
+    Lighter threshold than ``_conversation_is_strategic`` (which requires
+    3+ of 4). Used for short follow-ups where the message itself carries
+    no routing signal — even a single recent strategic message means the
+    conversation is still in strategic territory.
+    """
+    recent = context[-5:] if len(context) >= 5 else context
+    for msg in recent:
+        content = msg.get("content", "")
+        if not isinstance(content, str):
+            continue
+        for pattern in OPUS_SIGNALS + MODERATE_SIGNALS:
+            if re.search(pattern, content, re.IGNORECASE):
+                return True
+    return False
 
 
 def _conversation_is_strategic(context: list[dict[str, Any]]) -> bool:
@@ -99,6 +130,18 @@ class Router:
                 if defaults.ADVISOR_ENABLED:
                     return SONNET_MODEL_ID, None, True
                 return SONNET_MODEL_ID, THINKING_ADAPTIVE, False
+
+        # Short follow-up inheritance — if the message is too short to
+        # classify (e.g. "yes", "ok", "continue") and recent context has
+        # strategic signal, stay on the strategic model.
+        if (
+            conversation_context
+            and _is_short_followup(msg_lower)
+            and _context_has_strategic_signal(conversation_context)
+        ):
+            if defaults.ADVISOR_ENABLED:
+                return SONNET_MODEL_ID, None, True
+            return OPUS_MODEL_ID, THINKING_ADAPTIVE, False
 
         # Conversation escalation — if recent context is strategically dense
         if conversation_context and _conversation_is_strategic(conversation_context):

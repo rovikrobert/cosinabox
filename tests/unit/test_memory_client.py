@@ -135,3 +135,70 @@ class TestResolveMemoryClient:
         monkeypatch.delenv("MEMORY_API_KEY", raising=False)
         with pytest.raises(ValueError, match="MEMORY_API_KEY"):
             resolve_memory_client(db_path="/tmp/unused.db")
+
+
+class TestRemoteMemoryClientUrlNormalization:
+    """Verify URL construction handles /api/v1 prefix consistently."""
+
+    def test_base_url_without_api_prefix_uses_paths_directly(self):
+        from cosinabox.memory.client import RemoteMemoryClient
+
+        client = RemoteMemoryClient(base_url="https://mem.example.com", api_key="key123")
+        assert client.base_url == "https://mem.example.com"
+
+    def test_base_url_with_trailing_slash_is_stripped(self):
+        from cosinabox.memory.client import RemoteMemoryClient
+
+        client = RemoteMemoryClient(base_url="https://mem.example.com/", api_key="key123")
+        assert client.base_url == "https://mem.example.com"
+
+    def test_base_url_with_api_v1_prefix_is_preserved(self):
+        from cosinabox.memory.client import RemoteMemoryClient
+
+        client = RemoteMemoryClient(base_url="https://mem.example.com/api/v1", api_key="key123")
+        assert client.base_url == "https://mem.example.com/api/v1"
+
+    def test_base_url_with_api_v1_trailing_slash_is_normalized(self):
+        from cosinabox.memory.client import RemoteMemoryClient
+
+        client = RemoteMemoryClient(base_url="https://mem.example.com/api/v1/", api_key="key123")
+        assert client.base_url == "https://mem.example.com/api/v1"
+
+    def test_post_constructs_correct_url_with_api_prefix(self):
+        """When base_url includes /api/v1, requests go to /api/v1/memories etc."""
+        from cosinabox.memory.client import RemoteMemoryClient
+
+        client = RemoteMemoryClient(base_url="https://mem.example.com/api/v1", api_key="key123")
+        with patch("cosinabox.memory.client.httpx") as mock_httpx:
+            mock_resp = MagicMock()
+            mock_resp.json.return_value = {"id": "x"}
+            mock_resp.raise_for_status = MagicMock()
+            mock_httpx.post.return_value = mock_resp
+
+            client.store(text="fact", metadata={}, namespace="ns")
+            call_url = mock_httpx.post.call_args[0][0]
+            assert call_url == "https://mem.example.com/api/v1/memories"
+
+    def test_delete_constructs_correct_url_with_api_prefix(self):
+        from cosinabox.memory.client import RemoteMemoryClient
+
+        client = RemoteMemoryClient(base_url="https://mem.example.com/api/v1", api_key="key123")
+        with patch("cosinabox.memory.client.httpx") as mock_httpx:
+            mock_resp = MagicMock()
+            mock_resp.raise_for_status = MagicMock()
+            mock_httpx.delete.return_value = mock_resp
+
+            client.delete(memory_id="abc123")
+            call_url = mock_httpx.delete.call_args[0][0]
+            assert call_url == "https://mem.example.com/api/v1/memories/abc123"
+
+    def test_resolve_memory_client_with_base_path_env(self, monkeypatch):
+        """MEMORY_SERVICE_BASE_PATH env var should be appended to the URL."""
+        from cosinabox.memory.client import RemoteMemoryClient, resolve_memory_client
+
+        monkeypatch.setenv("MEMORY_SERVICE_URL", "https://mem.example.com")
+        monkeypatch.setenv("MEMORY_API_KEY", "key123")
+        monkeypatch.setenv("MEMORY_SERVICE_BASE_PATH", "/api/v1")
+        client = resolve_memory_client(db_path="/tmp/unused.db")
+        assert isinstance(client, RemoteMemoryClient)
+        assert client.base_url == "https://mem.example.com/api/v1"

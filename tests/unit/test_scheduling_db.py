@@ -365,3 +365,27 @@ class TestMoves:
         sched_db.mark_move_undone(mem, move_id)
         cur = mem._conn.execute("SELECT undone FROM scheduling_moves WHERE id = ?", (move_id,))
         assert cur.fetchone()[0] == 1
+
+
+class TestGetParticipantGmailThreadId:
+    def test_returns_thread_id_when_set(self, mem, sample_request):
+        rid = sched_db.create_request(mem, sample_request)
+        participants = sched_db.get_participants(mem, rid)
+        p = participants[0]
+        assert p.db_id is not None
+        # Set the gmail_thread_id via update_participant_status
+        sched_db.update_participant_status(mem, p.db_id, "sent", gmail_thread_id="thread-abc123")
+        thread_id = sched_db.get_participant_gmail_thread_id(mem, p.db_id)
+        assert thread_id == "thread-abc123"
+
+    def test_returns_none_when_not_set(self, mem, sample_request):
+        rid = sched_db.create_request(mem, sample_request)
+        participants = sched_db.get_participants(mem, rid)
+        p = participants[0]
+        assert p.db_id is not None
+        thread_id = sched_db.get_participant_gmail_thread_id(mem, p.db_id)
+        assert thread_id is None
+
+    def test_returns_none_for_missing_participant(self, mem):
+        thread_id = sched_db.get_participant_gmail_thread_id(mem, 99999)
+        assert thread_id is None

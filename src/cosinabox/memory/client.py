@@ -122,7 +122,24 @@ class LocalMemoryClient:
 
 
 class RemoteMemoryClient:
-    """HTTP client to an external memory service (e.g., Railway-hosted)."""
+    """HTTP client to an external memory service (e.g., Railway-hosted).
+
+    ``base_url`` is the root URL for the memory service API. It should
+    include the version prefix if the service requires one (e.g.,
+    ``https://mem.example.com/api/v1``). Trailing slashes are stripped
+    automatically. Request paths (``/memories``, ``/recall``, ``/search``)
+    are appended directly to ``base_url``.
+
+    Examples::
+
+        # Service at root — requests go to https://mem.example.com/memories
+        RemoteMemoryClient(base_url="https://mem.example.com", api_key="...")
+
+        # Service behind /api/v1 — requests go to https://mem.example.com/api/v1/memories
+        RemoteMemoryClient(base_url="https://mem.example.com/api/v1", api_key="...")
+
+    See also: ``MEMORY_SERVICE_BASE_PATH`` env var in ``resolve_memory_client``.
+    """
 
     def __init__(self, *, base_url: str, api_key: str) -> None:
         self.base_url = base_url.rstrip("/")
@@ -201,6 +218,13 @@ class RemoteMemoryClient:
 def resolve_memory_client(*, db_path: str | Path) -> LocalMemoryClient | RemoteMemoryClient:
     """Pick local or remote memory client based on env vars.
 
+    Environment variables:
+        ``MEMORY_SERVICE_URL`` — base URL of the remote memory service.
+        ``MEMORY_API_KEY`` — bearer token for authentication.
+        ``MEMORY_SERVICE_BASE_PATH`` — optional path prefix appended to
+            the URL (e.g., ``/api/v1``). Useful when the service is
+            mounted behind a reverse proxy or versioned API path.
+
     Fails loud if MEMORY_SERVICE_URL is set without MEMORY_API_KEY — an
     unauthenticated request would 401 on every call, silently dropping
     every memory. Better to crash at startup.
@@ -214,6 +238,9 @@ def resolve_memory_client(*, db_path: str | Path) -> LocalMemoryClient | RemoteM
                 "Set MEMORY_API_KEY in your .env, or unset MEMORY_SERVICE_URL "
                 "to use the local SQLite backend.",
             )
+        base_path = os.getenv("MEMORY_SERVICE_BASE_PATH", "")
+        if base_path:
+            url = url.rstrip("/") + "/" + base_path.strip("/")
         logger.info("Using remote memory service: %s", url)
         return RemoteMemoryClient(base_url=url, api_key=api_key)
     logger.info("Using local memory (SQLite keyword search)")
