@@ -4,11 +4,9 @@ from __future__ import annotations
 
 import logging
 import os
-import re
 from pathlib import Path
 from typing import Any
 
-import yaml
 from dotenv import load_dotenv
 
 from cosinabox import defaults
@@ -22,8 +20,6 @@ from cosinabox.scheduler.runner import SchedulerRunner
 from cosinabox.stakeholders import get_stakeholders
 
 logger = logging.getLogger("cosinabox")
-
-_FRONTMATTER_RE = re.compile(r"^---\n(.*?)\n---\n(.*)", re.DOTALL)
 
 
 class App:
@@ -43,42 +39,24 @@ class App:
         self.config_dir = Path(config_dir or os.getcwd())
 
     # ------------------------------------------------------------------
-    # Config loading
+    # Config loading (delegators — logic lives in app.config)
     # ------------------------------------------------------------------
 
     def _load_personality(self) -> tuple[str, str, str]:
         """Returns (body, name, timezone)."""
-        path = self.config_dir / "personality.md"
-        if not path.exists():
-            logger.warning("personality.md not found in %s", self.config_dir)
-            return "(no personality)", "user", defaults.DEFAULT_TIMEZONE
-        text = path.read_text()
-        m = _FRONTMATTER_RE.match(text)
-        if not m:
-            return text, "user", defaults.DEFAULT_TIMEZONE
-        front: dict[str, Any] = yaml.safe_load(m.group(1)) or {}
-        return (
-            m.group(2).strip(),
-            front.get("name", "user"),
-            front.get("timezone", defaults.DEFAULT_TIMEZONE),
-        )
+        from cosinabox.app.config import load_personality
+
+        return load_personality(self.config_dir)
 
     def _load_jobs(self) -> dict[str, Any]:
-        path = self.config_dir / "jobs.yaml"
-        if not path.exists():
-            logger.warning("jobs.yaml not found in %s", self.config_dir)
-            return {}
-        data: dict[str, Any] = yaml.safe_load(path.read_text()) or {}
-        jobs = data.get("jobs", {})
-        return jobs if isinstance(jobs, dict) else {}
+        from cosinabox.app.config import load_jobs
+
+        return load_jobs(self.config_dir)
 
     def _load_integrations(self) -> dict[str, Any]:
-        path = self.config_dir / "integrations.yaml"
-        if not path.exists():
-            return {}
-        data: dict[str, Any] = yaml.safe_load(path.read_text()) or {}
-        integrations = data.get("integrations", {})
-        return integrations if isinstance(integrations, dict) else {}
+        from cosinabox.app.config import load_integrations
+
+        return load_integrations(self.config_dir)
 
     # ------------------------------------------------------------------
     # Tool auto-discovery from integrations
