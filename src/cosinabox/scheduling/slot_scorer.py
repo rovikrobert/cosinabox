@@ -345,6 +345,19 @@ def compute_score(
 # ---------------------------------------------------------------------------
 
 
+def busy_intervals_to_tuples(
+    intervals: list[Any],
+) -> list[tuple[datetime, datetime]]:
+    """Convert ``BusyInterval`` objects to ``(start, end)`` tuples.
+
+    Accepts any object with ``.start`` and ``.end`` attributes (duck-typed
+    to avoid importing the ``BusyInterval`` class and creating a circular
+    dependency). This lets ``compute_score`` continue to work with plain
+    tuples while the coordinator passes typed ``BusyInterval`` values.
+    """
+    return [(bi.start, bi.end) for bi in intervals]
+
+
 def _find_conflict(
     start_utc: datetime,
     end_utc: datetime,
