@@ -18,6 +18,8 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any, Protocol
 
+import anthropic
+
 from cosinabox import defaults
 from cosinabox.agent.cost import CostExceeded, CostTracker, estimate_cost
 from cosinabox.agent.routing import SONNET_MODEL_ID, Router
@@ -26,6 +28,12 @@ from cosinabox.agent.routing import SONNET_MODEL_ID, Router
 # failover.py needs _ADVISOR_TOOL / _ADVISOR_BETA from this module.
 
 logger = logging.getLogger(__name__)
+
+# Exception types that indicate an Anthropic API failure (rate limit,
+# connection error, server error, etc.). Only these should trip the
+# circuit breaker — tool-execution errors (Google OAuth, memory-service
+# 422s, etc.) must NOT count.
+_ANTHROPIC_API_ERRORS = (anthropic.APIError, anthropic.APIConnectionError)
 
 # Advisor tool definition (beta API)
 _ADVISOR_TOOL = {
@@ -284,13 +292,14 @@ class AgentLoop:
             except CostExceeded:
                 result.stopped_reason = "cost_exceeded"
                 return result
-            except Exception as exc:
+            except _ANTHROPIC_API_ERRORS as exc:
+                # Anthropic API failure — increment circuit breaker
                 with _circuit_breaker_lock:
                     _consecutive_failures += 1
                     _last_failure_at = time.time()
                     current_failures = _consecutive_failures
                 logger.warning(
-                    "API call failed (attempt %d): %s",
+                    "Anthropic API call failed (attempt %d): %s",
                     current_failures,
                     str(exc)[:200],
                 )
@@ -298,7 +307,15 @@ class AgentLoop:
                     result.final_text = "(API unavailable — circuit breaker tripped)"
                     result.stopped_reason = "circuit_breaker"
                     return result
-                # Single failure: return what we have
+                result.stopped_reason = "api_error"
+                return result
+            except Exception as exc:
+                # Non-Anthropic error (e.g. Google OAuth, memory-service) —
+                # do NOT increment the circuit breaker so DMs keep working.
+                logger.warning(
+                    "Non-API error in agent loop (breaker not incremented): %s",
+                    str(exc)[:200],
+                )
                 result.stopped_reason = "api_error"
                 return result
 

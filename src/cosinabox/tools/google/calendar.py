@@ -6,6 +6,7 @@ runs `find_conflicts` first.
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, time, timedelta
 from typing import Any
@@ -17,7 +18,14 @@ except ImportError as e:
         "cosinabox[google] extra is required. Run: pip install 'cosinabox[google]'"
     ) from e
 
+from google.auth.exceptions import RefreshError, TransportError
+
+from cosinabox.tools.google._runtime_alert import runtime_oauth_alert as _runtime_oauth_alert
 from cosinabox.tools.google.auth import build_all_credentials
+
+logger = logging.getLogger(__name__)
+
+_GOOGLE_AUTH_ERRORS = (RefreshError, TransportError)
 
 # Deferred import to avoid circular dependency at module-load time.
 # The scheduling context types are only needed by GoogleCalendarProvider.
@@ -102,10 +110,15 @@ class CalendarTool:
         seen: set[str] = set()
         out: list[CalendarEvent] = []
         for svc in self._services:
-            for evt in _list_events_for_service(svc, self.calendar_id, start, end):
-                if evt.id not in seen:
-                    seen.add(evt.id)
-                    out.append(evt)
+            try:
+                for evt in _list_events_for_service(svc, self.calendar_id, start, end):
+                    if evt.id not in seen:
+                        seen.add(evt.id)
+                        out.append(evt)
+            except _GOOGLE_AUTH_ERRORS as exc:
+                logger.warning("Google Calendar OAuth failure: %s", exc)
+                _runtime_oauth_alert(exc)
+                return []
         return out
 
     def find_conflicts(self, *, start: datetime, end: datetime) -> list[CalendarEvent]:

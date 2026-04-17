@@ -3,6 +3,8 @@ from __future__ import annotations
 import time
 from unittest.mock import MagicMock
 
+import anthropic
+
 from cosinabox.agent import loop as loop_module
 from cosinabox.agent.cost import CostTracker
 from cosinabox.agent.loop import AgentLoop
@@ -27,7 +29,9 @@ def _build_loop(failing_client: MagicMock) -> AgentLoop:
 def test_circuit_breaker_trips_after_threshold() -> None:
     _reset_breaker()
     client = MagicMock()
-    client.messages.create.side_effect = Exception("API down")
+    client.messages.create.side_effect = anthropic.APIError(
+        message="API down", request=None, body=None
+    )
     loop = _build_loop(client)
 
     # Trigger 5 failures
@@ -45,7 +49,9 @@ def test_circuit_breaker_trips_after_threshold() -> None:
 def test_circuit_breaker_resets_after_cooldown() -> None:
     _reset_breaker()
     client = MagicMock()
-    client.messages.create.side_effect = Exception("API down")
+    client.messages.create.side_effect = anthropic.APIError(
+        message="API down", request=None, body=None
+    )
     loop = _build_loop(client)
 
     for _ in range(5):
@@ -72,7 +78,9 @@ def test_circuit_breaker_resets_after_cooldown() -> None:
 def test_circuit_breaker_stays_tripped_within_cooldown() -> None:
     _reset_breaker()
     client = MagicMock()
-    client.messages.create.side_effect = Exception("API down")
+    client.messages.create.side_effect = anthropic.APIError(
+        message="API down", request=None, body=None
+    )
     loop = _build_loop(client)
 
     for _ in range(5):
