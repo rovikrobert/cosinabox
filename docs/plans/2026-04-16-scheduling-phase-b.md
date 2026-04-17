@@ -1,7 +1,7 @@
 # Plan: Scheduling Phase B
 
 **Date:** 2026-04-16
-**Status:** Draft — no implementation until plan is reviewed.
+**Status:** Completed 2026-04-16.
 **Precursors:** PRs #17 (Plan 4C kickoff), #18 (dedup + stress suite), #19 (security), #20 (correctness), #22 (fresh-calendar rescore band-aid).
 **Worktree target:** `~/.worktrees/cantina/scheduling-phase-b` (create at M1).
 
@@ -113,7 +113,7 @@ No more `owner_events_by_day` kwarg. The function calls `ctx.calendar.list_busy_
 
 Each milestone is an independently-reviewable PR. Full pytest suite (627 tests) MUST stay green at the head of every PR. Stress suite (`tests/stress/test_plan4c_stress.py`) runs on every PR.
 
-### - [ ] M1: Introduce `SchedulingContext` + `CalendarProvider` protocol (no behaviour change)
+### - [x] M1: Introduce `SchedulingContext` + `CalendarProvider` protocol (no behaviour change)
 
 - **Files touched:**
   - Create `src/cosinabox/scheduling/context.py` (`SchedulingContext` dataclass, `OwnerProfile`, `CalendarProvider` Protocol, `BusyInterval` / `CreatedEvent` dataclasses, `build_from_integrations(integrations, memory, ...) -> SchedulingContext`).
@@ -124,7 +124,7 @@ Each milestone is an independently-reviewable PR. Full pytest suite (627 tests) 
 
 **Estimate:** 1 hr.
 
-### - [ ] M2: Wire `CalendarProvider` into `find_consensus` (parity behaviour)
+### - [x] M2: Wire `CalendarProvider` into `find_consensus` (parity behaviour)
 
 - **Files touched:**
   - `src/cosinabox/scheduling/coordinator.py` — new overload `find_consensus(ctx, request_id)` alongside the existing `find_consensus(db, request_id, owner_events_by_day=...)`. New one calls `ctx.calendar.list_busy_intervals` internally. Old one kept as a shim that constructs an ad-hoc `SchedulingContext` from its kwargs (deprecation warning via `warnings.warn`).
@@ -137,7 +137,7 @@ Each milestone is an independently-reviewable PR. Full pytest suite (627 tests) 
 
 **Estimate:** 2 hr.
 
-### - [ ] M3: Migrate `check_polling_status` + `SchedulingPollCheckJob` to the context; delete duplicate fetch
+### - [x] M3: Migrate `check_polling_status` + `SchedulingPollCheckJob` to the context; delete duplicate fetch
 
 - **Files touched:**
   - `src/cosinabox/scheduling/coordinator.py` — `check_polling_status(ctx, request_id)` new signature; internally calls the new `find_consensus(ctx, ...)` exactly once; returns the consensus slot in its return dict. Delete `_fetch_owner_events_for_slots` (no callers left after M3).
@@ -151,7 +151,7 @@ Each milestone is an independently-reviewable PR. Full pytest suite (627 tests) 
 
 **Estimate:** 4 hr (largest milestone).
 
-### - [ ] M4: Remove the deprecation shim + `owner_events_by_day` kwarg
+### - [x] M4: Remove the deprecation shim + `owner_events_by_day` kwarg
 
 - **Files touched:**
   - `src/cosinabox/scheduling/coordinator.py` — delete the old `find_consensus(db, request_id, owner_events_by_day=...)` signature + its `warnings.warn`.
@@ -161,7 +161,7 @@ Each milestone is an independently-reviewable PR. Full pytest suite (627 tests) 
 
 **Estimate:** 30 min.
 
-### - [ ] M5: Close the `book` loop — calendar event creation
+### - [x] M5: Close the `book` loop — calendar event creation
 
 - **Files touched:**
   - `src/cosinabox/scheduling/coordinator.py` — `record_decision("book", ...)` calls `ctx.calendar.create_event(...)`. Writes the returned event ID into a new `scheduling_requests.booked_event_id` column (migration).
@@ -176,7 +176,7 @@ Each milestone is an independently-reviewable PR. Full pytest suite (627 tests) 
 
 **Estimate:** 2 hr.
 
-### - [ ] M6: `nudged_at` column + participant-channel DM nudges
+### - [x] M6: `nudged_at` column + participant-channel DM nudges
 
 - **Files touched:**
   - `src/cosinabox/memory/sqlite.py` + `migrations/` — new `scheduling_participants.nudged_at TIMESTAMP NULL` column.
