@@ -14,7 +14,7 @@ from cosinabox.agent.cost import CostTracker
 from cosinabox.agent.loop import AgentLoop
 from cosinabox.agent.routing import Router
 from cosinabox.app.chat import is_approval  # noqa: F401 — re-export + used in handle_message
-from cosinabox.jobs.base import Job, JobContext
+from cosinabox.jobs.base import JobContext
 from cosinabox.prompts.core import render_system_prompt
 from cosinabox.scheduler.runner import SchedulerRunner
 from cosinabox.stakeholders import get_stakeholders
@@ -71,7 +71,7 @@ class App:
         return build_tools(integrations)
 
     # ------------------------------------------------------------------
-    # Job registration
+    # Job registration (delegator — logic lives in app.jobs)
     # ------------------------------------------------------------------
 
     def _register_jobs(
@@ -86,66 +86,18 @@ class App:
         name: str,
         stakeholders: list[dict[str, Any]],
     ) -> None:
-        from cosinabox.jobs.evening_wrap import EveningWrapJob
-        from cosinabox.jobs.followup_reminder import FollowupReminderJob
-        from cosinabox.jobs.morning_briefing import MorningBriefingJob
-        from cosinabox.jobs.pre_meeting_prep import PreMeetingPrepJob
-        from cosinabox.jobs.weekly_review import WeeklyReviewJob
+        from cosinabox.app.jobs import register_core_jobs
 
-        for job_name, cfg in jobs_config.items():
-            if not cfg.get("enabled"):
-                continue
-
-            if job_name == "morning_briefing" and cfg.get("schedule"):
-                job: Job = MorningBriefingJob(
-                    gmail=gmail,
-                    calendar=calendar,
-                    agent_loop=loop,
-                    personality=personality,
-                    name_for_briefing=name,
-                    stakeholders=stakeholders,
-                )
-                scheduler.add_job(job, cron=cfg["schedule"])
-                logger.info("Registered %s at %s", job_name, cfg["schedule"])
-
-            elif job_name == "evening_wrap" and cfg.get("schedule"):
-                job = EveningWrapJob(
-                    gmail=gmail,
-                    agent_loop=loop,
-                    personality=personality,
-                    name_for_briefing=name,
-                )
-                scheduler.add_job(job, cron=cfg["schedule"])
-                logger.info("Registered %s at %s", job_name, cfg["schedule"])
-
-            elif job_name == "pre_meeting_prep":
-                job = PreMeetingPrepJob(
-                    calendar=calendar,
-                    agent_loop=loop,
-                    personality=personality,
-                    skip_titles=cfg.get("skip_if_calendar_title_matches", []),
-                )
-                cron = cfg.get("schedule", "*/5 * * * *")
-                scheduler.add_job(job, cron=cron)
-                logger.info("Registered %s at %s", job_name, cron)
-
-            elif job_name == "weekly_review" and cfg.get("schedule"):
-                job = WeeklyReviewJob(
-                    gmail=gmail,
-                    calendar=calendar,
-                    agent_loop=loop,
-                    personality=personality,
-                    name_for_briefing=name,
-                    stakeholders=stakeholders,
-                )
-                scheduler.add_job(job, cron=cfg["schedule"])
-                logger.info("Registered %s at %s", job_name, cfg["schedule"])
-
-            elif job_name == "followup_reminder":
-                job = FollowupReminderJob(stakeholders=stakeholders)
-                cron = cfg.get("schedule", "30 9 * * *")
-                scheduler.add_job(job, cron=cron)
-                logger.info("Registered %s at %s", job_name, cron)
+        register_core_jobs(
+            scheduler,
+            jobs_config,
+            gmail=gmail,
+            calendar=calendar,
+            loop=loop,
+            personality=personality,
+            name=name,
+            stakeholders=stakeholders,
+        )
 
     # ------------------------------------------------------------------
     # Telegram output wiring
@@ -372,106 +324,23 @@ class App:
                 logger.exception("Failed to send auth-error alert via Telegram")
 
         # --- Register jobs that need send_telegram ---
-        for job_name, cfg in jobs_config.items():
-            if not cfg.get("enabled"):
-                continue
-            if job_name == "inbound_email_check":
-                from cosinabox.jobs.inbound_email_check import InboundEmailCheckJob
+        from cosinabox.app.jobs import register_telegram_jobs
 
-                google_cfg = integrations.get("google", {})
-                job: Job = InboundEmailCheckJob(
-                    gmail=gmail,
-                    db=memory,
-                    send_alert=send_telegram,
-                    urgent_senders=google_cfg.get("urgent_senders", []),
-                    poll_interval_minutes=google_cfg.get("poll_interval_minutes", 5),
-                )
-                cron = cfg.get("schedule", "*/5 * * * *")
-                scheduler.add_job(job, cron=cron)
-                logger.info("Registered %s at %s", job_name, cron)
-            elif job_name == "crm_email_sync":
-                from cosinabox.jobs.crm_email_sync import CrmEmailSyncJob
-
-                job = CrmEmailSyncJob(
-                    gmail=gmail,
-                    attio=tool_instances.get("attio"),
-                )
-                cron = cfg.get("schedule", "45 17 * * *")
-                scheduler.add_job(job, cron=cron)
-                logger.info("Registered %s at %s", job_name, cron)
-            elif job_name == "extract_fireflies":
-                from cosinabox.jobs.extract_fireflies import ExtractFirefliesJob
-
-                job = ExtractFirefliesJob(
-                    fireflies=tool_instances.get("fireflies"),
-                    memory_client=memory_client,
-                    db=memory,
-                    anthropic_client=_Anthropic(),
-                    cost_tracker=loop.cost,
-                )
-                cron = cfg.get("schedule", "0 7 * * *")
-                scheduler.add_job(job, cron=cron)
-                logger.info("Registered %s at %s", job_name, cron)
-            elif job_name == "extract_gmail":
-                from cosinabox.jobs.extract_gmail import ExtractGmailJob
-
-                job = ExtractGmailJob(
-                    gmail=gmail,
-                    memory_client=memory_client,
-                    db=memory,
-                    anthropic_client=_Anthropic(),
-                    stakeholders=stakeholders,
-                    cost_tracker=loop.cost,
-                )
-                cron = cfg.get("schedule", "15 7 * * *")
-                scheduler.add_job(job, cron=cron)
-                logger.info("Registered %s at %s", job_name, cron)
-            elif job_name == "post_meeting_debrief":
-                from cosinabox.jobs.post_meeting_debrief import PostMeetingDebriefJob
-
-                job = PostMeetingDebriefJob(
-                    calendar=calendar,
-                    fireflies=tool_instances.get("fireflies"),
-                    db=memory,
-                    send_fn=send_telegram,
-                    skip_titles=jobs_config.get("pre_meeting_prep", {}).get(
-                        "skip_if_calendar_title_matches",
-                        [],
-                    ),
-                    rela=rela_agent,
-                )
-                cron = cfg.get("schedule", "*/5 * * * *")
-                scheduler.add_job(job, cron=cron)
-                logger.info("Registered %s at %s", job_name, cron)
-            elif job_name == "scheduling_poll_check":
-                from cosinabox.jobs.scheduling_poll_check import SchedulingPollCheckJob
-
-                if scheduling_ctx is None:
-                    logger.warning(
-                        "scheduling_poll_check enabled but scheduling_ctx not built; skipping",
-                    )
-                    continue
-                job = SchedulingPollCheckJob(
-                    db=scheduling_ctx["db"],
-                    gmail=scheduling_ctx["coordinator_ctx"]["gmail"],
-                    calendar=tool_instances.get("calendar"),
-                    anthropic_client=scheduling_ctx["coordinator_ctx"]["anthropic_client"],
-                    cost_tracker=scheduling_ctx["coordinator_ctx"]["cost_tracker"],
-                    send_fn=send_telegram,
-                )
-                cron = cfg.get("schedule", "*/30 * * * *")
-                scheduler.add_job(job, cron=cron)
-                logger.info("Registered %s at %s", job_name, cron)
-            elif job_name == "rela_daily_scan":
-                from cosinabox.jobs.rela_daily_scan import RelaDailyScanJob
-
-                job = RelaDailyScanJob(
-                    rela=rela_agent,
-                    stakeholders=stakeholders,
-                )
-                cron = cfg.get("schedule", "50 7 * * *")
-                scheduler.add_job(job, cron=cron)
-                logger.info("Registered %s at %s", job_name, cron)
+        register_telegram_jobs(
+            scheduler,
+            jobs_config,
+            send_telegram=send_telegram,
+            gmail=gmail,
+            memory=memory,
+            memory_client=memory_client,
+            tool_instances=tool_instances,
+            loop=loop,
+            integrations=integrations,
+            stakeholders=stakeholders,
+            rela_agent=rela_agent,
+            scheduling_ctx=scheduling_ctx,
+            anthropic_factory=_Anthropic,
+        )
 
         self._wire_telegram_output(scheduler, send_telegram)
 
