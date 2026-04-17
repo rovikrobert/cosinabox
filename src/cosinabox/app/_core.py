@@ -13,7 +13,6 @@ from cosinabox import defaults
 from cosinabox.agent.cost import CostTracker
 from cosinabox.agent.loop import AgentLoop
 from cosinabox.agent.routing import Router
-from cosinabox.app.chat import is_approval  # noqa: F401 — re-export + used in handle_message
 from cosinabox.prompts.core import render_system_prompt
 from cosinabox.scheduler.runner import SchedulerRunner
 from cosinabox.stakeholders import get_stakeholders

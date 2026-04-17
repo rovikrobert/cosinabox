@@ -19,6 +19,7 @@ The engine is opinionated about being a Chief of Staff. See `docs/superpowers/sp
 ```
 cosinabox/
 ├── src/cosinabox/
+│   ├── app/                # App orchestrator (split into config, tools, jobs, alerts, chat)
 │   ├── agent/              # Claude API loop, routing, cost tracking
 │   ├── bot/                # Telegram adapter (only channel in v0.1)
 │   ├── memory/             # SQLite layer

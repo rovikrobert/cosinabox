@@ -1,7 +1,7 @@
 """Telegram bot commands: /help, /status, /cost, /brief.
 
 Each command is a standalone async handler that receives the Telegram
-Update + context. They are registered in App.run() alongside the DM
+Update + context. They are registered in App.run() (app/_core.py) alongside the DM
 message handler.
 """
 
