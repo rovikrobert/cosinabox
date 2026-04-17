@@ -187,11 +187,12 @@ class RemoteMemoryClient:
 
     def delete(self, *, memory_id: str) -> bool:
         try:
-            httpx.delete(
+            resp = httpx.delete(
                 f"{self.base_url}/memories/{memory_id}",
                 headers=self._headers,
                 timeout=5.0,
             )
+            resp.raise_for_status()
             return True
         except Exception:
             logger.warning("Memory service delete failed", exc_info=True)

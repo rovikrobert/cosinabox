@@ -4,6 +4,7 @@ import os
 import shutil
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 import pytest
@@ -15,6 +16,25 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 # (fall back to the Python interpreter's bin dir, where pip drops entry points).
 COSINABOX_BIN = shutil.which("cosinabox") or str(Path(sys.executable).parent / "cosinabox")
 COSINABOX_BIN_DIR = str(Path(COSINABOX_BIN).parent)
+
+# Detect whether git init works in the test environment. Sandboxed filesystems
+# (e.g., macOS App Sandbox, CI containers with read-only /tmp) may block
+# .git/hooks creation or git init entirely.
+_GIT_WORKS = True
+try:
+    _tmpdir = tempfile.mkdtemp()
+    subprocess.run(
+        ["git", "init", "--bare"],
+        capture_output=True,
+        check=True,
+        cwd=_tmpdir,
+    )
+except (subprocess.CalledProcessError, PermissionError, FileNotFoundError):
+    _GIT_WORKS = False
+finally:
+    shutil.rmtree(_tmpdir, ignore_errors=True)
+
+_skip_no_git = pytest.mark.skipif(not _GIT_WORKS, reason="git init not available in sandbox")
 
 
 @pytest.fixture
@@ -55,6 +75,7 @@ def _hook_env() -> dict[str, str]:
     return env
 
 
+@_skip_no_git
 def test_validate_passes_on_template(fresh_user_repo: Path) -> None:
     """Confirm that the template files pass cosinabox validate."""
     result = subprocess.run(
@@ -65,6 +86,7 @@ def test_validate_passes_on_template(fresh_user_repo: Path) -> None:
     assert result.returncode == 0, result.stdout + result.stderr
 
 
+@_skip_no_git
 def test_secret_scan_blocks_anthropic_key(fresh_user_repo: Path) -> None:
     """Pre-commit hook must exit non-zero when an Anthropic API key is staged."""
     leaky = fresh_user_repo / "personality.md"
@@ -88,6 +110,7 @@ def test_secret_scan_blocks_anthropic_key(fresh_user_repo: Path) -> None:
     assert "secret" in (result.stdout + result.stderr).lower()
 
 
+@_skip_no_git
 def test_clean_commit_passes_hook(fresh_user_repo: Path) -> None:
     """Pre-commit hook must exit zero when no secrets are present."""
     clean = fresh_user_repo / "personality.md"
