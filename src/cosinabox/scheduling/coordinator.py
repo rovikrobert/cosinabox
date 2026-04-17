@@ -37,7 +37,6 @@ from cosinabox.scheduling.slot_scorer import (
     ScoringConfig,
     busy_intervals_to_tuples,
     compute_score,
-    events_to_busy_intervals,
     find_candidate_slots,
 )
 
@@ -226,26 +225,12 @@ def _fetch_gmail_replies(gmail: Any, thread_id: str) -> list[dict[str, Any]]:
 
 
 def check_polling_status(
-    db_or_ctx: Any,
+    ctx: Any,
     request_id: str,
-    *,
-    gmail: Any | None = None,
-    anthropic_client: Any | None = None,
-    cost_tracker: Any | None = None,
-    calendar: Any | None = None,  # noqa: ARG001 — legacy, unused with ctx
-    scoring_config: ScoringConfig | None = None,  # noqa: ARG001 — legacy, unused with ctx
 ) -> dict[str, Any]:
     """Check a POLLING request for new Gmail replies and summarise state.
 
-    Supports two calling conventions:
-
-    **New (Phase B)** — pass a ``SchedulingContext``::
-
-        check_polling_status(ctx, request_id)
-
-    **Legacy** — pass a ``db`` handle + kwargs::
-
-        check_polling_status(db, request_id, gmail=..., ...)
+    Accepts a ``SchedulingContext`` as the first argument.
 
     Returns::
         {
@@ -262,19 +247,10 @@ def check_polling_status(
     Does NOT transition the state — the caller (polling job or owner tool)
     decides what to do based on the summary.
     """
-    # Dispatch: SchedulingContext has an ``owner`` attribute.
-    if hasattr(db_or_ctx, "owner"):
-        ctx = db_or_ctx
-        db = ctx.db
-        _gmail = ctx.gmail
-        _anthropic = ctx.anthropic_client
-        _cost_tracker = ctx.cost_tracker
-    else:
-        db = db_or_ctx
-        ctx = None
-        _gmail = gmail
-        _anthropic = anthropic_client
-        _cost_tracker = cost_tracker
+    db = ctx.db
+    _gmail = ctx.gmail
+    _anthropic = ctx.anthropic_client
+    _cost_tracker = ctx.cost_tracker
 
     req = sched_db.get_request(db, request_id)
     if req is None:
@@ -356,12 +332,7 @@ def check_polling_status(
     responded = sum(1 for p in req.participants if p.db_id in responded_ids)
     pending = total - responded
 
-    # Use the new find_consensus path if we have a SchedulingContext;
-    # otherwise fall back to stored-score-only consensus (no fresh calendar).
-    if ctx is not None:
-        consensus_slot = find_consensus(ctx, request_id)
-    else:
-        consensus_slot = find_consensus(db, request_id)
+    consensus_slot = find_consensus(ctx, request_id)
 
     return {
         "request_id": request_id,
@@ -516,60 +487,18 @@ def _find_consensus_ctx(
 
 
 def find_consensus(
-    db_or_ctx: Any,
+    ctx: Any,
     request_id: str,
-    *,
-    owner_events_by_day: dict[date, list[dict[str, Any]]] | None = None,
-    scoring_config: ScoringConfig | None = None,
 ) -> TimeSlot | None:
     """Return the slot where ALL participants voted ``yes`` or ``if_needed``.
 
-    Supports two calling conventions:
-
-    **New (Phase B)** — pass a ``SchedulingContext`` as the first argument::
-
-        find_consensus(ctx, request_id)
-
-    **Legacy (deprecated)** — pass a ``db`` handle + optional kwargs::
-
-        find_consensus(db, request_id, owner_events_by_day=..., scoring_config=...)
-
-    The legacy signature emits a ``DeprecationWarning`` and delegates to the
-    same internal logic. It will be removed in M4.
+    Accepts a ``SchedulingContext`` as the first argument. When
+    ``ctx.calendar`` is not None, qualifying slots are re-scored against
+    fresh busy intervals from the provider.
 
     Returns None if no slot has unanimous acceptance yet.
     """
-    # Dispatch: if first arg has an ``owner`` attribute, it's a SchedulingContext.
-    if hasattr(db_or_ctx, "owner"):
-        return _find_consensus_ctx(db_or_ctx, request_id)
-
-    # --- Legacy path (deprecation shim) ---
-    import warnings
-
-    warnings.warn(
-        "find_consensus(db, request_id, owner_events_by_day=...) is deprecated. "
-        "Pass a SchedulingContext as the first argument instead.",
-        DeprecationWarning,
-        stacklevel=2,
-    )
-
-    req, qualifying = _find_qualifying_slots(db_or_ctx, request_id)
-    if not qualifying or req is None:
-        return None
-
-    if owner_events_by_day is None:
-        return max(qualifying, key=lambda s: s.score)
-
-    config = scoring_config or ScoringConfig()
-    owner_tz = req.preferred_timezone or "UTC"
-
-    busy_by_day: dict[date, list[tuple[datetime, datetime]]] = {}
-    events_per_day: dict[date, int] = {}
-    for d, events in owner_events_by_day.items():
-        busy_by_day[d] = events_to_busy_intervals(events, owner_tz)
-        events_per_day[d] = len(events)
-
-    return _rescore_with_busy_tuples(qualifying, busy_by_day, events_per_day, req, config)
+    return _find_consensus_ctx(ctx, request_id)
 
 
 # ---------------------------------------------------------------------------

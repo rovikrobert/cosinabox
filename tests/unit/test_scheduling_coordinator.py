@@ -9,6 +9,7 @@ import pytest
 from cosinabox.memory import Memory
 from cosinabox.scheduling import coordinator
 from cosinabox.scheduling import db as sched_db
+from cosinabox.scheduling.context import OwnerProfile, SchedulingContext
 from cosinabox.scheduling.coordinator import (
     _TRANSITIONS,
     InvalidTransition,
@@ -23,6 +24,17 @@ from cosinabox.scheduling.models import (
     SchedulingStatus,
     TimeSlot,
 )
+
+
+def _ctx(mem, **overrides):
+    """Build a minimal SchedulingContext for tests."""
+    defaults = {
+        "db": mem,
+        "owner": OwnerProfile(name="Host", timezone="UTC"),
+    }
+    defaults.update(overrides)
+    return SchedulingContext(**defaults)
+
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -150,7 +162,7 @@ def test_find_consensus_all_yes(mem):
             slot_db_id=slot_ids[0],
             response="yes",
         )
-    result = find_consensus(mem, rid)
+    result = find_consensus(_ctx(mem), rid)
     assert result is not None
     assert result.db_id == slot_ids[0]
 
@@ -171,7 +183,7 @@ def test_find_consensus_if_needed_counts_as_yes(mem):
         slot_db_id=slot_ids[0],
         response="if_needed",
     )
-    result = find_consensus(mem, rid)
+    result = find_consensus(_ctx(mem), rid)
     assert result is not None
     assert result.db_id == slot_ids[0]
 
@@ -192,7 +204,7 @@ def test_find_consensus_single_no_disqualifies(mem):
         slot_db_id=slot_ids[0],
         response="no",
     )
-    assert find_consensus(mem, rid) is None
+    assert find_consensus(_ctx(mem), rid) is None
 
 
 def test_find_consensus_missing_participant_returns_none(mem):
@@ -205,7 +217,7 @@ def test_find_consensus_missing_participant_returns_none(mem):
         slot_db_id=slot_ids[0],
         response="yes",
     )
-    assert find_consensus(mem, rid) is None
+    assert find_consensus(_ctx(mem), rid) is None
 
 
 def test_find_consensus_rescores_against_fresh_calendar(mem):
@@ -260,20 +272,22 @@ def test_find_consensus_rescores_against_fresh_calendar(mem):
                 response="yes",
             )
 
-    # Without fresh calendar, stored score wins → slot A.
-    assert find_consensus(mem, rid).db_id == sid_a
+    # Without fresh calendar, stored score wins -> slot A.
+    assert find_consensus(_ctx(mem), rid).db_id == sid_a
 
     # With fresh calendar showing a new event overlapping slot A, the rescore
     # should prefer slot B (still clear today).
-    new_conflict = {
-        "start": {"dateTime": slot_a.start_time.isoformat()},
-        "end": {"dateTime": slot_a.end_time.isoformat()},
-    }
-    fresh_events = {
-        slot_a.start_time.date(): [new_conflict],
-        slot_b.start_time.date(): [],
-    }
-    result = find_consensus(mem, rid, owner_events_by_day=fresh_events)
+    from cosinabox.scheduling.context import BusyInterval
+
+    provider = FakeCalendarProvider(
+        busy=[
+            BusyInterval(
+                start=slot_a.start_time,
+                end=slot_a.end_time,
+            ),
+        ]
+    )
+    result = find_consensus(_ctx(mem, calendar=provider), rid)
     assert result is not None
     assert result.db_id == sid_b
 
@@ -291,7 +305,7 @@ def test_find_consensus_without_fresh_calendar_uses_stored_scores(mem):
                 slot_db_id=sid,
                 response="yes",
             )
-    result = find_consensus(mem, rid)
+    result = find_consensus(_ctx(mem), rid)
     assert result is not None
     assert result.db_id == slot_ids[0]  # highest stored score
 
@@ -308,7 +322,7 @@ def test_find_consensus_picks_highest_score_slot(mem):
                 slot_db_id=sid,
                 response="yes",
             )
-    result = find_consensus(mem, rid)
+    result = find_consensus(_ctx(mem), rid)
     assert result is not None
     assert result.db_id == slot_ids[0]
 
@@ -507,7 +521,7 @@ def test_check_polling_status_returns_summary(mem):
         slot_db_id=slot_ids[0],
         response="yes",
     )
-    summary = coordinator.check_polling_status(mem, rid)
+    summary = coordinator.check_polling_status(_ctx(mem), rid)
     assert summary["total_participants"] == 2
     assert summary["responded"] == 1
     assert summary["pending"] == 1
@@ -515,7 +529,7 @@ def test_check_polling_status_returns_summary(mem):
 
 
 def test_check_polling_status_missing_request(mem):
-    summary = coordinator.check_polling_status(mem, "nope")
+    summary = coordinator.check_polling_status(_ctx(mem), "nope")
     assert "error" in summary
 
 
@@ -691,13 +705,11 @@ def test_find_consensus_ctx_provider_error_falls_back(mem):
     assert result.db_id == slot.db_id
 
 
-def test_find_consensus_legacy_emits_deprecation(mem):
-    """Legacy find_consensus(db, ...) emits DeprecationWarning."""
-    import warnings
-
+def test_find_consensus_requires_scheduling_context(mem):
+    """find_consensus requires a SchedulingContext (old db path removed in M4)."""
     req = SchedulingRequest(
         id="",
-        title="Deprecation",
+        title="Ctx required",
         duration_minutes=30,
         date_range_start=date(2026, 5, 4),
         date_range_end=date(2026, 5, 5),
@@ -721,8 +733,7 @@ def test_find_consensus_legacy_emits_deprecation(mem):
         mem, request_id=rid, participant_db_id=p.db_id, slot_db_id=slot.db_id, response="yes"
     )
 
-    with warnings.catch_warnings(record=True) as w:
-        warnings.simplefilter("always")
-        result = find_consensus(mem, rid)
+    # New path works
+    result = find_consensus(_ctx(mem), rid)
     assert result is not None
-    assert any("deprecated" in str(warning.message).lower() for warning in w)
+    assert result.db_id == slot.db_id
