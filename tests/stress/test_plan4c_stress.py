@@ -804,3 +804,88 @@ def test_book_fails_gracefully_when_calendar_missing(mem):
     assert result["status"] == "ok"
     assert result["new_status"] == "booked"
     assert "manually" in result.get("calendar_note", "").lower()
+
+
+# ---------------------------------------------------------------------------
+# 18. Phase B M6: nudge timestamp + participant-channel routing
+# ---------------------------------------------------------------------------
+
+
+def test_nudge_records_nudged_at_timestamp(mem):
+    """record_nudge sets both status='nudged' and nudged_at timestamp."""
+    req = SchedulingRequest(
+        id="",
+        title="Nudge test",
+        duration_minutes=30,
+        date_range_start=date(2026, 5, 4),
+        date_range_end=date(2026, 5, 5),
+        participants=[_participant(name="D", email="d@x.com", channel="gmail")],
+    )
+    rid = sched_db.create_request(mem, req)
+    p = sched_db.get_participants(mem, rid)[0]
+    sched_db.update_participant_status(mem, p.db_id, "sent", mark_outreach_sent=True)
+
+    # Record nudge
+    sched_db.record_nudge(mem, p.db_id)
+
+    # Verify
+    row = mem._conn.execute(
+        "SELECT status, nudged_at FROM scheduling_participants WHERE id = ?",
+        (p.db_id,),
+    ).fetchone()
+    assert row["status"] == "nudged"
+    assert row["nudged_at"] is not None
+
+
+def test_nudge_direct_telegram_when_flag_enabled(mem):
+    """With nudge_participants_directly=True, the poll job sends a Telegram
+    DM to the participant and still notifies the owner."""
+    from unittest.mock import MagicMock
+
+    from cosinabox.jobs.scheduling_poll_check import SchedulingPollCheckJob
+    from cosinabox.scheduling.context import OwnerProfile, SchedulingContext
+
+    bot = MagicMock()
+    ctx = SchedulingContext(
+        db=mem,
+        owner=OwnerProfile(name="Host", timezone="UTC"),
+        bot=bot,
+        nudge_participants_directly=True,
+    )
+
+    alice = _participant(name="Alice", telegram_id="tg_alice", channel="telegram")
+    req = SchedulingRequest(
+        id="",
+        title="Direct nudge",
+        duration_minutes=30,
+        date_range_start=date(2026, 5, 4),
+        date_range_end=date(2026, 5, 5),
+        participants=[alice],
+    )
+    rid = sched_db.create_request(mem, req)
+    p = sched_db.get_participants(mem, rid)[0]
+    sched_db.update_participant_status(mem, p.db_id, "sent", mark_outreach_sent=True)
+    sched_db.update_request_status(mem, rid, "polling")
+
+    # Age the outreach to 25h
+    from datetime import timedelta
+
+    old_time = (datetime.now(UTC) - timedelta(hours=25)).isoformat()
+    mem._conn.execute(
+        "UPDATE scheduling_participants SET outreach_sent_at = ? WHERE id = ?",
+        (old_time, p.db_id),
+    )
+    mem._conn.commit()
+
+    send = []
+    job = SchedulingPollCheckJob(ctx=ctx, send_fn=lambda t: send.append(t))
+    job.run()
+
+    # Bot should have been called to send a direct DM
+    bot.send_message.assert_called_once()
+    call_kwargs = bot.send_message.call_args
+    assert call_kwargs[1]["chat_id"] == "tg_alice"
+
+    # Owner also notified
+    assert len(send) >= 1
+    assert "direct nudge sent" in send[0].lower()

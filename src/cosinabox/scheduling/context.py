@@ -126,6 +126,9 @@ class SchedulingContext:
 
     scoring_config: Any | None = None  # ScoringConfig or None
 
+    # Feature flags
+    nudge_participants_directly: bool = False  # M6: send DMs to participants
+
     def replace(self, **changes: Any) -> SchedulingContext:
         """Return a shallow copy with the given fields replaced."""
         return replace(self, **changes)

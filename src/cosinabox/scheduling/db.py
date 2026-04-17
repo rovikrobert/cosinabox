@@ -248,6 +248,20 @@ def update_participant_status(
     db._conn.commit()
 
 
+def record_nudge(db: Any, participant_db_id: int) -> None:
+    """Record a nudge timestamp and flip status to 'nudged'.
+
+    Sets ``nudged_at`` to now and ``status`` to ``'nudged'`` in a single
+    UPDATE so the timestamp and status are always consistent.
+    """
+    now = datetime.now(UTC).isoformat()
+    db._conn.execute(
+        "UPDATE scheduling_participants SET status = 'nudged', nudged_at = ? WHERE id = ?",
+        (now, participant_db_id),
+    )
+    db._conn.commit()
+
+
 def get_participant_outreach_sent_at(
     db: Any,
     participant_db_id: int,

@@ -68,6 +68,62 @@ class SchedulingPollCheckJob(Job):
     def db(self) -> Any:
         return self.ctx.db
 
+    def _send_nudge(self, participant: Any, title: str, age_hours: float) -> None:
+        """Send a nudge notification.
+
+        When ``ctx.nudge_participants_directly`` is True and the participant
+        has a channel-specific target (telegram_id or email), send the nudge
+        directly to them via the appropriate adapter. Otherwise, fall back to
+        ``send_fn`` (owner's DM).
+
+        Either way, the owner always gets a summary via ``send_fn``.
+        """
+        nudge_text = (
+            f"Scheduling nudge: {participant.name} hasn't responded to "
+            f"'{title}' in {int(age_hours)}h. "
+            "Consider reaching out directly."
+        )
+
+        if self.ctx.nudge_participants_directly:
+            sent_direct = False
+            if participant.channel == "telegram" and participant.telegram_id and self.ctx.bot:
+                try:
+                    self.ctx.bot.send_message(
+                        chat_id=participant.telegram_id,
+                        text=(
+                            f"Friendly reminder: please respond to the "
+                            f"scheduling poll for '{title}'."
+                        ),
+                    )
+                    sent_direct = True
+                except Exception:  # noqa: BLE001
+                    logger.warning(
+                        "Direct Telegram nudge failed for %s",
+                        participant.name,
+                        exc_info=True,
+                    )
+            elif participant.channel == "gmail" and participant.email and self.ctx.gmail:
+                try:
+                    self.ctx.gmail.compose_draft(
+                        to=participant.email,
+                        subject=f"Reminder: scheduling poll for '{title}'",
+                        body=(
+                            f"Hi {participant.name}, this is a friendly reminder "
+                            f"to respond to the scheduling poll for '{title}'."
+                        ),
+                    )
+                    sent_direct = True
+                except Exception:  # noqa: BLE001
+                    logger.warning(
+                        "Direct Gmail nudge failed for %s",
+                        participant.name,
+                        exc_info=True,
+                    )
+            if sent_direct:
+                nudge_text += " (direct nudge sent)"
+
+        self.send_fn(nudge_text)
+
     def run(self, context: Any = None) -> str:
         active = sched_db.get_active_requests(
             self.db,
@@ -161,16 +217,8 @@ class SchedulingPollCheckJob(Job):
 
                 if in_expire_window and p.status == "sent" and can_still_nudge:
                     # Bot-down-during-nudge-window recovery path.
-                    self.send_fn(
-                        f"Scheduling nudge: {p.name} hasn't responded to "
-                        f"'{req.title}' in {int(age_hours)}h. "
-                        "Consider reaching out directly."
-                    )
-                    sched_db.update_participant_status(
-                        self.db,
-                        p.db_id,
-                        "nudged",
-                    )
+                    self._send_nudge(p, req.title, age_hours)
+                    sched_db.record_nudge(self.db, p.db_id)
                     nudged_names.append(p.name)
                     remaining_active += 1
                 elif in_expire_window:
@@ -182,16 +230,8 @@ class SchedulingPollCheckJob(Job):
                     )
                     expired_names.append(p.name)
                 elif in_nudge_window and p.status == "sent":
-                    self.send_fn(
-                        f"Scheduling nudge: {p.name} hasn't responded to "
-                        f"'{req.title}' in {int(age_hours)}h. "
-                        "Consider reaching out directly."
-                    )
-                    sched_db.update_participant_status(
-                        self.db,
-                        p.db_id,
-                        "nudged",
-                    )
+                    self._send_nudge(p, req.title, age_hours)
+                    sched_db.record_nudge(self.db, p.db_id)
                     nudged_names.append(p.name)
                     remaining_active += 1
                 else:
