@@ -14,7 +14,6 @@ from cosinabox.agent.cost import CostTracker
 from cosinabox.agent.loop import AgentLoop
 from cosinabox.agent.routing import Router
 from cosinabox.app.chat import is_approval  # noqa: F401 — re-export + used in handle_message
-from cosinabox.jobs.base import JobContext
 from cosinabox.prompts.core import render_system_prompt
 from cosinabox.scheduler.runner import SchedulerRunner
 from cosinabox.stakeholders import get_stakeholders
@@ -100,33 +99,14 @@ class App:
         )
 
     # ------------------------------------------------------------------
-    # Telegram output wiring
+    # Telegram output wiring (delegator — logic lives in app.alerts)
     # ------------------------------------------------------------------
 
     @staticmethod
     def _wire_telegram_output(scheduler: SchedulerRunner, send_fn: Any) -> None:
-        """Wrap each job's run() to send output to Telegram."""
-        NO_OP = ("no upcoming", "no events", "no meetings", "(no ")
+        from cosinabox.app.alerts import wire_telegram_output
 
-        for jname, registered_job in scheduler._jobs.items():
-            orig = registered_job.run
-
-            def _wrap(original: Any, name: str) -> Any:
-                def wrapped(ctx: JobContext | None = None) -> str:
-                    result: str = original(ctx or JobContext())
-                    if not result or not result.strip():
-                        return result
-                    if any(m in result.lower() for m in NO_OP):
-                        return result
-                    try:
-                        send_fn(f"[{name}]\n\n{result}")
-                    except Exception:
-                        logger.exception("Telegram send failed for %s", name)
-                    return result
-
-                return wrapped
-
-            registered_job.run = _wrap(orig, jname)  # type: ignore[method-assign]  # monkey-patching for telegram output
+        wire_telegram_output(scheduler, send_fn)
 
     # ------------------------------------------------------------------
     # Main entry point
@@ -301,27 +281,10 @@ class App:
         )
 
         # --- Telegram ---
-        import httpx
+        from cosinabox.app.alerts import make_send_telegram, send_auth_error_alert
 
-        tg_url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
-
-        def send_telegram(text: str) -> None:
-            for i in range(0, len(text), 4000):
-                httpx.post(
-                    tg_url,
-                    json={"chat_id": chat_id, "text": text[i : i + 4000]},
-                )
-
-        # --- Surface any auth / tool init failures collected at startup ---
-        # Per feedback_flag_oauth_failures: never silently drop accounts.
-        if auth_errors:
-            alert_body = "\n\n".join(f"- {e}" for e in auth_errors)
-            try:
-                send_telegram(
-                    f"[cosinabox startup] Integration auth issues detected:\n\n{alert_body}"
-                )
-            except Exception:  # noqa: BLE001
-                logger.exception("Failed to send auth-error alert via Telegram")
+        send_telegram = make_send_telegram(bot_token, chat_id)
+        send_auth_error_alert(send_telegram, auth_errors)
 
         # --- Register jobs that need send_telegram ---
         from cosinabox.app.jobs import register_telegram_jobs
