@@ -206,61 +206,6 @@ def start_scheduling(
 # ---------------------------------------------------------------------------
 
 
-def _fetch_owner_events_for_slots(
-    calendar: Any | None,
-    req: SchedulingRequest,
-) -> dict[date, list[dict[str, Any]]] | None:
-    """Best-effort fetch of owner calendar events covering the request's
-    slot dates. Returns ``None`` if no calendar adapter was supplied or the
-    fetch fails — callers treat ``None`` as "skip fresh re-score".
-
-    Adapter contract: ``calendar.list_events(start=datetime, end=datetime)``
-    returns objects with ``.start`` / ``.end`` attributes (CalendarEvent).
-    We re-shape them into the ``dict`` format ``find_consensus`` expects.
-    """
-    if calendar is None or not req.slots:
-        return None
-    list_events = getattr(calendar, "list_events", None)
-    if not callable(list_events):
-        return None
-    # Compute day window from slot range.
-    slot_dates = sorted({s.start_time.date() for s in req.slots})
-    if not slot_dates:
-        return None
-    # Fetch one range covering all slot days.
-    try:
-        from zoneinfo import ZoneInfo
-
-        utc = ZoneInfo("UTC")
-        start = datetime.combine(slot_dates[0], datetime.min.time(), tzinfo=utc)
-        end = datetime.combine(
-            slot_dates[-1],
-            datetime.min.time(),
-            tzinfo=utc,
-        ) + timedelta(days=1)
-        raw_events = list_events(start=start, end=end)
-    except Exception:  # noqa: BLE001
-        logger.warning("calendar.list_events failed", exc_info=True)
-        return None
-
-    events_by_day: dict[date, list[dict[str, Any]]] = {d: [] for d in slot_dates}
-    for ev in raw_events or []:
-        s = getattr(ev, "start", None)
-        e = getattr(ev, "end", None)
-        if s is None or e is None:
-            continue
-        d = s.date() if hasattr(s, "date") else None
-        if d is None:
-            continue
-        events_by_day.setdefault(d, []).append(
-            {
-                "start": {"dateTime": s.isoformat()},
-                "end": {"dateTime": e.isoformat()},
-            }
-        )
-    return events_by_day
-
-
 def _fetch_gmail_replies(gmail: Any, thread_id: str) -> list[dict[str, Any]]:
     """Best-effort reply fetch. Adapter contract:
         gmail.list_thread_messages(thread_id) -> list[dict{'body': str, ...}]
@@ -281,20 +226,26 @@ def _fetch_gmail_replies(gmail: Any, thread_id: str) -> list[dict[str, Any]]:
 
 
 def check_polling_status(
-    db: Any,
+    db_or_ctx: Any,
     request_id: str,
     *,
     gmail: Any | None = None,
     anthropic_client: Any | None = None,
     cost_tracker: Any | None = None,
-    calendar: Any | None = None,
-    scoring_config: ScoringConfig | None = None,
+    calendar: Any | None = None,  # noqa: ARG001 — legacy, unused with ctx
+    scoring_config: ScoringConfig | None = None,  # noqa: ARG001 — legacy, unused with ctx
 ) -> dict[str, Any]:
     """Check a POLLING request for new Gmail replies and summarise state.
 
-    For each participant with a ``gmail_thread_id`` and no recorded response,
-    fetch replies, parse the latest body via ``parse_response``, and record
-    ``yes``/``if_needed``/``no`` per slot.
+    Supports two calling conventions:
+
+    **New (Phase B)** — pass a ``SchedulingContext``::
+
+        check_polling_status(ctx, request_id)
+
+    **Legacy** — pass a ``db`` handle + kwargs::
+
+        check_polling_status(db, request_id, gmail=..., ...)
 
     Returns::
         {
@@ -311,6 +262,20 @@ def check_polling_status(
     Does NOT transition the state — the caller (polling job or owner tool)
     decides what to do based on the summary.
     """
+    # Dispatch: SchedulingContext has an ``owner`` attribute.
+    if hasattr(db_or_ctx, "owner"):
+        ctx = db_or_ctx
+        db = ctx.db
+        _gmail = ctx.gmail
+        _anthropic = ctx.anthropic_client
+        _cost_tracker = ctx.cost_tracker
+    else:
+        db = db_or_ctx
+        ctx = None
+        _gmail = gmail
+        _anthropic = anthropic_client
+        _cost_tracker = cost_tracker
+
     req = sched_db.get_request(db, request_id)
     if req is None:
         return {"error": f"request {request_id!r} not found"}
@@ -320,7 +285,7 @@ def check_polling_status(
     new_responses = 0
     parse_errors: list[str] = []
 
-    if gmail is not None and anthropic_client is not None:
+    if _gmail is not None and _anthropic is not None:
         for p in req.participants:
             if p.db_id is None or p.db_id in already_responded:
                 continue
@@ -334,7 +299,7 @@ def check_polling_status(
             if not thread_id:
                 continue
 
-            messages = _fetch_gmail_replies(gmail, thread_id)
+            messages = _fetch_gmail_replies(_gmail, thread_id)
             if not messages:
                 continue
 
@@ -347,8 +312,8 @@ def check_polling_status(
                 participant_name=p.name,
                 slots=req.slots,
                 reply_text=body,
-                anthropic_client=anthropic_client,
-                cost_tracker=cost_tracker,
+                anthropic_client=_anthropic,
+                cost_tracker=_cost_tracker,
                 participant_timezone=p.timezone,
             )
 
@@ -391,15 +356,12 @@ def check_polling_status(
     responded = sum(1 for p in req.participants if p.db_id in responded_ids)
     pending = total - responded
 
-    # Pass fresh calendar events (if a calendar tool was injected) so the
-    # re-score path picks a slot that is actually still free today.
-    owner_events = _fetch_owner_events_for_slots(calendar, req)
-    consensus_slot = find_consensus(
-        db,
-        request_id,
-        owner_events_by_day=owner_events,
-        scoring_config=scoring_config,
-    )
+    # Use the new find_consensus path if we have a SchedulingContext;
+    # otherwise fall back to stored-score-only consensus (no fresh calendar).
+    if ctx is not None:
+        consensus_slot = find_consensus(ctx, request_id)
+    else:
+        consensus_slot = find_consensus(db, request_id)
 
     return {
         "request_id": request_id,

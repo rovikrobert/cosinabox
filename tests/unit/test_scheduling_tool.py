@@ -64,19 +64,18 @@ class TestToolDefinitions:
 
 
 def _make_handlers():
+    from cosinabox.scheduling.context import OwnerProfile, SchedulingContext
+
     db = MagicMock()
-    coordinator_ctx = {
-        "anthropic_client": MagicMock(),
-        "cost_tracker": MagicMock(),
-        "bot": MagicMock(),
-        "gmail": MagicMock(),
-    }
-    return build_scheduling_handlers(
+    ctx = SchedulingContext(
         db=db,
-        coordinator_ctx=coordinator_ctx,
-        owner_name="Taylor",
-        owner_timezone="Europe/Berlin",
-    ), db
+        owner=OwnerProfile(name="Taylor", timezone="Europe/Berlin"),
+        gmail=MagicMock(),
+        bot=MagicMock(),
+        anthropic_client=MagicMock(),
+        cost_tracker=MagicMock(),
+    )
+    return build_scheduling_handlers(ctx), db
 
 
 class TestHandlersRegistered:

@@ -99,7 +99,7 @@ def register_telegram_jobs(
     integrations: dict[str, Any],
     stakeholders: list[dict[str, Any]],
     rela_agent: Any,
-    scheduling_ctx: dict[str, Any] | None,
+    scheduling_ctx: Any | None,  # SchedulingContext or None
     anthropic_factory: Any,
 ) -> None:
     """Register jobs that need send_telegram (runs AFTER send_telegram exists)."""
@@ -183,11 +183,7 @@ def register_telegram_jobs(
                 )
                 continue
             job = SchedulingPollCheckJob(
-                db=scheduling_ctx["db"],
-                gmail=scheduling_ctx["coordinator_ctx"]["gmail"],
-                calendar=tool_instances.get("calendar"),
-                anthropic_client=scheduling_ctx["coordinator_ctx"]["anthropic_client"],
-                cost_tracker=scheduling_ctx["coordinator_ctx"]["cost_tracker"],
+                ctx=scheduling_ctx,
                 send_fn=send_telegram,
             )
             cron = cfg.get("schedule", "*/30 * * * *")
