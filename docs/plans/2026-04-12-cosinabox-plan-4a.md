@@ -1,6 +1,8 @@
 # Plan 4A: Foundation Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+**Status:** Completed 2026-04-13.
+
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** Add persistent memory, structured logging, analytics, Gmail polling, and CRM sync to the cosinabox engine.
 
@@ -24,7 +26,7 @@
 - Modify: `src/cosinabox/memory/sqlite.py:51-57`
 - Test: `tests/unit/test_memory.py`
 
-- [ ] **Step 1: Write failing test for WAL mode**
+- [x] **Step 1: Write failing test for WAL mode**
 
 ```python
 # tests/unit/test_memory.py — add at end
@@ -36,12 +38,12 @@ def test_memory_uses_wal_mode(tmp_path):
     mem.close()
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `.venv/bin/pytest tests/unit/test_memory.py::test_memory_uses_wal_mode -v`
 Expected: FAIL — current journal_mode is "delete"
 
-- [ ] **Step 3: Enable WAL mode and thread-safe connections**
+- [x] **Step 3: Enable WAL mode and thread-safe connections**
 
 In `src/cosinabox/memory/sqlite.py`, replace the `__init__` method:
 
@@ -59,12 +61,12 @@ def __init__(self, db_path: str | Path) -> None:
     self._conn.commit()
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `.venv/bin/pytest tests/unit/test_memory.py -v`
 Expected: ALL PASS
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/cosinabox/memory/sqlite.py tests/unit/test_memory.py
@@ -79,7 +81,7 @@ git commit -m "fix: enable SQLite WAL mode for concurrent access"
 - Create: `src/cosinabox/memory/client.py`
 - Test: `tests/unit/test_memory_client.py`
 
-- [ ] **Step 1: Write failing tests for LocalMemoryClient**
+- [x] **Step 1: Write failing tests for LocalMemoryClient**
 
 ```python
 # tests/unit/test_memory_client.py
@@ -141,12 +143,12 @@ class TestLocalMemoryClient:
         assert len(results) == 3
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `.venv/bin/pytest tests/unit/test_memory_client.py -v`
 Expected: FAIL — `ImportError: cannot import name 'LocalMemoryClient'`
 
-- [ ] **Step 3: Implement LocalMemoryClient**
+- [x] **Step 3: Implement LocalMemoryClient**
 
 ```python
 # src/cosinabox/memory/client.py
@@ -254,12 +256,12 @@ class LocalMemoryClient:
         self._conn.close()
 ```
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 Run: `.venv/bin/pytest tests/unit/test_memory_client.py -v`
 Expected: ALL PASS
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/cosinabox/memory/client.py tests/unit/test_memory_client.py
@@ -274,7 +276,7 @@ git commit -m "feat: LocalMemoryClient — SQLite keyword search memory backend"
 - Modify: `src/cosinabox/memory/client.py`
 - Add to: `tests/unit/test_memory_client.py`
 
-- [ ] **Step 1: Write failing tests for RemoteMemoryClient**
+- [x] **Step 1: Write failing tests for RemoteMemoryClient**
 
 Add to `tests/unit/test_memory_client.py`:
 
@@ -317,12 +319,12 @@ class TestResolveMemoryClient:
         assert isinstance(client, RemoteMemoryClient)
 ```
 
-- [ ] **Step 2: Run to verify failures**
+- [x] **Step 2: Run to verify failures**
 
 Run: `.venv/bin/pytest tests/unit/test_memory_client.py::TestRemoteMemoryClient -v`
 Expected: FAIL — `ImportError`
 
-- [ ] **Step 3: Implement RemoteMemoryClient + resolve function**
+- [x] **Step 3: Implement RemoteMemoryClient + resolve function**
 
 Add to `src/cosinabox/memory/client.py`:
 
@@ -409,12 +411,12 @@ def resolve_memory_client(*, db_path: str | Path) -> LocalMemoryClient | RemoteM
     return LocalMemoryClient(db_path=db_path)
 ```
 
-- [ ] **Step 4: Run tests**
+- [x] **Step 4: Run tests**
 
 Run: `.venv/bin/pytest tests/unit/test_memory_client.py -v`
 Expected: ALL PASS
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/cosinabox/memory/client.py tests/unit/test_memory_client.py
@@ -430,7 +432,7 @@ git commit -m "feat: RemoteMemoryClient + resolve_memory_client for local/remote
 - Test: `tests/unit/test_structured_logging.py`
 - Modify: `src/cosinabox/memory/sqlite.py` (add tables to _SCHEMA)
 
-- [ ] **Step 1: Add new tables to Memory schema**
+- [x] **Step 1: Add new tables to Memory schema**
 
 In `src/cosinabox/memory/sqlite.py`, append to `_SCHEMA` string (after the summaries table):
 
@@ -476,7 +478,7 @@ CREATE TABLE IF NOT EXISTS processed_message_ids (
 );
 ```
 
-- [ ] **Step 2: Write failing tests for classify_error + ToolLogger**
+- [x] **Step 2: Write failing tests for classify_error + ToolLogger**
 
 ```python
 # tests/unit/test_structured_logging.py
@@ -535,12 +537,12 @@ class TestToolLogger:
         assert cur.fetchone()[0] == 0
 ```
 
-- [ ] **Step 3: Run to verify failures**
+- [x] **Step 3: Run to verify failures**
 
 Run: `.venv/bin/pytest tests/unit/test_structured_logging.py -v`
 Expected: FAIL — `ImportError`
 
-- [ ] **Step 4: Implement classify_error + ToolLogger**
+- [x] **Step 4: Implement classify_error + ToolLogger**
 
 ```python
 # src/cosinabox/agent/logging.py
@@ -618,12 +620,12 @@ class ToolLogger:
         self._conn.commit()
 ```
 
-- [ ] **Step 5: Run tests**
+- [x] **Step 5: Run tests**
 
 Run: `.venv/bin/pytest tests/unit/test_structured_logging.py -v`
 Expected: ALL PASS
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src/cosinabox/agent/logging.py src/cosinabox/memory/sqlite.py tests/unit/test_structured_logging.py
@@ -638,7 +640,7 @@ git commit -m "feat: structured logging — classify_error + ToolLogger with pri
 - Modify: `src/cosinabox/agent/cost.py`
 - Add to: `tests/unit/test_structured_logging.py`
 
-- [ ] **Step 1: Write failing tests for persistent CostTracker**
+- [x] **Step 1: Write failing tests for persistent CostTracker**
 
 Add to `tests/unit/test_structured_logging.py`:
 
@@ -683,12 +685,12 @@ class TestCostTrackerPersistence:
         assert tracker.spend_on(datetime.now(UTC).date()) == 0.50
 ```
 
-- [ ] **Step 2: Run to verify failures**
+- [x] **Step 2: Run to verify failures**
 
 Run: `.venv/bin/pytest tests/unit/test_structured_logging.py::TestCostTrackerPersistence -v`
 Expected: FAIL — `TypeError: __init__() got unexpected keyword argument 'db'`
 
-- [ ] **Step 3: Add persistence to CostTracker**
+- [x] **Step 3: Add persistence to CostTracker**
 
 Replace the `CostTracker` class in `src/cosinabox/agent/cost.py`:
 
@@ -751,17 +753,17 @@ class CostTracker:
 
 Also add `import threading` at the top of the file.
 
-- [ ] **Step 4: Run tests**
+- [x] **Step 4: Run tests**
 
 Run: `.venv/bin/pytest tests/unit/test_structured_logging.py -v`
 Expected: ALL PASS
 
-- [ ] **Step 5: Run full suite to check no regressions**
+- [x] **Step 5: Run full suite to check no regressions**
 
 Run: `.venv/bin/pytest -q`
 Expected: ALL PASS
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src/cosinabox/agent/cost.py tests/unit/test_structured_logging.py
@@ -776,7 +778,7 @@ git commit -m "feat: CostTracker persistence — atomic SQL increment, threading
 - Modify: `src/cosinabox/agent/loop.py`
 - Modify: `src/cosinabox/app.py`
 
-- [ ] **Step 1: Add tool timing + logging to AgentLoop tool dispatch**
+- [x] **Step 1: Add tool timing + logging to AgentLoop tool dispatch**
 
 In `src/cosinabox/agent/loop.py`, in the tool dispatch section (inside `if response.stop_reason == "tool_use":`), wrap each tool execution with timing and logging. Find the `else:` branch that executes `fn(**block.input)` and replace it:
 
@@ -813,7 +815,7 @@ Also add `_tool_logger` to `__init__`:
             self._tool_logger = ToolLogger(db=self.memory)
 ```
 
-- [ ] **Step 2: Wire CostTracker db in App.run()**
+- [x] **Step 2: Wire CostTracker db in App.run()**
 
 In `src/cosinabox/app.py`, pass `db=memory` to CostTracker:
 
@@ -829,12 +831,12 @@ In `src/cosinabox/app.py`, pass `db=memory` to CostTracker:
             ...
 ```
 
-- [ ] **Step 3: Run full test suite**
+- [x] **Step 3: Run full test suite**
 
 Run: `.venv/bin/pytest -q`
 Expected: ALL PASS
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add src/cosinabox/agent/loop.py src/cosinabox/app.py
@@ -850,7 +852,7 @@ git commit -m "feat: wire tool logging + cost persistence into AgentLoop and App
 - Modify: `src/cosinabox/bot/commands.py`
 - Test: `tests/unit/test_analytics.py`
 
-- [ ] **Step 1: Write failing tests**
+- [x] **Step 1: Write failing tests**
 
 ```python
 # tests/unit/test_analytics.py
@@ -917,12 +919,12 @@ class TestAnalytics:
         assert result["errors"] == []
 ```
 
-- [ ] **Step 2: Run to verify failures**
+- [x] **Step 2: Run to verify failures**
 
 Run: `.venv/bin/pytest tests/unit/test_analytics.py -v`
 Expected: FAIL — `ImportError`
 
-- [ ] **Step 3: Implement analytics module**
+- [x] **Step 3: Implement analytics module**
 
 ```python
 # src/cosinabox/agent/analytics.py
@@ -1007,7 +1009,7 @@ def get_error_summary(db: Any, hours: int = 24) -> dict[str, Any]:
     return {"errors": errors, "hours": hours}
 ```
 
-- [ ] **Step 4: Add /analytics bot command**
+- [x] **Step 4: Add /analytics bot command**
 
 In `src/cosinabox/bot/commands.py`, add:
 
@@ -1069,7 +1071,7 @@ async def cmd_help(update: Update, _ctx: Any) -> None:
         await update.message.reply_text(text)
 ```
 
-- [ ] **Step 5: Register /analytics in App.run()**
+- [x] **Step 5: Register /analytics in App.run()**
 
 In `src/cosinabox/app.py`, in the bot commands section, add:
 
@@ -1089,12 +1091,12 @@ tg_app.add_handler(CommandHandler("analytics", build_analytics_handler(
 )))
 ```
 
-- [ ] **Step 6: Run tests**
+- [x] **Step 6: Run tests**
 
 Run: `.venv/bin/pytest tests/unit/test_analytics.py -v && .venv/bin/pytest -q`
 Expected: ALL PASS
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add src/cosinabox/agent/analytics.py src/cosinabox/bot/commands.py src/cosinabox/app.py tests/unit/test_analytics.py
@@ -1110,7 +1112,7 @@ git commit -m "feat: analytics module + /analytics bot command"
 - Modify: `src/cosinabox/app.py` (register job)
 - Test: `tests/unit/test_gmail_polling.py`
 
-- [ ] **Step 1: Write failing tests**
+- [x] **Step 1: Write failing tests**
 
 ```python
 # tests/unit/test_gmail_polling.py
@@ -1186,12 +1188,12 @@ class TestInboundEmailCheckJob:
         assert alert.call_count == 1  # still 1, not 2
 ```
 
-- [ ] **Step 2: Run to verify failures**
+- [x] **Step 2: Run to verify failures**
 
 Run: `.venv/bin/pytest tests/unit/test_gmail_polling.py -v`
 Expected: FAIL — `ImportError`
 
-- [ ] **Step 3: Implement InboundEmailCheckJob**
+- [x] **Step 3: Implement InboundEmailCheckJob**
 
 ```python
 # src/cosinabox/jobs/inbound_email_check.py
@@ -1311,7 +1313,7 @@ class InboundEmailCheckJob(Job):
         return f"Checked {len(messages)} emails, {alert_count} urgent alerts sent"
 ```
 
-- [ ] **Step 4: Register in App.run()**
+- [x] **Step 4: Register in App.run()**
 
 In `src/cosinabox/app.py`, in `_register_jobs()`, add after the followup_reminder block:
 
@@ -1334,12 +1336,12 @@ In `src/cosinabox/app.py`, in `_register_jobs()`, add after the followup_reminde
 
 Note: `_register_jobs` needs `memory` and `send_telegram` parameters added. Add `memory: Any = None` and `send_fn: Any = None` to the method signature, and pass them from `run()`.
 
-- [ ] **Step 5: Run tests**
+- [x] **Step 5: Run tests**
 
 Run: `.venv/bin/pytest tests/unit/test_gmail_polling.py -v && .venv/bin/pytest -q`
 Expected: ALL PASS
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src/cosinabox/jobs/inbound_email_check.py src/cosinabox/app.py tests/unit/test_gmail_polling.py
@@ -1355,7 +1357,7 @@ git commit -m "feat: Gmail polling job — urgent sender alerts with persistent 
 - Modify: `src/cosinabox/app.py` (register job)
 - Test: `tests/unit/test_crm_sync.py`
 
-- [ ] **Step 1: Write failing tests**
+- [x] **Step 1: Write failing tests**
 
 ```python
 # tests/unit/test_crm_sync.py
@@ -1410,12 +1412,12 @@ class TestCrmEmailSyncJob:
         assert "0" in result
 ```
 
-- [ ] **Step 2: Run to verify failures**
+- [x] **Step 2: Run to verify failures**
 
 Run: `.venv/bin/pytest tests/unit/test_crm_sync.py -v`
 Expected: FAIL — `ImportError`
 
-- [ ] **Step 3: Implement CrmEmailSyncJob**
+- [x] **Step 3: Implement CrmEmailSyncJob**
 
 ```python
 # src/cosinabox/jobs/crm_email_sync.py
@@ -1510,7 +1512,7 @@ class CrmEmailSyncJob(Job):
         return f"CRM sync: {updated}/{total} interactions updated, {failed} failed"
 ```
 
-- [ ] **Step 4: Register in App.run()**
+- [x] **Step 4: Register in App.run()**
 
 In `_register_jobs()`, add:
 
@@ -1525,12 +1527,12 @@ In `_register_jobs()`, add:
                 logger.info("Registered %s at %s", job_name, cron)
 ```
 
-- [ ] **Step 5: Run tests**
+- [x] **Step 5: Run tests**
 
 Run: `.venv/bin/pytest tests/unit/test_crm_sync.py -v && .venv/bin/pytest -q`
 Expected: ALL PASS
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src/cosinabox/jobs/crm_email_sync.py src/cosinabox/app.py tests/unit/test_crm_sync.py
@@ -1551,7 +1553,7 @@ git commit -m "feat: CRM email sync — daily sent mail → Attio last_interacti
 - Modify: `src/cosinabox/cli/describe.py`
 - Modify: `src/cosinabox/prompts/core.py`
 
-- [ ] **Step 1: Update .env.example**
+- [x] **Step 1: Update .env.example**
 
 Add after the Attio/Fireflies/Serper lines:
 
@@ -1561,7 +1563,7 @@ Add after the Attio/Fireflies/Serper lines:
 # MEMORY_API_KEY=               # Bearer token for the memory service
 ```
 
-- [ ] **Step 2: Update jobs.yaml template**
+- [x] **Step 2: Update jobs.yaml template**
 
 Add two new jobs (disabled by default):
 
@@ -1574,7 +1576,7 @@ Add two new jobs (disabled by default):
     schedule: "45 17 * * *"   # 5:45 PM — syncs sent email to CRM
 ```
 
-- [ ] **Step 3: Update integrations.yaml template**
+- [x] **Step 3: Update integrations.yaml template**
 
 Add `urgent_senders` under google:
 
@@ -1590,7 +1592,7 @@ Add `urgent_senders` under google:
     # poll_interval_minutes: 5
 ```
 
-- [ ] **Step 4: Create docs/agent/memory.md**
+- [x] **Step 4: Create docs/agent/memory.md**
 
 ```markdown
 # Memory service
@@ -1622,7 +1624,7 @@ For semantic search (understands meaning, not just keywords), point your CoS at 
 The transition is seamless — your CoS will start using semantic search immediately. Local memories are not migrated automatically; new memories go to the remote service.
 ```
 
-- [ ] **Step 5: Create docs/agent/jobs.md**
+- [x] **Step 5: Create docs/agent/jobs.md**
 
 ```markdown
 # Scheduled jobs
@@ -1657,7 +1659,7 @@ Requires `urgent_senders` in `integrations.yaml` to know which emails to alert o
 Requires both Google (Gmail) and Attio integrations enabled. Updates `last_interaction` timestamps only — no notes or status changes.
 ```
 
-- [ ] **Step 6: Update describe.py**
+- [x] **Step 6: Update describe.py**
 
 Add memory backend to `_build_data`:
 
@@ -1674,7 +1676,7 @@ Add to `_format_english`:
     lines.append(f"Memory: {data.get('memory_backend', 'local')}")
 ```
 
-- [ ] **Step 7: Add Capabilities section to system prompt**
+- [x] **Step 7: Add Capabilities section to system prompt**
 
 In `src/cosinabox/prompts/core.py`, add at the end of `_SYSTEM_PROMPT_SRC` (before the closing `"""`):
 
@@ -1684,16 +1686,16 @@ In `src/cosinabox/prompts/core.py`, add at the end of `_SYSTEM_PROMPT_SRC` (befo
 Commands: /help, /status, /cost, /brief, /analytics
 ```
 
-- [ ] **Step 8: Update editing-config.md**
+- [x] **Step 8: Update editing-config.md**
 
 Add memory service row to the integration table.
 
-- [ ] **Step 9: Run full test suite**
+- [x] **Step 9: Run full test suite**
 
 Run: `.venv/bin/pytest -q`
 Expected: ALL PASS
 
-- [ ] **Step 10: Commit**
+- [x] **Step 10: Commit**
 
 ```bash
 git add src/cosinabox/templates/ src/cosinabox/cli/describe.py src/cosinabox/prompts/core.py
@@ -1704,27 +1706,27 @@ git commit -m "docs: OSS discoverability — memory, jobs, system prompt capabil
 
 ### Task 11: Final validation — full test suite + sync
 
-- [ ] **Step 1: Run full test suite**
+- [x] **Step 1: Run full test suite**
 
 Run: `.venv/bin/pytest -q`
 Expected: ALL PASS (211 existing + ~35 new = ~246 total)
 
-- [ ] **Step 2: Run stress test checklist**
+- [x] **Step 2: Run stress test checklist**
 
 For each component, verify:
-- [ ] Empty state (first run) doesn't crash
-- [ ] Missing integrations skip silently
-- [ ] No hardcoded names in any description or log message
-- [ ] New features documented in agent-facing docs
-- [ ] Template files have inline comments explaining each option
+- [x] Empty state (first run) doesn't crash
+- [x] Missing integrations skip silently
+- [x] No hardcoded names in any description or log message
+- [x] New features documented in agent-facing docs
+- [x] Template files have inline comments explaining each option
 
-- [ ] **Step 3: Sync vendored copy**
+- [x] **Step 3: Sync vendored copy**
 
 ```bash
 cp -r src/cosinabox/ /tmp/rovik-keevs/cosinabox/
 ```
 
-- [ ] **Step 4: Push and open PR**
+- [x] **Step 4: Push and open PR**
 
 ```bash
 git push -u origin plan4a-foundation

@@ -1,8 +1,8 @@
 # Plan: Refactor `src/cosinabox/app.py` into a thin orchestrator
 
-**Status:** Drafted 2026-04-16. Not yet in flight.
+**Status:** Completed 2026-04-16.
 **Active-plan pointer:** update `docs/active-plan.md` when M1 opens.
-**How to resume:** open this file, find the first `- [ ]` milestone, read its "Files touched" + "Tests" sections, start there. The plan is self-contained; do not rely on chat context.
+**How to resume:** open this file, find the first `- [x]` milestone, read its "Files touched" + "Tests" sections, start there. The plan is self-contained; do not rely on chat context.
 
 ## Context / Why
 
@@ -134,7 +134,7 @@ Each milestone is one PR, independently reviewable, keeps all 627 tests green, a
 
 ---
 
-### - [ ] M1: Introduce `app/` package skeleton with no behaviour change (NOOP cutover)
+### - [x] M1: Introduce `app/` package skeleton with no behaviour change (NOOP cutover)
 
 **Goal:** flip `app.py` into `app/` package without moving any logic. The package's `_core.py` is a verbatim copy of the current `app.py`. Prove the import surface is preserved.
 
@@ -155,7 +155,7 @@ Each milestone is one PR, independently reviewable, keeps all 627 tests green, a
 
 ---
 
-### - [ ] M2: Extract `config.py`
+### - [x] M2: Extract `config.py`
 
 **Goal:** move `_load_personality`, `_load_jobs`, `_load_integrations`, and `_FRONTMATTER_RE` out. `App` methods become thin delegators.
 
@@ -173,7 +173,7 @@ Each milestone is one PR, independently reviewable, keeps all 627 tests green, a
 
 ---
 
-### - [ ] M3: Extract `tools.py`
+### - [x] M3: Extract `tools.py`
 
 **Goal:** move `_build_tools` logic to `app/tools.py` as a module function `build_tools(integrations) -> (tools, {}, errors)`. `App._build_tools` becomes a one-line delegator — **kept because `tests/unit/test_auth_failure_visibility.py` calls `app._build_tools(integrations)` directly on an instance.** Do NOT change the return shape (the `{}` middle element).
 
@@ -191,7 +191,7 @@ Each milestone is one PR, independently reviewable, keeps all 627 tests green, a
 
 ---
 
-### - [ ] M4: Extract `jobs.py` (both core jobs and telegram-dependent jobs)
+### - [x] M4: Extract `jobs.py` (both core jobs and telegram-dependent jobs)
 
 **Goal:** move `_register_jobs` (5 core jobs) and the inline extras (7 jobs that need `send_telegram`) to `app/jobs.py` as `register_core_jobs(...)` and `register_telegram_jobs(...)`. Call sites in `_core.py:run()` become two function calls instead of a class method + a 90-line inline block.
 
@@ -209,7 +209,7 @@ Each milestone is one PR, independently reviewable, keeps all 627 tests green, a
 
 ---
 
-### - [ ] M5: Extract `alerts.py` (send_telegram factory, auth-error alert, _wire_telegram_output)
+### - [x] M5: Extract `alerts.py` (send_telegram factory, auth-error alert, _wire_telegram_output)
 
 **Goal:** move the `send_telegram` closure factory, the auth-error alert block, and `_wire_telegram_output` to `app/alerts.py`.
 
@@ -227,7 +227,7 @@ Each milestone is one PR, independently reviewable, keeps all 627 tests green, a
 
 ---
 
-### - [ ] M6: Extract `chat.py` (DM handler + pending-tool TTL)
+### - [x] M6: Extract `chat.py` (DM handler + pending-tool TTL)
 
 **Goal:** move the DM handler, `_pending_tools` dict, lock, TTL sweep, and `handle_message` async function to `app/chat.py`. Expose a factory `build_dm_handler(loop, chat_id) -> async handler`. Note `is_approval` already moved here in M1.
 
@@ -245,7 +245,7 @@ Each milestone is one PR, independently reviewable, keeps all 627 tests green, a
 
 ---
 
-### - [ ] M7: Thin `_core.py` — final cleanup + update comments
+### - [x] M7: Thin `_core.py` — final cleanup + update comments
 
 **Goal:** with all modules extracted, `_core.py` should be ~150–180 lines: just `App.__init__`, `App.run()` as straight-line wiring, and the three thin delegators (`_build_tools`, `_load_personality`, etc. kept for the test + any subclasser). Update the 3 docstring/comment references to `App._build_tools` / `App.run` in `tools/registry.py`, `bot/commands.py`, and `app/_core.py` itself to point at the new module paths.
 
@@ -262,7 +262,7 @@ Each milestone is one PR, independently reviewable, keeps all 627 tests green, a
 
 ---
 
-### - [ ] M8: Retro
+### - [x] M8: Retro
 
 Write `docs/retros/2026-04-16-app-refactor-retro.md` within 24 hours of M7 merging, per commitment 3. Capture: actual vs estimate per milestone, any subtle coupling that surprised us (my bet: the scheduling_ctx patching order), whether the package split paid off for the next feature.
 

@@ -1,6 +1,8 @@
 # Advisor Tool Integration — Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+**Status:** Completed 2026-04-12.
+
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** Replace Keevs' Opus-first-then-downgrade pattern with Sonnet executor + Opus advisor, getting near-Opus quality at ~60-70% less cost.
 
@@ -17,7 +19,7 @@
 **Files:**
 - Modify: `config/settings.py:48-57`
 
-- [ ] **Step 1: Add advisor settings**
+- [x] **Step 1: Add advisor settings**
 
 Add after line 57 (after `MODEL_FAILOVER_CHAIN`):
 
@@ -27,7 +29,7 @@ ADVISOR_ENABLED = os.getenv("ADVISOR_ENABLED", "true").lower() == "true"
 ADVISOR_MAX_USES = int(os.getenv("ADVISOR_MAX_USES", "2"))
 ```
 
-- [ ] **Step 2: Commit**
+- [x] **Step 2: Commit**
 
 ```bash
 git add config/settings.py
@@ -42,7 +44,7 @@ git commit -m "feat: add ADVISOR_ENABLED and ADVISOR_MAX_USES settings"
 - Modify: `src/cost_tracker.py`
 - Test: `tests/test_cost_tracker.py`
 
-- [ ] **Step 1: Write failing test for `estimate_cost_with_advisor`**
+- [x] **Step 1: Write failing test for `estimate_cost_with_advisor`**
 
 Add to `tests/test_cost_tracker.py`:
 
@@ -100,12 +102,12 @@ class TestEstimateCostWithAdvisor:
         assert cost == 0.0
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `cd /path/to/worktree/cos-agent && python3 -m pytest tests/test_cost_tracker.py::TestEstimateCostWithAdvisor -v`
 Expected: FAIL with `ImportError` (function doesn't exist yet)
 
-- [ ] **Step 3: Implement `estimate_cost_with_advisor`**
+- [x] **Step 3: Implement `estimate_cost_with_advisor`**
 
 Add to `src/cost_tracker.py` after the existing `estimate_cost` function:
 
@@ -135,17 +137,17 @@ def estimate_cost_with_advisor(
     return total
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `cd /path/to/worktree/cos-agent && python3 -m pytest tests/test_cost_tracker.py::TestEstimateCostWithAdvisor -v`
 Expected: all 4 PASS
 
-- [ ] **Step 5: Run full cost tracker test suite**
+- [x] **Step 5: Run full cost tracker test suite**
 
 Run: `cd /path/to/worktree/cos-agent && python3 -m pytest tests/test_cost_tracker.py -v`
 Expected: all existing + new tests PASS
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src/cost_tracker.py tests/test_cost_tracker.py
@@ -160,7 +162,7 @@ git commit -m "feat: add estimate_cost_with_advisor for advisor tool billing"
 - Modify: `src/router.py`
 - Test: `tests/test_router.py`
 
-- [ ] **Step 1: Write failing tests for advisor routing**
+- [x] **Step 1: Write failing tests for advisor routing**
 
 Update existing imports in `tests/test_router.py` — no new imports needed since everything is already imported.
 
@@ -214,12 +216,12 @@ class TestAdvisorRouting:
         assert use_advisor is False
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `cd /path/to/worktree/cos-agent && python3 -m pytest tests/test_router.py::TestAdvisorRouting -v`
 Expected: FAIL — `select_model` returns 2 values, not 3
 
-- [ ] **Step 3: Update `select_model` to return 3 values**
+- [x] **Step 3: Update `select_model` to return 3 values**
 
 In `src/router.py`, add import at the top (after existing imports):
 
@@ -264,12 +266,12 @@ def select_model(
     return "claude-sonnet-4-6", None, False
 ```
 
-- [ ] **Step 4: Run new tests to verify they pass**
+- [x] **Step 4: Run new tests to verify they pass**
 
 Run: `cd /path/to/worktree/cos-agent && python3 -m pytest tests/test_router.py::TestAdvisorRouting -v`
 Expected: all 6 PASS
 
-- [ ] **Step 5: Update existing tests that unpack 2 values from `select_model`**
+- [x] **Step 5: Update existing tests that unpack 2 values from `select_model`**
 
 Every existing test that does `model, thinking = select_model(...)` needs a third variable. Update all call sites:
 
@@ -437,7 +439,7 @@ class TestRoutingRegression:
         assert use_advisor == expected_advisor, f"Expected advisor={expected_advisor} for: {prompt!r}"
 ```
 
-- [ ] **Step 6: Update `select_model_with_overrides` to return 4 values**
+- [x] **Step 6: Update `select_model_with_overrides` to return 4 values**
 
 Replace `select_model_with_overrides` (lines 122-156) with:
 
@@ -478,7 +480,7 @@ async def select_model_with_overrides(
     return model, thinking, matched, use_advisor
 ```
 
-- [ ] **Step 7: Update `TestSelectModelWithOverrides` tests**
+- [x] **Step 7: Update `TestSelectModelWithOverrides` tests**
 
 Update all 4-value unpacking in the async test class:
 
@@ -553,12 +555,12 @@ class TestSelectModelWithOverrides:
         assert use_advisor is True
 ```
 
-- [ ] **Step 8: Run full router test suite**
+- [x] **Step 8: Run full router test suite**
 
 Run: `cd /path/to/worktree/cos-agent && python3 -m pytest tests/test_router.py -v`
 Expected: all tests PASS
 
-- [ ] **Step 9: Commit**
+- [x] **Step 9: Commit**
 
 ```bash
 git add src/router.py tests/test_router.py
@@ -572,7 +574,7 @@ git commit -m "feat: router returns use_advisor flag, replaces Opus routing"
 **Files:**
 - Modify: `src/agent_failover.py`
 
-- [ ] **Step 1: Add `use_advisor` parameter and advisor tool injection**
+- [x] **Step 1: Add `use_advisor` parameter and advisor tool injection**
 
 Replace the `call_with_failover` function with:
 
@@ -686,12 +688,12 @@ async def call_with_failover(
     raise last_error  # type: ignore[misc]
 ```
 
-- [ ] **Step 2: Verify no syntax errors**
+- [x] **Step 2: Verify no syntax errors**
 
 Run: `cd /path/to/worktree/cos-agent && python3 -c "from src.agent_failover import call_with_failover; print('OK')"`
 Expected: `OK`
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add src/agent_failover.py
@@ -705,7 +707,7 @@ git commit -m "feat: call_with_failover supports advisor tool via beta API"
 **Files:**
 - Modify: `src/agent.py`
 
-- [ ] **Step 1: Update model selection unpacking**
+- [x] **Step 1: Update model selection unpacking**
 
 In `src/agent.py`, find the line (around line 697):
 ```python
@@ -716,7 +718,7 @@ Replace with:
         model, thinking, matched_rule, use_advisor = await select_model_with_overrides(user_message, history)
 ```
 
-- [ ] **Step 2: Update logging to include advisor status**
+- [x] **Step 2: Update logging to include advisor status**
 
 Find the log line (around line 702):
 ```python
@@ -742,7 +744,7 @@ Replace with:
     )
 ```
 
-- [ ] **Step 3: Pass `use_advisor` to `call_with_failover`**
+- [x] **Step 3: Pass `use_advisor` to `call_with_failover`**
 
 Find the API call (around line 857):
 ```python
@@ -770,7 +772,7 @@ Replace with:
             )
 ```
 
-- [ ] **Step 4: Update cost tracking to handle advisor iterations**
+- [x] **Step 4: Update cost tracking to handle advisor iterations**
 
 Find the cost tracking block (around line 882):
 ```python
@@ -812,7 +814,7 @@ Replace with:
         session_cost += call_cost
 ```
 
-- [ ] **Step 5: Disable advisor after first iteration (same as thinking)**
+- [x] **Step 5: Disable advisor after first iteration (same as thinking)**
 
 Find the Opus downgrade block (around line 820):
 ```python
@@ -852,7 +854,7 @@ Replace with:
                 logger.info("Advisor disabled for tool-loop iteration %d", iteration)
 ```
 
-- [ ] **Step 6: Strip advisor blocks from history when advisor is off**
+- [x] **Step 6: Strip advisor blocks from history when advisor is off**
 
 Find `_prune_old_tool_results` (around line 486). Add a new helper function right before it:
 
@@ -900,12 +902,12 @@ Replace with:
             messages_with_cache = _add_cache_to_last_message(messages_for_call)
 ```
 
-- [ ] **Step 7: Verify no syntax errors**
+- [x] **Step 7: Verify no syntax errors**
 
 Run: `cd /path/to/worktree/cos-agent && python3 -c "from src.agent import process_message; print('OK')"`
 Expected: `OK`
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add src/agent.py
@@ -919,7 +921,7 @@ git commit -m "feat: wire advisor tool through agent loop with cost tracking"
 **Files:**
 - Modify: `tests/test_agent.py`
 
-- [ ] **Step 1: Write failing test for `_strip_advisor_blocks`**
+- [x] **Step 1: Write failing test for `_strip_advisor_blocks`**
 
 Add to `tests/test_agent.py` imports:
 ```python
@@ -979,22 +981,22 @@ class TestStripAdvisorBlocks:
         assert result[0]["content"] == "[Advisor context removed]"
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `cd /path/to/worktree/cos-agent && python3 -m pytest tests/test_agent.py::TestStripAdvisorBlocks -v`
 Expected: FAIL with `ImportError`
 
-- [ ] **Step 3: Run test to verify it passes** (implementation was done in Task 5)
+- [x] **Step 3: Run test to verify it passes** (implementation was done in Task 5)
 
 Run: `cd /path/to/worktree/cos-agent && python3 -m pytest tests/test_agent.py::TestStripAdvisorBlocks -v`
 Expected: all 4 PASS
 
-- [ ] **Step 4: Run full test suite**
+- [x] **Step 4: Run full test suite**
 
 Run: `cd /path/to/worktree/cos-agent && python3 -m pytest -v`
 Expected: all tests PASS
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add tests/test_agent.py
@@ -1005,17 +1007,17 @@ git commit -m "test: add advisor block stripping tests"
 
 ### Task 7: Final verification and cleanup
 
-- [ ] **Step 1: Run full test suite**
+- [x] **Step 1: Run full test suite**
 
 Run: `cd /path/to/worktree/cos-agent && python3 -m pytest -v`
 Expected: all tests PASS, no regressions
 
-- [ ] **Step 2: Verify imports are clean**
+- [x] **Step 2: Verify imports are clean**
 
 Run: `cd /path/to/worktree/cos-agent && python3 -c "from src.agent import process_message; from src.router import select_model, select_model_with_overrides; from src.agent_failover import call_with_failover; from src.cost_tracker import estimate_cost_with_advisor; print('All imports OK')"`
 Expected: `All imports OK`
 
-- [ ] **Step 3: Push and create PR**
+- [x] **Step 3: Push and create PR**
 
 ```bash
 git push -u origin feat/advisor-tool

@@ -1,6 +1,8 @@
 # Plan 4B: Intelligence Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+**Status:** Completed 2026-04-13.
+
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** Add extraction pipeline (Fireflies + Gmail → memory), post-meeting debrief, and Rela relationship manager to the cosinabox engine.
 
@@ -24,7 +26,7 @@
 - Modify: `src/cosinabox/templates/user-repo/stakeholders.yaml` (add email field)
 - Test: `tests/unit/test_extraction.py`
 
-- [ ] **Step 1: Add tables to _SCHEMA**
+- [x] **Step 1: Add tables to _SCHEMA**
 
 In `src/cosinabox/memory/sqlite.py`, append to the `_SCHEMA` string (after the `processed_message_ids` table):
 
@@ -41,7 +43,7 @@ CREATE TABLE IF NOT EXISTS debrief_state (
 );
 ```
 
-- [ ] **Step 2: Add email field to stakeholders.yaml template**
+- [x] **Step 2: Add email field to stakeholders.yaml template**
 
 In `src/cosinabox/templates/user-repo/stakeholders.yaml`, update the field documentation and example:
 
@@ -72,7 +74,7 @@ stakeholders:
       flow or tell Claude Code "add a stakeholder" to do it conversationally.
 ```
 
-- [ ] **Step 3: Write failing tests for extraction helpers**
+- [x] **Step 3: Write failing tests for extraction helpers**
 
 ```python
 # tests/unit/test_extraction.py
@@ -141,12 +143,12 @@ class TestExtractionPrompt:
         assert "ONLY" in EXTRACTION_PROMPT
 ```
 
-- [ ] **Step 4: Run tests to verify they fail**
+- [x] **Step 4: Run tests to verify they fail**
 
 Run: `.venv/bin/pytest tests/unit/test_extraction.py -v`
 Expected: FAIL — `ImportError`
 
-- [ ] **Step 5: Implement extraction helpers**
+- [x] **Step 5: Implement extraction helpers**
 
 ```python
 # src/cosinabox/jobs/extraction.py
@@ -223,12 +225,12 @@ def parse_extraction_response(text: str) -> list[dict[str, Any]]:
         return []
 ```
 
-- [ ] **Step 6: Run tests to verify they pass**
+- [x] **Step 6: Run tests to verify they pass**
 
 Run: `.venv/bin/pytest tests/unit/test_extraction.py -v`
 Expected: ALL PASS
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add src/cosinabox/memory/sqlite.py src/cosinabox/jobs/extraction.py \
@@ -244,7 +246,7 @@ git commit -m "feat: extraction infrastructure — idempotency, JSON parser, sch
 - Create: `src/cosinabox/jobs/extract_fireflies.py`
 - Add to: `tests/unit/test_extraction.py`
 
-- [ ] **Step 1: Write failing tests**
+- [x] **Step 1: Write failing tests**
 
 Add to `tests/unit/test_extraction.py`:
 
@@ -291,9 +293,9 @@ class TestExtractFirefliesJob:
         assert is_source_processed(mem, "fireflies", "t1")
 ```
 
-- [ ] **Step 2: Run to verify failures**
+- [x] **Step 2: Run to verify failures**
 
-- [ ] **Step 3: Implement ExtractFirefliesJob**
+- [x] **Step 3: Implement ExtractFirefliesJob**
 
 ```python
 # src/cosinabox/jobs/extract_fireflies.py
@@ -395,9 +397,9 @@ class ExtractFirefliesJob(Job):
         return f"Fireflies: {extracted} facts from {len(meetings)} transcripts ({skipped} skipped)"
 ```
 
-- [ ] **Step 4: Run tests, verify pass**
-- [ ] **Step 5: Run full suite**
-- [ ] **Step 6: Commit**
+- [x] **Step 4: Run tests, verify pass**
+- [x] **Step 5: Run full suite**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src/cosinabox/jobs/extract_fireflies.py tests/unit/test_extraction.py
@@ -412,7 +414,7 @@ git commit -m "feat: extract_fireflies job — meeting transcript → memory fac
 - Create: `src/cosinabox/jobs/extract_gmail.py`
 - Add to: `tests/unit/test_extraction.py`
 
-- [ ] **Step 1: Write failing tests**
+- [x] **Step 1: Write failing tests**
 
 Add to `tests/unit/test_extraction.py`:
 
@@ -456,7 +458,7 @@ class TestExtractGmailJob:
         gmail.search.assert_not_called()
 ```
 
-- [ ] **Step 2: Implement ExtractGmailJob**
+- [x] **Step 2: Implement ExtractGmailJob**
 
 ```python
 # src/cosinabox/jobs/extract_gmail.py
@@ -555,8 +557,8 @@ class ExtractGmailJob(Job):
         return f"Gmail: {extracted} facts from {len(messages)} emails ({skipped} skipped)"
 ```
 
-- [ ] **Step 3: Run tests, verify pass**
-- [ ] **Step 4: Commit**
+- [x] **Step 3: Run tests, verify pass**
+- [x] **Step 4: Commit**
 
 ```bash
 git add src/cosinabox/jobs/extract_gmail.py tests/unit/test_extraction.py
@@ -571,7 +573,7 @@ git commit -m "feat: extract_gmail job — stakeholder emails → memory facts"
 - Create: `src/cosinabox/agent/subagent.py`
 - Test: `tests/unit/test_subagent.py`
 
-- [ ] **Step 1: Write failing tests**
+- [x] **Step 1: Write failing tests**
 
 ```python
 # tests/unit/test_subagent.py
@@ -644,7 +646,7 @@ class TestSubAgent:
         assert call_kwargs["namespace"] == "rela"
 ```
 
-- [ ] **Step 2: Implement SubAgent**
+- [x] **Step 2: Implement SubAgent**
 
 ```python
 # src/cosinabox/agent/subagent.py
@@ -731,8 +733,8 @@ def get_agent(name: str) -> SubAgent | None:
     return _AGENTS.get(name)
 ```
 
-- [ ] **Step 3: Run tests, verify pass**
-- [ ] **Step 4: Commit**
+- [x] **Step 3: Run tests, verify pass**
+- [x] **Step 4: Commit**
 
 ```bash
 git add src/cosinabox/agent/subagent.py tests/unit/test_subagent.py
@@ -747,7 +749,7 @@ git commit -m "feat: SubAgent class — namespace-isolated agents with backgroun
 - Create: `src/cosinabox/jobs/post_meeting_debrief.py`
 - Test: `tests/unit/test_post_meeting_debrief.py`
 
-- [ ] **Step 1: Write failing tests**
+- [x] **Step 1: Write failing tests**
 
 ```python
 # tests/unit/test_post_meeting_debrief.py
@@ -852,7 +854,7 @@ class TestPostMeetingDebriefJob:
         assert "0" in result or "no meetings" in result.lower()
 ```
 
-- [ ] **Step 2: Implement PostMeetingDebriefJob**
+- [x] **Step 2: Implement PostMeetingDebriefJob**
 
 ```python
 # src/cosinabox/jobs/post_meeting_debrief.py
@@ -1024,8 +1026,8 @@ class PostMeetingDebriefJob(Job):
         return f"Debriefed {debriefed} meetings"
 ```
 
-- [ ] **Step 3: Run tests, verify pass**
-- [ ] **Step 4: Commit**
+- [x] **Step 3: Run tests, verify pass**
+- [x] **Step 4: Commit**
 
 ```bash
 git add src/cosinabox/jobs/post_meeting_debrief.py tests/unit/test_post_meeting_debrief.py
@@ -1042,7 +1044,7 @@ git commit -m "feat: post-meeting debrief — calendar watch + Fireflies transcr
 - Add to: `src/cosinabox/tools/registry.py` (register rela_query)
 - Test: `tests/unit/test_rela.py`
 
-- [ ] **Step 1: Write failing tests**
+- [x] **Step 1: Write failing tests**
 
 ```python
 # tests/unit/test_rela.py
@@ -1087,7 +1089,7 @@ class TestRelaQueryHandler:
         assert "not configured" in result.lower()
 ```
 
-- [ ] **Step 2: Implement Rela agent + tool**
+- [x] **Step 2: Implement Rela agent + tool**
 
 ```python
 # src/cosinabox/agent/rela.py
@@ -1194,7 +1196,7 @@ def rela_query_handler(rela_agent: Any | None) -> Callable[..., str]:
     return handler
 ```
 
-- [ ] **Step 3: Register rela_query in registry.py**
+- [x] **Step 3: Register rela_query in registry.py**
 
 In `src/cosinabox/tools/registry.py`, at the end of `build_tool_registry()` (before the consistency check), add:
 
@@ -1220,8 +1222,8 @@ def build_tool_registry(
 ) -> tuple[list[dict[str, Any]], dict[str, Callable[..., str]]]:
 ```
 
-- [ ] **Step 4: Run tests, verify pass**
-- [ ] **Step 5: Commit**
+- [x] **Step 4: Run tests, verify pass**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/cosinabox/agent/rela.py src/cosinabox/tools/rela_tool.py \
@@ -1240,7 +1242,7 @@ git commit -m "feat: Rela relationship manager — scoring model, sub-agent, DM 
 - Modify: `src/cosinabox/templates/user-repo/docs/agent/jobs.md` (add new jobs)
 - Modify: `src/cosinabox/prompts/core.py` (add Rela to capabilities)
 
-- [ ] **Step 1: Register extraction + debrief + Rela in App.run()**
+- [x] **Step 1: Register extraction + debrief + Rela in App.run()**
 
 In `src/cosinabox/app.py`, in the "Register jobs that need send_telegram" section (after crm_email_sync), add:
 
@@ -1315,7 +1317,7 @@ Pass `rela_agent=rela_agent` to `build_tool_registry()`:
         )
 ```
 
-- [ ] **Step 2: Update jobs.yaml template**
+- [x] **Step 2: Update jobs.yaml template**
 
 Add to `src/cosinabox/templates/user-repo/jobs.yaml`:
 
@@ -1333,7 +1335,7 @@ Add to `src/cosinabox/templates/user-repo/jobs.yaml`:
     schedule: "50 7 * * *"     # 7:50 AM — check relationship health
 ```
 
-- [ ] **Step 3: Create docs/agent/rela.md**
+- [x] **Step 3: Create docs/agent/rela.md**
 
 ```markdown
 # Rela — Relationship Manager
@@ -1375,14 +1377,14 @@ cosinabox enable-job post_meeting_debrief
 ```
 ```
 
-- [ ] **Step 4: Update jobs.md and system prompt**
+- [x] **Step 4: Update jobs.md and system prompt**
 
 Add new jobs to `docs/agent/jobs.md` table.
 
 Add to system prompt capabilities: `Rela: ask about relationship health (e.g., "how's my relationship with Alice?")`
 
-- [ ] **Step 5: Run full test suite**
-- [ ] **Step 6: Commit**
+- [x] **Step 5: Run full test suite**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src/cosinabox/app.py src/cosinabox/templates/ src/cosinabox/prompts/core.py
@@ -1393,29 +1395,29 @@ git commit -m "feat: wire extraction + debrief + Rela into App + OSS docs"
 
 ### Task 8: Final validation
 
-- [ ] **Step 1: Run full test suite**
+- [x] **Step 1: Run full test suite**
 
 Run: `.venv/bin/pytest -q`
 Expected: ALL PASS (~280+ tests)
 
-- [ ] **Step 2: Stress test checklist**
+- [x] **Step 2: Stress test checklist**
 
-- [ ] First run (empty extraction_state) — doesn't crash
-- [ ] Fireflies not configured — extractors skip gracefully
-- [ ] No stakeholders with email — Gmail extraction skips with clear message
-- [ ] Meeting ended but no transcript — debrief sends basic info
-- [ ] Rela query for unknown stakeholder — returns "no data"
-- [ ] No hardcoded names in descriptions or prompts
-- [ ] All new jobs documented in jobs.md
-- [ ] Rela documented in rela.md with example queries
+- [x] First run (empty extraction_state) — doesn't crash
+- [x] Fireflies not configured — extractors skip gracefully
+- [x] No stakeholders with email — Gmail extraction skips with clear message
+- [x] Meeting ended but no transcript — debrief sends basic info
+- [x] Rela query for unknown stakeholder — returns "no data"
+- [x] No hardcoded names in descriptions or prompts
+- [x] All new jobs documented in jobs.md
+- [x] Rela documented in rela.md with example queries
 
-- [ ] **Step 3: Sync vendored copy**
+- [x] **Step 3: Sync vendored copy**
 
 ```bash
 cp -r src/cosinabox/ /tmp/rovik-keevs/cosinabox/
 ```
 
-- [ ] **Step 4: Push and open PR**
+- [x] **Step 4: Push and open PR**
 
 ```bash
 git push -u origin plan4b-intelligence
