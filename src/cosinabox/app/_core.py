@@ -176,23 +176,30 @@ class App:
         # opted in (via scheduling_poll_check in jobs.yaml OR a scheduling:
         # section in integrations.yaml). OSS users without either get no extra
         # cost or surface area.
+        from cosinabox.scheduling.context import SchedulingContext, build_from_integrations
+
         scheduling_enabled = bool(
             jobs_config.get("scheduling_poll_check", {}).get("enabled")
             or "scheduling" in integrations
         )
-        scheduling_ctx: dict[str, Any] | None = None
+        scheduling_ctx: SchedulingContext | None = None
         if scheduling_enabled:
-            scheduling_ctx = {
-                "db": memory,
-                "coordinator_ctx": {
-                    "anthropic_client": _Anthropic(),
-                    "cost_tracker": None,  # filled after loop is created
-                    "bot": None,  # filled after tg_app is created
-                    "gmail": tool_instances.get("gmail"),
-                },
-                "owner_name": name,
-                "owner_timezone": timezone,
-            }
+            # Build a CalendarProvider if a calendar tool exists.
+            cal_provider = None
+            if "calendar" in tool_instances:
+                from cosinabox.tools.google.calendar import GoogleCalendarProvider
+
+                cal_provider = GoogleCalendarProvider(tool_instances["calendar"])
+
+            scheduling_ctx = build_from_integrations(
+                db=memory,
+                owner_name=name,
+                owner_timezone=timezone,
+                calendar=cal_provider,
+                gmail=tool_instances.get("gmail"),
+                anthropic_client=_Anthropic(),
+                # cost_tracker + bot filled after loop/tg_app are created
+            )
 
         # Initial tool registry (without rela_query — loop not yet created)
         tool_definitions, tool_handlers = build_tool_registry(
@@ -237,7 +244,7 @@ class App:
         # Now that the loop (and its cost tracker) exists, plug it into the
         # scheduling context so tool handlers + the poll job share one tracker.
         if scheduling_ctx is not None:
-            scheduling_ctx["coordinator_ctx"]["cost_tracker"] = loop.cost
+            scheduling_ctx = scheduling_ctx.replace(cost_tracker=loop.cost)
 
         tool_definitions, tool_handlers = build_tool_registry(
             tool_instances,
@@ -338,8 +345,8 @@ class App:
             # Outreach runs in sync worker threads; python-telegram-bot's
             # Application.bot is async and has an incompatible send_poll
             # signature, so wire the sync HTTP adapter instead.
-            scheduling_ctx["coordinator_ctx"]["bot"] = SyncSchedulingBotAdapter(
-                bot_token,
+            scheduling_ctx = scheduling_ctx.replace(
+                bot=SyncSchedulingBotAdapter(bot_token),
             )
 
         # --- Bot commands ---

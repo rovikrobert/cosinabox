@@ -81,14 +81,25 @@ def mem(tmp_path):
     return Memory(db_path=tmp_path / "poll.db")
 
 
+def _make_ctx(mem, *, gmail=None, anthropic_client=None, calendar=None):
+    """Build a minimal SchedulingContext for poll-job tests."""
+    from cosinabox.scheduling.context import OwnerProfile, SchedulingContext
+
+    return SchedulingContext(
+        db=mem,
+        owner=OwnerProfile(name="Host", timezone="UTC"),
+        gmail=gmail,
+        anthropic_client=anthropic_client or _FakeAnthropic(),
+        calendar=calendar,
+    )
+
+
 @pytest.fixture
 def job_factory(mem):
     def _make(send_fn=None):
+        ctx = _make_ctx(mem)
         return SchedulingPollCheckJob(
-            db=mem,
-            anthropic_client=_FakeAnthropic(),
-            gmail=None,
-            cost_tracker=None,
+            ctx=ctx,
             send_fn=send_fn or _FakeSend(),
         )
 
@@ -255,11 +266,9 @@ def test_gmail_reply_parsed_and_recorded(mem, job_factory, monkeypatch):
         _fake_parse_response,
     )
 
+    ctx = _make_ctx(mem, gmail=_Gmail(), anthropic_client=_FakeAnthropic())
     job = SchedulingPollCheckJob(
-        db=mem,
-        anthropic_client=_FakeAnthropic(),
-        gmail=_Gmail(),
-        cost_tracker=None,
+        ctx=ctx,
         send_fn=send,
     )
     result = job.run()

@@ -223,19 +223,15 @@ def _format_request_detail(db: Any, req: Any) -> str:
 
 
 def build_scheduling_handlers(
-    *,
-    db: Any,
-    coordinator_ctx: dict[str, Any],
-    owner_name: str,
-    owner_timezone: str,
+    ctx: Any,
 ) -> dict[str, Callable[..., str]]:
-    """Build the 3 scheduling handlers.
+    """Build the 3 scheduling handlers from a ``SchedulingContext``.
 
-    ``coordinator_ctx`` is an open-ended dict of dependencies the coordinator
-    needs — typically ``{"anthropic_client": ..., "cost_tracker": ...,
-    "bot": ..., "gmail": ...}``. Handlers unpack what they need and forward
-    the rest to the coordinator.
+    The context provides ``db``, ``owner``, and all integration adapters.
     """
+    db = ctx.db
+    owner_name = ctx.owner.name
+    owner_timezone = ctx.owner.timezone
 
     def schedule_group_meeting(
         title: str,
@@ -276,8 +272,8 @@ def build_scheduling_handlers(
                 owner_name=owner_name,
                 title=title,
                 notes=notes,
-                anthropic_client=coordinator_ctx.get("anthropic_client"),
-                cost_tracker=coordinator_ctx.get("cost_tracker"),
+                anthropic_client=ctx.anthropic_client,
+                cost_tracker=ctx.cost_tracker,
             )
         except Exception as exc:
             logger.exception("schedule_group_meeting failed")
@@ -293,7 +289,7 @@ def build_scheduling_handlers(
         return (
             f"Created scheduling request {req.id} for '{title}'. "
             f"Status: {req.status}. "
-            f"{len(req.slots)} candidate slots scored — awaiting review. "
+            f"{len(req.slots)} candidate slots scored -- awaiting review. "
             "Use scheduling_respond with action='approve' to send outreach, "
             "or action='reject' to rework."
         )
@@ -331,8 +327,8 @@ def build_scheduling_handlers(
         kwargs: dict[str, Any] = {
             "owner_name": owner_name,
             "owner_timezone": owner_timezone,
-            "bot": coordinator_ctx.get("bot"),
-            "gmail": coordinator_ctx.get("gmail"),
+            "bot": ctx.bot,
+            "gmail": ctx.gmail,
         }
         if slot_id is not None:
             kwargs["slot_id"] = slot_id

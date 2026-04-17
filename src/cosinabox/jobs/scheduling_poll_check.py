@@ -3,26 +3,27 @@
 For each POLLING scheduling request:
   1. Fetch Gmail replies via ``coordinator.check_polling_status`` — that
      function parses and records any new responses.
-  2. If ``find_consensus`` returns a slot, transition POLLING → CONVERGED
-     and notify the owner via ``send_fn``.
+  2. Use the consensus slot returned by ``check_polling_status`` (which
+     calls ``find_consensus`` internally with fresh calendar re-score).
+     If consensus exists, transition POLLING -> CONVERGED and notify owner.
   3. Otherwise, for each participant that still has not responded, compute
      the age of their outreach:
-       - >= 24h since outreach_sent_at and status == 'sent' → nudge
-         (status becomes 'nudged'; no dedicated nudged_at column exists —
+       - >= 24h since outreach_sent_at and status == 'sent' -> nudge
+         (status becomes 'nudged'; no dedicated nudged_at column exists --
          the status flip guards against re-nudging).
-       - >= 48h since outreach_sent_at → expire (status 'no_response').
-  4. If ALL non-responded participants have expired, transition POLLING →
+       - >= 48h since outreach_sent_at -> expire (status 'no_response').
+  4. If ALL non-responded participants have expired, transition POLLING ->
      OWNER_REVIEW and notify the owner.
 
 Returns a summary string: e.g.
     "checked 3 requests, 1 converged, 2 nudged, 1 expired"
-    or "skipped — no active polls"
+    or "skipped -- no active polls"
 
 Notes for OSS users:
 - ``send_fn(text)`` is a single callable; this job does not know about
   Telegram chat IDs. App wiring chooses where messages land.
 - Nudge messages are plain text sent via ``send_fn``. Sending a Telegram
-  DM directly to the participant is an app-level concern (Phase B).
+  DM directly to the participant is an app-level concern (Phase B M6).
 """
 
 from __future__ import annotations
@@ -37,7 +38,6 @@ from cosinabox.scheduling import db as sched_db
 from cosinabox.scheduling.coordinator import (
     InvalidTransition,
     check_polling_status,
-    find_consensus,
     transition,
 )
 from cosinabox.scheduling.models import SchedulingStatus
@@ -48,7 +48,7 @@ logger = logging.getLogger(__name__)
 _NUDGE_HOURS = 24
 _EXPIRE_HOURS = 48
 # Safety cap: if the bot was down through the nudge window, we still want to
-# nudge once before expiring — but not after 3 days (too stale to be useful).
+# nudge once before expiring -- but not after 3 days (too stale to be useful).
 _NUDGE_SAFETY_CAP_HOURS = 72
 
 
@@ -58,19 +58,15 @@ class SchedulingPollCheckJob(Job):
     def __init__(
         self,
         *,
-        db: Any,
-        anthropic_client: Any,
+        ctx: Any,
         send_fn: Callable[[str], None],
-        gmail: Any | None = None,
-        calendar: Any | None = None,
-        cost_tracker: Any | None = None,
     ) -> None:
-        self.db = db
-        self.gmail = gmail
-        self.calendar = calendar
-        self.anthropic_client = anthropic_client
-        self.cost_tracker = cost_tracker
+        self.ctx = ctx
         self.send_fn = send_fn
+
+    @property
+    def db(self) -> Any:
+        return self.ctx.db
 
     def run(self, context: Any = None) -> str:
         active = sched_db.get_active_requests(
@@ -78,7 +74,7 @@ class SchedulingPollCheckJob(Job):
             status_filter=[SchedulingStatus.POLLING.value],
         )
         if not active:
-            return "skipped — no active polls"
+            return "skipped -- no active polls"
 
         now = datetime.now(UTC)
         converged = 0
@@ -87,35 +83,23 @@ class SchedulingPollCheckJob(Job):
         owner_review_total = 0
 
         for req in active:
-            # 1. Poll Gmail / parse responses.
+            # 1. Poll Gmail / parse responses + run consensus in one call.
             try:
-                check_polling_status(
-                    self.db,
-                    req.id,
-                    gmail=self.gmail,
-                    calendar=self.calendar,
-                    anthropic_client=self.anthropic_client,
-                    cost_tracker=self.cost_tracker,
-                )
+                poll_result = check_polling_status(self.ctx, req.id)
             except Exception:  # noqa: BLE001
                 logger.exception(
                     "check_polling_status failed for %s",
                     req.id,
                 )
+                poll_result = {}
 
-            # 2. Consensus? Re-score against fresh calendar so we don't pick a
-            # slot that the owner has since booked over.
-            from cosinabox.scheduling.coordinator import (
-                _fetch_owner_events_for_slots,
-            )
-
-            fresh = _fetch_owner_events_for_slots(self.calendar, req)
-            consensus = find_consensus(
-                self.db,
-                req.id,
-                owner_events_by_day=fresh,
-            )
-            if consensus is not None:
+            # 2. Consensus? check_polling_status already called find_consensus
+            # with the SchedulingContext (fresh calendar re-score included).
+            consensus_slot_id = poll_result.get("consensus_slot_id")
+            if consensus_slot_id is not None:
+                # Recover the slot object for the notification message.
+                slots = sched_db.get_slots(self.db, req.id)
+                consensus = next((s for s in slots if s.db_id == consensus_slot_id), None)
                 try:
                     transition(
                         self.db,
@@ -124,12 +108,12 @@ class SchedulingPollCheckJob(Job):
                         SchedulingStatus.CONVERGED,
                     )
                     converged += 1
-                    local_start = consensus.start_time
-                    self.send_fn(
-                        f"Scheduling: consensus reached for '{req.title}' — "
-                        f"slot {local_start.isoformat()}. "
-                        "Use the book action to confirm."
-                    )
+                    if consensus:
+                        self.send_fn(
+                            f"Scheduling: consensus reached for '{req.title}' -- "
+                            f"slot {consensus.start_time.isoformat()}. "
+                            "Use the book action to confirm."
+                        )
                 except InvalidTransition:
                     logger.warning(
                         "Could not transition %s to converged",
@@ -168,7 +152,7 @@ class SchedulingPollCheckJob(Job):
 
                 # Nudge-before-expire guard: if we're past the expire window
                 # but never nudged (e.g. bot was down 24-48h window), send the
-                # nudge first and defer expire to the next cycle — but only if
+                # nudge first and defer expire to the next cycle -- but only if
                 # we're still within the safety cap (72h). Past the cap, expire
                 # without nudging (the nudge would be too stale to matter).
                 in_expire_window = age_hours >= _EXPIRE_HOURS
@@ -190,7 +174,7 @@ class SchedulingPollCheckJob(Job):
                     nudged_names.append(p.name)
                     remaining_active += 1
                 elif in_expire_window:
-                    # Either already nudged, or past safety cap — expire.
+                    # Either already nudged, or past safety cap -- expire.
                     sched_db.update_participant_status(
                         self.db,
                         p.db_id,
@@ -216,10 +200,8 @@ class SchedulingPollCheckJob(Job):
             nudged_total += len(nudged_names)
             expired_total += len(expired_names)
 
-            # 4. All non-responded participants expired → owner review.
+            # 4. All non-responded participants expired -> owner review.
             if expired_names and remaining_active == 0:
-                # Are there any participants still in 'responded'?
-                # Escalate regardless — owner should decide next step.
                 try:
                     transition(
                         self.db,
@@ -229,7 +211,7 @@ class SchedulingPollCheckJob(Job):
                     )
                     owner_review_total += 1
                     self.send_fn(
-                        f"Scheduling: '{req.title}' returned for review — "
+                        f"Scheduling: '{req.title}' returned for review -- "
                         f"expired without response: {', '.join(expired_names)}. "
                         "Book with partial responses, extend, or cancel."
                     )
