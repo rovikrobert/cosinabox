@@ -56,6 +56,15 @@ def _participant(**kw):
     return Participant(**defaults)
 
 
+def _ctx(mem, **overrides):
+    """Build a minimal SchedulingContext for tests."""
+    from cosinabox.scheduling.context import OwnerProfile, SchedulingContext
+
+    defaults = {"db": mem, "owner": OwnerProfile(name="Host", timezone="UTC")}
+    defaults.update(overrides)
+    return SchedulingContext(**defaults)
+
+
 def _mock_anthropic_response(text: str, in_tok: int = 200, out_tok: int = 50):
     content_block = MagicMock()
     content_block.text = text
@@ -128,7 +137,7 @@ def test_first_run_end_to_end(mem):
             response="yes",
         )
 
-    cs = find_consensus(mem, req.id)
+    cs = find_consensus(_ctx(mem), req.id)
     assert cs is not None
     assert cs.db_id == slots[0].db_id
 
@@ -419,7 +428,7 @@ def test_concurrent_poll_double_records_response(mem):
     )
 
     # First poll
-    check_polling_status(mem, rid, gmail=gmail, anthropic_client=client)
+    check_polling_status(_ctx(mem, gmail=gmail, anthropic_client=client), rid)
     # In the same invocation the participant is in `already_responded` so
     # subsequent polls in the SAME call won't re-record. But if the DB is
     # observed mid-flight by a concurrent worker, it would. Simulate by
@@ -431,7 +440,7 @@ def test_concurrent_poll_double_records_response(mem):
     # skips. So sequential calls ARE safe. The race exists only if two
     # workers execute concurrently between the `get_responses` read and
     # the `record_response` write.
-    check_polling_status(mem, rid, gmail=gmail, anthropic_client=client)
+    check_polling_status(_ctx(mem, gmail=gmail, anthropic_client=client), rid)
     responses = sched_db.get_responses(mem, rid)
     # Sequential polling IS dedup-safe (via already_responded check).
     # We document this behavior here.

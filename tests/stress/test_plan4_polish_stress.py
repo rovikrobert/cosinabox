@@ -37,6 +37,31 @@ def mem(tmp_path):
     return Memory(db_path=tmp_path / "polish_stress.db")
 
 
+def _ctx(mem, **overrides):
+    from cosinabox.scheduling.context import OwnerProfile, SchedulingContext
+
+    defaults = {"db": mem, "owner": OwnerProfile(name="Host", timezone="UTC")}
+    defaults.update(overrides)
+    return SchedulingContext(**defaults)
+
+
+class _FakeProvider:
+    """Minimal CalendarProvider for stress tests."""
+
+    def __init__(self, busy=None):
+        self._busy = busy or []
+
+    def list_busy_intervals(self, *, start, end, timezone):
+        return self._busy
+
+    def create_event(self, **kw):
+        from cosinabox.scheduling.context import CreatedEvent
+
+        return CreatedEvent(
+            event_id="fake", title=kw.get("title", ""), start=kw["start"], end=kw["end"]
+        )
+
+
 def _make_polling_request(mem, *, slots_spec, n_participants=2, owner_tz="UTC"):
     """slots_spec: list of (start_dt, end_dt, score) tuples."""
     ps = [
@@ -420,17 +445,19 @@ class TestFreshRescoreStressP2_6:
             mem,
             slots_spec=[(start0, end0, 1.0), (start1, end1, 0.9)],
         )
-        result = find_consensus(mem, rid, owner_events_by_day={})
+        result = find_consensus(_ctx(mem), rid)
         assert result is not None
         assert result.db_id == slot_ids[0]
 
     def test_partial_overlap_lowers_score(self, mem):
-        """Shipped re-score uses compute_score with fresh busy — a partial
-        overlap triggers the move-cost penalty (0.5× on w_move_cost=0.15),
+        """Shipped re-score uses compute_score with fresh busy -- a partial
+        overlap triggers the move-cost penalty (0.5x on w_move_cost=0.15),
         which is enough to tip a tied stored-score pair in the other
         slot's favour. We place both slots at identical local-time profiles
         on different days so compute_score's other factors match, and the
         fresh conflict is the only tiebreaker."""
+        from cosinabox.scheduling.context import BusyInterval
+
         s0 = datetime(2026, 4, 14, 10, 0, tzinfo=UTC)
         e0 = s0 + timedelta(minutes=30)
         s1 = datetime(2026, 4, 15, 10, 0, tzinfo=UTC)
@@ -440,22 +467,21 @@ class TestFreshRescoreStressP2_6:
             slots_spec=[(s0, e0, 0.95), (s1, e1, 0.90)],
         )
         # 1-minute partial overlap on slot0 only.
-        conflict = {
-            "start": {"dateTime": (s0 + timedelta(minutes=29)).isoformat()},
-            "end": {"dateTime": (s0 + timedelta(minutes=40)).isoformat()},
-        }
-        result = find_consensus(
-            mem,
-            rid,
-            owner_events_by_day={s0.date(): [conflict]},
+        provider = _FakeProvider(
+            busy=[
+                BusyInterval(
+                    start=s0 + timedelta(minutes=29),
+                    end=s0 + timedelta(minutes=40),
+                )
+            ]
         )
+        result = find_consensus(_ctx(mem, calendar=provider), rid)
         assert result is not None
-        # Shipped semantics: slot1 (no fresh conflict) now beats slot0
-        # despite lower stored score, because compute_score penalises slot0's
-        # fresh move-cost enough to flip the ordering.
         assert result.db_id == slot_ids[1]
 
-    def test_all_slots_conflict_falls_back_to_stored_max(self, mem):
+    def test_all_slots_conflict_picks_best_rescored(self, mem):
+        from cosinabox.scheduling.context import BusyInterval
+
         s0 = datetime(2026, 4, 14, 10, 0, tzinfo=UTC)
         e0 = s0 + timedelta(minutes=30)
         s1 = datetime(2026, 4, 14, 12, 0, tzinfo=UTC)
@@ -464,20 +490,21 @@ class TestFreshRescoreStressP2_6:
             mem,
             slots_spec=[(s0, e0, 1.0), (s1, e1, 0.9)],
         )
-        events = {
-            s0.date(): [
-                {"start": {"dateTime": s0.isoformat()}, "end": {"dateTime": e0.isoformat()}},
-                {"start": {"dateTime": s1.isoformat()}, "end": {"dateTime": e1.isoformat()}},
-            ],
-        }
-        result = find_consensus(mem, rid, owner_events_by_day=events)
+        provider = _FakeProvider(
+            busy=[
+                BusyInterval(start=s0, end=e0),
+                BusyInterval(start=s1, end=e1),
+            ]
+        )
+        result = find_consensus(_ctx(mem, calendar=provider), rid)
         assert result is not None
-        # Fell back to stored max.
+        # Both have conflicts; rescored slot0 should still beat slot1.
         assert result.db_id == slot_ids[0]
 
     def test_adjacent_event_does_not_disqualify(self, mem):
-        """Event ending exactly at slot.start (or starting at slot.end) is
-        adjacent, not overlapping — must not disqualify."""
+        """Event ending exactly at slot.start is adjacent, not overlapping."""
+        from cosinabox.scheduling.context import BusyInterval
+
         s0 = datetime(2026, 4, 14, 10, 0, tzinfo=UTC)
         e0 = s0 + timedelta(minutes=30)
         s1 = datetime(2026, 4, 14, 12, 0, tzinfo=UTC)
@@ -486,20 +513,15 @@ class TestFreshRescoreStressP2_6:
             mem,
             slots_spec=[(s0, e0, 1.0), (s1, e1, 0.9)],
         )
-        # Event ends at 10:00, slot0 starts at 10:00 — adjacent.
-        adjacent = {
-            "start": {"dateTime": (s0 - timedelta(minutes=30)).isoformat()},
-            "end": {"dateTime": s0.isoformat()},
-        }
-        result = find_consensus(
-            mem,
-            rid,
-            owner_events_by_day={s0.date(): [adjacent]},
-        )
+        # Event ends at 10:00, slot0 starts at 10:00 -- adjacent.
+        provider = _FakeProvider(busy=[BusyInterval(start=s0 - timedelta(minutes=30), end=s0)])
+        result = find_consensus(_ctx(mem, calendar=provider), rid)
         assert result is not None
         assert result.db_id == slot_ids[0]  # slot0 still wins
 
     def test_event_on_unrelated_day_ignored(self, mem):
+        from cosinabox.scheduling.context import BusyInterval
+
         s0 = datetime(2026, 4, 14, 10, 0, tzinfo=UTC)
         e0 = s0 + timedelta(minutes=30)
         s1 = datetime(2026, 4, 14, 12, 0, tzinfo=UTC)
@@ -509,35 +531,27 @@ class TestFreshRescoreStressP2_6:
             slots_spec=[(s0, e0, 1.0), (s1, e1, 0.9)],
         )
         # Event on a DIFFERENT day; must not affect today's slots.
-        other_day = date(2026, 5, 1)
-        unrelated = {
-            "start": {"dateTime": datetime(2026, 5, 1, 10, 0, tzinfo=UTC).isoformat()},
-            "end": {"dateTime": datetime(2026, 5, 1, 10, 30, tzinfo=UTC).isoformat()},
-        }
-        result = find_consensus(
-            mem,
-            rid,
-            owner_events_by_day={other_day: [unrelated]},
+        provider = _FakeProvider(
+            busy=[
+                BusyInterval(
+                    start=datetime(2026, 5, 1, 10, 0, tzinfo=UTC),
+                    end=datetime(2026, 5, 1, 10, 30, tzinfo=UTC),
+                )
+            ]
         )
+        result = find_consensus(_ctx(mem, calendar=provider), rid)
         assert result is not None
         assert result.db_id == slot_ids[0]
 
-    def test_event_dicts_missing_datetime_are_skipped(self, mem):
-        """All-day events (date, not dateTime) have no 'dateTime' key —
-        `events_to_busy_intervals` must silently skip them, not crash."""
+    def test_no_calendar_uses_stored_scores(self, mem):
+        """When ctx.calendar is None, fall back to stored scores."""
         s0 = datetime(2026, 4, 14, 10, 0, tzinfo=UTC)
         e0 = s0 + timedelta(minutes=30)
         rid, _, slot_ids = _make_polling_request(
             mem,
             slots_spec=[(s0, e0, 1.0)],
         )
-        # All-day "event" — only "date" keys, no "dateTime".
-        allday = {"start": {"date": "2026-04-14"}, "end": {"date": "2026-04-15"}}
-        result = find_consensus(
-            mem,
-            rid,
-            owner_events_by_day={s0.date(): [allday]},
-        )
+        result = find_consensus(_ctx(mem), rid)
         assert result is not None
         assert result.db_id == slot_ids[0]
 
