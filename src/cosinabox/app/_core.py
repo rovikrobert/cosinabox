@@ -312,77 +312,11 @@ class App:
         scheduler.start()
 
         # --- Telegram DM polling ---
-        # Track tools that are pending approval per session, with timestamps
-        # so we can evict stale entries (user walked away without responding).
-        import threading as _threading
-        import time as _time
-
-        from telegram import Update
         from telegram.ext import Application, MessageHandler, filters
 
-        # Track tools pending approval per session (may be multiple).
-        # Value is (list_of_tool_names, timestamp) so we can evict stale
-        # entries from abandoned sessions.
-        _pending_tools: dict[str, tuple[list[str], float]] = {}
-        _PENDING_TOOL_TTL_S = 300  # 5 minutes
-        # The DM handler runs on the PTB async loop thread, while the sweep
-        # can be called by the same handler mid-request; scheduling outreach
-        # and agent loop errors may interleave. Protect all accesses.
-        _pending_tools_lock = _threading.Lock()
+        from cosinabox.app.chat import build_dm_handler
 
-        def _sweep_pending_tools() -> None:
-            now = _time.time()
-            with _pending_tools_lock:
-                expired = [
-                    sid for sid, (_, ts) in _pending_tools.items() if now - ts > _PENDING_TOOL_TTL_S
-                ]
-                for sid in expired:
-                    del _pending_tools[sid]
-
-        async def handle_message(update: Update, _ctx: Any) -> None:
-            if update.message is None or update.message.text is None:
-                return
-            if update.effective_chat is None:
-                return
-            if str(update.effective_chat.id) != chat_id:
-                return
-
-            user_text = update.message.text
-            session = f"dm-{update.effective_chat.id}"
-            logger.info("DM: %s", user_text[:80])
-
-            _sweep_pending_tools()
-
-            # Check if this message is an approval for pending tools. Both
-            # conditions (exact-match normalised phrase AND session has a
-            # pending tool) are enforced by ``is_approval``.
-            tool_names_to_grant: list[str] = []
-            with _pending_tools_lock:
-                has_pending = session in _pending_tools
-                if has_pending and is_approval(user_text, has_pending_tool=True):
-                    tool_names, _ts = _pending_tools.pop(session)
-                    tool_names_to_grant = tool_names
-            if tool_names_to_grant:
-                from cosinabox.agent.policy import grant_temporary_approval
-
-                for tool_name in tool_names_to_grant:
-                    grant_temporary_approval(session, tool_name)
-                    logger.info("User approved %s in %s", tool_name, session)
-
-            blocked: list[str] = []
-            try:
-                result = loop.run(prompt=user_text, session_id=session)
-                reply = result.final_text or "(no response)"
-                blocked = [tc.name for tc in result.tool_calls if "APPROVAL REQUIRED" in tc.result]
-            except Exception:
-                logger.exception("Agent loop failed")
-                reply = "(error processing message)"
-            if blocked:
-                with _pending_tools_lock:
-                    _pending_tools[session] = (blocked, _time.time())
-
-            for i in range(0, len(reply), 4000):
-                await update.message.reply_text(reply[i : i + 4000])
+        handle_message = build_dm_handler(loop, chat_id)
 
         tg_app = Application.builder().token(bot_token).build()
         tg_app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
