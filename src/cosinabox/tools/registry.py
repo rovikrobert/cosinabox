@@ -2,7 +2,7 @@
 
 Each tool integration defines its own TOOL_DEFINITIONS (Claude schemas) and
 a handler function. The registry composes them from tool instances that
-App._build_tools() creates.
+app.tools.build_tools() creates (App._build_tools delegates to it).
 
 OSS-friendly: descriptions are generic, no hardcoded user names.
 """
@@ -553,7 +553,7 @@ def build_tool_registry(
     """Build Claude API tool definitions and handler dict from tool instances.
 
     Args:
-        tool_instances: Dict from App._build_tools(), e.g.
+        tool_instances: Dict from app.tools.build_tools(), e.g.
             {"gmail": GmailTool, "calendar": CalendarTool, ...}
         timezone: User's IANA timezone (e.g. "Asia/Singapore"). Used by
             calendar handlers so time windows align with the user's local clock.
