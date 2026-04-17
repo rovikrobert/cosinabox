@@ -276,6 +276,25 @@ def get_participant_outreach_sent_at(
     return datetime.fromisoformat(row["outreach_sent_at"])
 
 
+def get_participant_gmail_thread_id(
+    db: Any,
+    participant_db_id: int,
+) -> str | None:
+    """Return the gmail_thread_id for a participant, or None if not set.
+
+    Used by the coordinator's polling logic to look up thread IDs without
+    reaching into the db object's private ``_conn`` attribute directly.
+    """
+    cur = db._conn.execute(
+        "SELECT gmail_thread_id FROM scheduling_participants WHERE id = ?",
+        (participant_db_id,),
+    )
+    row = cur.fetchone()
+    if not row or not row["gmail_thread_id"]:
+        return None
+    return str(row["gmail_thread_id"])
+
+
 # ---------------------------------------------------------------------------
 # Slots
 # ---------------------------------------------------------------------------

@@ -266,12 +266,8 @@ def check_polling_status(
             if p.db_id is None or p.db_id in already_responded:
                 continue
 
-            # We need the gmail_thread_id — re-read from DB.
-            row = db._conn.execute(
-                "SELECT gmail_thread_id FROM scheduling_participants WHERE id = ?",
-                (p.db_id,),
-            ).fetchone()
-            thread_id = row["gmail_thread_id"] if row else None
+            # We need the gmail_thread_id — look up via scheduling DB API.
+            thread_id = sched_db.get_participant_gmail_thread_id(db, p.db_id)
             if not thread_id:
                 continue
 
