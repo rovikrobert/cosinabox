@@ -596,16 +596,59 @@ def record_decision(
                 "reason": f"book requires CONVERGED, got {current.value}",
             }
         transition(db, request_id, current, SchedulingStatus.BOOKED)
-        return {
+
+        # Attempt calendar event creation if a CalendarProvider is available.
+        calendar = kwargs.get("calendar")
+        booked_event_id = None
+        calendar_note = None
+        slot_id = kwargs.get("slot_id")
+
+        if calendar is not None and req.slots:
+            # Find the specific slot (or use the first/best).
+            target_slot = None
+            if slot_id is not None:
+                target_slot = next((s for s in req.slots if s.db_id == slot_id), None)
+            if target_slot is None:
+                target_slot = req.slots[0]
+
+            attendees = [p.email for p in req.participants if p.email]
+            try:
+                created = calendar.create_event(
+                    title=req.title,
+                    start=target_slot.start_time,
+                    end=target_slot.end_time,
+                    attendees=attendees,
+                )
+                booked_event_id = created.event_id
+                # Persist the event ID.
+                db._conn.execute(
+                    "UPDATE scheduling_requests SET booked_event_id = ? WHERE id = ?",
+                    (booked_event_id, request_id),
+                )
+                db._conn.commit()
+                calendar_note = f"Created calendar event {booked_event_id}."
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("Calendar event creation failed: %s", exc)
+                calendar_note = (
+                    f"Calendar event creation failed: {exc}. Please create the event manually."
+                )
+        elif calendar is None:
+            calendar_note = (
+                "No calendar provider configured. "
+                "Please create the event manually in your calendar."
+            )
+
+        result: dict[str, Any] = {
             "status": "ok",
             "action": action,
             "new_status": SchedulingStatus.BOOKED.value,
-            "slot_id": kwargs.get("slot_id"),
-            "phase_b_note": (
-                "Calendar event creation is deferred to Phase B. "
-                "Please create the event manually in your calendar."
-            ),
+            "slot_id": slot_id,
         }
+        if booked_event_id:
+            result["booked_event_id"] = booked_event_id
+        if calendar_note:
+            result["calendar_note"] = calendar_note
+        return result
 
     if action == "rework":
         if current != SchedulingStatus.POLLING:

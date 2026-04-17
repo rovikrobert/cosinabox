@@ -146,7 +146,7 @@ def test_first_run_end_to_end(mem):
     result = record_decision(mem, req.id, "book", slot_id=slots[0].db_id)
     assert result["status"] == "ok"
     assert result["new_status"] == "booked"
-    assert "phase_b_note" in result
+    assert "calendar_note" in result
 
 
 # ---------------------------------------------------------------------------
@@ -710,3 +710,97 @@ def test_find_consensus_calls_provider_once_per_cycle(mem):
     # Call again — should be another single call (no caching).
     find_consensus(ctx, rid)
     assert provider.list_calls == 2
+
+
+# ---------------------------------------------------------------------------
+# 17. Phase B M5: book creates calendar event
+# ---------------------------------------------------------------------------
+
+
+def test_book_creates_calendar_event(mem):
+    """record_decision('book') with a CalendarProvider creates an event and
+    persists the booked_event_id."""
+    from cosinabox.scheduling.context import CreatedEvent
+
+    class _BookProvider:
+        def __init__(self):
+            self.created = []
+
+        def list_busy_intervals(self, **kw):
+            return []
+
+        def create_event(self, *, title, start, end, attendees, description=None):
+            self.created.append({"title": title, "attendees": attendees})
+            return CreatedEvent(
+                event_id="evt-42", title=title, start=start, end=end, attendees=attendees
+            )
+
+    req = SchedulingRequest(
+        id="",
+        title="Book test",
+        duration_minutes=30,
+        date_range_start=date(2026, 5, 4),
+        date_range_end=date(2026, 5, 5),
+        participants=[_participant(name="Bob", email="bob@x.com", channel="gmail")],
+    )
+    rid = sched_db.create_request(mem, req)
+    sched_db.add_slot(
+        mem,
+        rid,
+        TimeSlot(
+            start_time=datetime(2026, 5, 4, 9, 0, tzinfo=UTC),
+            end_time=datetime(2026, 5, 4, 9, 30, tzinfo=UTC),
+            score=0.8,
+        ),
+    )
+    slot = sched_db.get_slots(mem, rid)[0]
+    from cosinabox.scheduling.coordinator import transition
+
+    transition(mem, rid, "proposing", "owner_review")
+    transition(mem, rid, "owner_review", "polling")
+    transition(mem, rid, "polling", "converged")
+
+    provider = _BookProvider()
+    result = record_decision(mem, rid, "book", slot_id=slot.db_id, calendar=provider)
+    assert result["status"] == "ok"
+    assert result["booked_event_id"] == "evt-42"
+    assert "Created calendar event" in result.get("calendar_note", "")
+    assert len(provider.created) == 1
+    assert "bob@x.com" in provider.created[0]["attendees"]
+
+    # Verify persisted in DB
+    loaded = sched_db.get_request(mem, rid)
+    assert loaded.booked_event_id == "evt-42"
+
+
+def test_book_fails_gracefully_when_calendar_missing(mem):
+    """record_decision('book') without a CalendarProvider still transitions
+    to BOOKED and returns a helpful note."""
+    req = SchedulingRequest(
+        id="",
+        title="No cal",
+        duration_minutes=30,
+        date_range_start=date(2026, 5, 4),
+        date_range_end=date(2026, 5, 5),
+        participants=[_participant(name="C", email="c@x.com", channel="gmail")],
+    )
+    rid = sched_db.create_request(mem, req)
+    sched_db.add_slot(
+        mem,
+        rid,
+        TimeSlot(
+            start_time=datetime(2026, 5, 4, 9, 0, tzinfo=UTC),
+            end_time=datetime(2026, 5, 4, 9, 30, tzinfo=UTC),
+            score=0.8,
+        ),
+    )
+    from cosinabox.scheduling.coordinator import transition
+
+    transition(mem, rid, "proposing", "owner_review")
+    transition(mem, rid, "owner_review", "polling")
+    transition(mem, rid, "polling", "converged")
+
+    result = record_decision(mem, rid, "book")
+    assert result["status"] == "ok"
+    assert result["new_status"] == "booked"
+    assert "manually" in result.get("calendar_note", "").lower()

@@ -66,3 +66,4 @@ class SchedulingRequest:
     preferred_timezone: str = "UTC"
     notes: str | None = None
     slots: list[TimeSlot] = field(default_factory=list)
+    booked_event_id: str | None = None

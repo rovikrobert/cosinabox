@@ -180,12 +180,6 @@ def build_scheduling_tool_definitions(owner_name: str) -> list[dict[str, Any]]:
 # ---------------------------------------------------------------------------
 
 
-_BOOK_PHASE_B_CAVEAT = (
-    "Calendar event creation is deferred to Plan 5 — please create "
-    "the event manually in Google Calendar."
-)
-
-
 def _format_request_summary(req: Any) -> str:
     """Single-line summary for list views."""
     return (
@@ -329,6 +323,7 @@ def build_scheduling_handlers(
             "owner_timezone": owner_timezone,
             "bot": ctx.bot,
             "gmail": ctx.gmail,
+            "calendar": ctx.calendar,
         }
         if slot_id is not None:
             kwargs["slot_id"] = slot_id
@@ -351,8 +346,8 @@ def build_scheduling_handlers(
 
         new_status = result.get("new_status", "?")
         msg = f"Action '{action}' recorded for {request_id}. New status: {new_status}."
-        if action == "book":
-            msg += " " + _BOOK_PHASE_B_CAVEAT
+        if "calendar_note" in result:
+            msg += " " + result["calendar_note"]
         if "outreach_summary" in result:
             msg += f"\nOutreach: {result['outreach_summary']}"
         return msg
