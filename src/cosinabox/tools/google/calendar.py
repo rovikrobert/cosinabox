@@ -19,6 +19,10 @@ except ImportError as e:
 
 from cosinabox.tools.google.auth import build_all_credentials
 
+# Deferred import to avoid circular dependency at module-load time.
+# The scheduling context types are only needed by GoogleCalendarProvider.
+_SCHEDULING_CONTEXT_LOADED = False
+
 
 class CalendarConflict(Exception):
     """Raised when create_event would overlap an existing event."""
@@ -203,4 +207,87 @@ class CalendarTool:
             start=_parse_dt(resp["start"]),
             end=_parse_dt(resp["end"]),
             attendees=[a.get("email", "") for a in resp.get("attendees", []) if a.get("email")],
+        )
+
+
+# ---------------------------------------------------------------------------
+# GoogleCalendarProvider — CalendarProvider protocol adapter
+# ---------------------------------------------------------------------------
+
+
+class GoogleCalendarProvider:
+    """Wraps ``CalendarTool`` to satisfy the ``CalendarProvider`` protocol.
+
+    Converts ``CalendarEvent`` objects from the raw Google adapter into
+    the scheduling engine's ``BusyInterval`` / ``CreatedEvent`` types.
+    """
+
+    def __init__(self, calendar_tool: CalendarTool) -> None:
+        self._tool = calendar_tool
+
+    def list_busy_intervals(
+        self,
+        *,
+        start: datetime,
+        end: datetime,
+        timezone: str,  # noqa: ARG002 — part of protocol
+    ) -> list[Any]:
+        """Return busy intervals from the Google Calendar API.
+
+        ``timezone`` is accepted per the protocol contract but not used here
+        because ``CalendarTool.list_events`` returns timezone-aware datetimes.
+        """
+        from cosinabox.scheduling.context import BusyInterval
+
+        events = self._tool.list_events(start=start, end=end)
+        intervals: list[BusyInterval] = []
+        for evt in events:
+            if evt.start < evt.end:
+                intervals.append(
+                    BusyInterval(
+                        start=evt.start,
+                        end=evt.end,
+                        source_event_id=evt.id,
+                    )
+                )
+        # Sort and merge overlapping intervals.
+        intervals.sort(key=lambda bi: bi.start)
+        merged: list[BusyInterval] = []
+        for bi in intervals:
+            if merged and bi.start <= merged[-1].end:
+                prev = merged[-1]
+                merged[-1] = BusyInterval(
+                    start=prev.start,
+                    end=max(prev.end, bi.end),
+                    source_event_id=prev.source_event_id,
+                )
+            else:
+                merged.append(bi)
+        return merged
+
+    def create_event(
+        self,
+        *,
+        title: str,
+        start: datetime,
+        end: datetime,
+        attendees: list[str],
+        description: str | None = None,  # noqa: ARG002 — not yet wired
+    ) -> Any:
+        """Create a calendar event via the Google Calendar API."""
+        from cosinabox.scheduling.context import CreatedEvent
+
+        evt = self._tool.create_event(
+            summary=title,
+            start=start,
+            end=end,
+            attendees=attendees if attendees else None,
+            allow_conflict=True,  # scheduling engine already validated
+        )
+        return CreatedEvent(
+            event_id=evt.id,
+            title=evt.summary,
+            start=evt.start,
+            end=evt.end,
+            attendees=evt.attendees,
         )

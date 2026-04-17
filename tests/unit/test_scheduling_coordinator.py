@@ -517,3 +517,212 @@ def test_check_polling_status_returns_summary(mem):
 def test_check_polling_status_missing_request(mem):
     summary = coordinator.check_polling_status(mem, "nope")
     assert "error" in summary
+
+
+# ---------------------------------------------------------------------------
+# Phase B M2: find_consensus with SchedulingContext
+# ---------------------------------------------------------------------------
+
+
+def _make_ctx(mem, *, calendar=None, scoring_config=None):
+    """Build a SchedulingContext for tests."""
+    from cosinabox.scheduling.context import OwnerProfile, SchedulingContext
+
+    return SchedulingContext(
+        db=mem,
+        owner=OwnerProfile(name="Host", timezone="UTC"),
+        calendar=calendar,
+        scoring_config=scoring_config,
+    )
+
+
+class FakeCalendarProvider:
+    """Test double for CalendarProvider."""
+
+    def __init__(self, busy=None):
+        from cosinabox.scheduling.context import BusyInterval
+
+        self._busy: list[BusyInterval] = busy or []
+        self.call_count = 0
+
+    def list_busy_intervals(self, *, start, end, timezone):
+        self.call_count += 1
+        return self._busy
+
+    def create_event(self, *, title, start, end, attendees, description=None):
+        from cosinabox.scheduling.context import CreatedEvent
+
+        return CreatedEvent(
+            event_id="fake-1", title=title, start=start, end=end, attendees=attendees
+        )
+
+
+def test_find_consensus_ctx_no_calendar(mem):
+    """New-style find_consensus with ctx.calendar=None uses stored scores."""
+    req = SchedulingRequest(
+        id="",
+        title="Ctx test",
+        duration_minutes=30,
+        date_range_start=date(2026, 5, 4),
+        date_range_end=date(2026, 5, 5),
+        participants=[
+            Participant(name="A", email="a@x.com", timezone="UTC", channel="gmail"),
+        ],
+    )
+    rid = sched_db.create_request(mem, req)
+    sched_db.add_slot(
+        mem,
+        rid,
+        TimeSlot(
+            start_time=datetime(2026, 5, 4, 9, 0, tzinfo=UTC),
+            end_time=datetime(2026, 5, 4, 9, 30, tzinfo=UTC),
+            score=0.8,
+        ),
+    )
+    slot = sched_db.get_slots(mem, rid)[0]
+    p = sched_db.get_participants(mem, rid)[0]
+    sched_db.record_response(
+        mem, request_id=rid, participant_db_id=p.db_id, slot_db_id=slot.db_id, response="yes"
+    )
+
+    ctx = _make_ctx(mem)
+    result = find_consensus(ctx, rid)
+    assert result is not None
+    assert result.db_id == slot.db_id
+
+
+def test_find_consensus_ctx_with_provider(mem):
+    """New-style find_consensus with a FakeCalendarProvider re-scores."""
+    from cosinabox.scheduling.context import BusyInterval
+
+    req = SchedulingRequest(
+        id="",
+        title="Ctx provider",
+        duration_minutes=30,
+        date_range_start=date(2026, 5, 4),
+        date_range_end=date(2026, 5, 5),
+        participants=[
+            Participant(name="A", email="a@x.com", timezone="UTC", channel="gmail"),
+        ],
+    )
+    rid = sched_db.create_request(mem, req)
+    # Two slots — second has higher stored score but a conflict in fresh calendar
+    sched_db.add_slot(
+        mem,
+        rid,
+        TimeSlot(
+            start_time=datetime(2026, 5, 4, 9, 0, tzinfo=UTC),
+            end_time=datetime(2026, 5, 4, 9, 30, tzinfo=UTC),
+            score=0.5,
+        ),
+    )
+    sched_db.add_slot(
+        mem,
+        rid,
+        TimeSlot(
+            start_time=datetime(2026, 5, 4, 10, 0, tzinfo=UTC),
+            end_time=datetime(2026, 5, 4, 10, 30, tzinfo=UTC),
+            score=0.9,
+        ),
+    )
+    slots = sched_db.get_slots(mem, rid)
+    p = sched_db.get_participants(mem, rid)[0]
+    for s in slots:
+        sched_db.record_response(
+            mem, request_id=rid, participant_db_id=p.db_id, slot_db_id=s.db_id, response="yes"
+        )
+
+    # Provider returns a conflict overlapping the 10:00 slot
+    provider = FakeCalendarProvider(
+        busy=[
+            BusyInterval(
+                start=datetime(2026, 5, 4, 9, 45, tzinfo=UTC),
+                end=datetime(2026, 5, 4, 10, 45, tzinfo=UTC),
+            ),
+        ]
+    )
+    ctx = _make_ctx(mem, calendar=provider)
+    result = find_consensus(ctx, rid)
+    assert result is not None
+    # The 9:00 slot should win because the 10:00 slot now has a conflict
+    assert result.start_time.hour == 9
+    assert provider.call_count == 1
+
+
+def test_find_consensus_ctx_provider_error_falls_back(mem):
+    """If the provider raises, fall back to stored scores."""
+
+    class ErrorProvider:
+        def list_busy_intervals(self, **kw):
+            raise RuntimeError("API down")
+
+        def create_event(self, **kw):
+            raise RuntimeError("API down")
+
+    req = SchedulingRequest(
+        id="",
+        title="Error test",
+        duration_minutes=30,
+        date_range_start=date(2026, 5, 4),
+        date_range_end=date(2026, 5, 5),
+        participants=[
+            Participant(name="A", email="a@x.com", timezone="UTC", channel="gmail"),
+        ],
+    )
+    rid = sched_db.create_request(mem, req)
+    sched_db.add_slot(
+        mem,
+        rid,
+        TimeSlot(
+            start_time=datetime(2026, 5, 4, 9, 0, tzinfo=UTC),
+            end_time=datetime(2026, 5, 4, 9, 30, tzinfo=UTC),
+            score=0.8,
+        ),
+    )
+    slot = sched_db.get_slots(mem, rid)[0]
+    p = sched_db.get_participants(mem, rid)[0]
+    sched_db.record_response(
+        mem, request_id=rid, participant_db_id=p.db_id, slot_db_id=slot.db_id, response="yes"
+    )
+
+    ctx = _make_ctx(mem, calendar=ErrorProvider())
+    result = find_consensus(ctx, rid)
+    assert result is not None
+    assert result.db_id == slot.db_id
+
+
+def test_find_consensus_legacy_emits_deprecation(mem):
+    """Legacy find_consensus(db, ...) emits DeprecationWarning."""
+    import warnings
+
+    req = SchedulingRequest(
+        id="",
+        title="Deprecation",
+        duration_minutes=30,
+        date_range_start=date(2026, 5, 4),
+        date_range_end=date(2026, 5, 5),
+        participants=[
+            Participant(name="A", email="a@x.com", timezone="UTC", channel="gmail"),
+        ],
+    )
+    rid = sched_db.create_request(mem, req)
+    sched_db.add_slot(
+        mem,
+        rid,
+        TimeSlot(
+            start_time=datetime(2026, 5, 4, 9, 0, tzinfo=UTC),
+            end_time=datetime(2026, 5, 4, 9, 30, tzinfo=UTC),
+            score=0.8,
+        ),
+    )
+    slot = sched_db.get_slots(mem, rid)[0]
+    p = sched_db.get_participants(mem, rid)[0]
+    sched_db.record_response(
+        mem, request_id=rid, participant_db_id=p.db_id, slot_db_id=slot.db_id, response="yes"
+    )
+
+    with warnings.catch_warnings(record=True) as w:
+        warnings.simplefilter("always")
+        result = find_consensus(mem, rid)
+    assert result is not None
+    assert any("deprecated" in str(warning.message).lower() for warning in w)

@@ -633,3 +633,71 @@ def test_duplicate_response_upserts(mem):
     responses = sched_db.get_responses(mem, rid)
     assert len(responses) == 1
     assert responses[0]["response"] == "no"
+
+
+# ---------------------------------------------------------------------------
+# 16. Phase B M2: CalendarProvider called exactly once per find_consensus
+# ---------------------------------------------------------------------------
+
+
+class _CountingProvider:
+    """Minimal CalendarProvider that counts calls."""
+
+    def __init__(self):
+        self.list_calls = 0
+        self.create_calls = 0
+
+    def list_busy_intervals(self, *, start, end, timezone):
+        self.list_calls += 1
+        return []
+
+    def create_event(self, *, title, start, end, attendees, description=None):
+        self.create_calls += 1
+        from cosinabox.scheduling.context import CreatedEvent
+
+        return CreatedEvent(event_id="fake", title=title, start=start, end=end, attendees=attendees)
+
+
+def test_find_consensus_calls_provider_once_per_cycle(mem):
+    """CalendarProvider.list_busy_intervals is called at most once per
+    find_consensus invocation (no duplicate fetch)."""
+    from cosinabox.scheduling.context import OwnerProfile, SchedulingContext
+
+    req = SchedulingRequest(
+        id="",
+        title="ProviderCount",
+        duration_minutes=30,
+        date_range_start=date(2026, 5, 4),
+        date_range_end=date(2026, 5, 5),
+        participants=[_participant(name="A", email="a@x.com", channel="gmail")],
+    )
+    rid = sched_db.create_request(mem, req)
+    sched_db.add_slot(
+        mem,
+        rid,
+        TimeSlot(
+            start_time=datetime(2026, 5, 4, 9, 0, tzinfo=UTC),
+            end_time=datetime(2026, 5, 4, 9, 30, tzinfo=UTC),
+            score=0.8,
+        ),
+    )
+    slot = sched_db.get_slots(mem, rid)[0]
+    p = sched_db.get_participants(mem, rid)[0]
+    sched_db.record_response(
+        mem, request_id=rid, participant_db_id=p.db_id, slot_db_id=slot.db_id, response="yes"
+    )
+
+    provider = _CountingProvider()
+    ctx = SchedulingContext(
+        db=mem,
+        owner=OwnerProfile(name="Host", timezone="UTC"),
+        calendar=provider,
+    )
+    result = find_consensus(ctx, rid)
+    assert result is not None
+    assert provider.list_calls == 1, (
+        f"Expected exactly 1 list_busy_intervals call, got {provider.list_calls}"
+    )
+    # Call again — should be another single call (no caching).
+    find_consensus(ctx, rid)
+    assert provider.list_calls == 2

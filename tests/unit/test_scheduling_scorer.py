@@ -265,3 +265,40 @@ class TestScoringConfig:
         p = Participant(name="Owner", timezone="UTC")
         dt = datetime(2026, 4, 14, 6, 0, tzinfo=UTC)
         assert _is_in_hard_block(dt, p, config) is True
+
+
+# ---------------------------------------------------------------------------
+# Phase B M2: busy_intervals_to_tuples
+# ---------------------------------------------------------------------------
+
+
+class TestBusyIntervalsToTuples:
+    def test_converts_busy_intervals(self):
+        from cosinabox.scheduling.context import BusyInterval
+        from cosinabox.scheduling.slot_scorer import busy_intervals_to_tuples
+
+        intervals = [
+            BusyInterval(
+                start=datetime(2026, 5, 4, 9, 0, tzinfo=UTC),
+                end=datetime(2026, 5, 4, 10, 0, tzinfo=UTC),
+            ),
+            BusyInterval(
+                start=datetime(2026, 5, 4, 14, 0, tzinfo=UTC),
+                end=datetime(2026, 5, 4, 15, 0, tzinfo=UTC),
+            ),
+        ]
+        result = busy_intervals_to_tuples(intervals)
+        assert len(result) == 2
+        assert result[0] == (
+            datetime(2026, 5, 4, 9, 0, tzinfo=UTC),
+            datetime(2026, 5, 4, 10, 0, tzinfo=UTC),
+        )
+        assert result[1] == (
+            datetime(2026, 5, 4, 14, 0, tzinfo=UTC),
+            datetime(2026, 5, 4, 15, 0, tzinfo=UTC),
+        )
+
+    def test_empty_list(self):
+        from cosinabox.scheduling.slot_scorer import busy_intervals_to_tuples
+
+        assert busy_intervals_to_tuples([]) == []

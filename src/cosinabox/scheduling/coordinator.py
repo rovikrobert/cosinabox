@@ -35,6 +35,7 @@ from cosinabox.scheduling.outreach import execute_outreach
 from cosinabox.scheduling.response_parser import parse_response
 from cosinabox.scheduling.slot_scorer import (
     ScoringConfig,
+    busy_intervals_to_tuples,
     compute_score,
     events_to_busy_intervals,
     find_candidate_slots,
@@ -417,38 +418,23 @@ def check_polling_status(
 # ---------------------------------------------------------------------------
 
 
-def find_consensus(
+def _find_qualifying_slots(
     db: Any,
     request_id: str,
-    *,
-    owner_events_by_day: dict[date, list[dict[str, Any]]] | None = None,
-    scoring_config: ScoringConfig | None = None,
-) -> TimeSlot | None:
-    """Return the slot where ALL participants voted ``yes`` or ``if_needed``.
+) -> tuple[Any | None, list[TimeSlot]]:
+    """Shared logic: load request, responses, return (req, qualifying_slots).
 
-    - A participant who has not responded at all counts as "not yes" for
-      every slot (returns None while anyone is pending).
-    - A single ``no`` for a slot disqualifies that slot.
-    - If multiple slots qualify, the highest-scoring one is returned.
-
-    If ``owner_events_by_day`` is provided, qualifying slots are re-scored
-    against the fresh calendar before picking a winner. Stored ``.score``
-    values were computed at PROPOSING time and can go stale during POLLING
-    (up to 48h) as the owner accepts new meetings that overlap proposed
-    slots. Passing fresh events lets the coordinator prefer a slot that is
-    still actually free today.
-
-    Returns None if no slot has unanimous acceptance yet.
+    Returns ``(None, [])`` when the request is missing or no slot has
+    unanimous yes/if_needed acceptance.
     """
     req = sched_db.get_request(db, request_id)
     if req is None or not req.slots or not req.participants:
-        return None
+        return None, []
 
     responses = sched_db.get_responses(db, request_id)
     participant_ids = {p.db_id for p in req.participants if p.db_id is not None}
     total = len(participant_ids)
 
-    # Build (slot_id) -> {participant_id: verdict}
     per_slot: dict[int, dict[int, str]] = {}
     for r in responses:
         sid = r["slot_id"]
@@ -461,7 +447,6 @@ def find_consensus(
         if slot.db_id is None:
             continue
         votes = per_slot.get(slot.db_id, {})
-        # Require every participant to have voted yes/if_needed.
         if len(votes) < total:
             continue
         if not participant_ids.issubset(votes.keys()):
@@ -469,34 +454,24 @@ def find_consensus(
         if all(votes[pid] in ("yes", "if_needed") for pid in participant_ids):
             qualifying.append(slot)
 
-    if not qualifying:
-        return None
+    return req, qualifying
 
-    if owner_events_by_day is None:
-        return max(qualifying, key=lambda s: s.score)
 
-    # --- Fresh re-score pass -------------------------------------------------
-    # Recompute scores against the caller-provided calendar snapshot. We
-    # don't mutate the persisted slots — this is a read-time correction
-    # that stays local to this call.
-    config = scoring_config or ScoringConfig()
+def _rescore_with_busy_tuples(
+    qualifying: list[TimeSlot],
+    busy_by_day: dict[date, list[tuple[datetime, datetime]]],
+    events_per_day: dict[date, int],
+    req: Any,
+    config: ScoringConfig,
+) -> TimeSlot:
+    """Re-score qualifying slots against fresh busy intervals (tuple form)."""
+    from zoneinfo import ZoneInfo
+
     owner_tz = req.preferred_timezone or "UTC"
     range_start = req.date_range_start
     range_end = req.date_range_end
 
-    # Pre-compute per-day busy intervals + event counts from the fresh feed.
-    busy_by_day: dict[date, list[tuple[datetime, datetime]]] = {}
-    events_per_day: dict[date, int] = {}
-    for d, events in owner_events_by_day.items():
-        busy_by_day[d] = events_to_busy_intervals(events, owner_tz)
-        events_per_day[d] = len(events)
-
-    def _find_conflict_fresh(
-        start: datetime,
-        end: datetime,
-    ) -> str | None:
-        from zoneinfo import ZoneInfo
-
+    def _find_conflict_fresh(start: datetime, end: datetime) -> str | None:
         local_day = start.astimezone(ZoneInfo(owner_tz)).date()
         for bs, be in busy_by_day.get(local_day, []):
             if start < be and end > bs:
@@ -505,8 +480,6 @@ def find_consensus(
 
     rescored: list[tuple[TimeSlot, float]] = []
     for slot in qualifying:
-        from zoneinfo import ZoneInfo
-
         local_day = slot.start_time.astimezone(ZoneInfo(owner_tz)).date()
         busy_today = busy_by_day.get(local_day, [])
         requires_move = _find_conflict_fresh(slot.start_time, slot.end_time)
@@ -524,10 +497,117 @@ def find_consensus(
         )
         rescored.append((slot, fresh_score))
 
-    # Prefer the highest fresh score. Tie-breaker: fall back to stored score
-    # so this remains deterministic even when the fresh calendar is empty.
     rescored.sort(key=lambda ss: (ss[1], ss[0].score), reverse=True)
     return rescored[0][0]
+
+
+def _find_consensus_ctx(
+    ctx: Any,
+    request_id: str,
+) -> TimeSlot | None:
+    """New-style find_consensus using ``SchedulingContext``.
+
+    When ``ctx.calendar`` is not None, fetches fresh busy intervals via
+    the ``CalendarProvider`` protocol and re-scores qualifying slots.
+    """
+    from zoneinfo import ZoneInfo
+
+    req, qualifying = _find_qualifying_slots(ctx.db, request_id)
+    if not qualifying or req is None:
+        return None
+
+    if ctx.calendar is None:
+        return max(qualifying, key=lambda s: s.score)
+
+    # Fetch fresh busy intervals via the CalendarProvider protocol.
+    owner_tz = req.preferred_timezone or "UTC"
+    slot_dates = sorted({s.start_time.astimezone(ZoneInfo(owner_tz)).date() for s in req.slots})
+    if not slot_dates:
+        return max(qualifying, key=lambda s: s.score)
+
+    utc = ZoneInfo("UTC")
+    fetch_start = datetime.combine(slot_dates[0], datetime.min.time(), tzinfo=utc)
+    fetch_end = datetime.combine(slot_dates[-1], datetime.min.time(), tzinfo=utc) + timedelta(
+        days=1
+    )
+
+    try:
+        intervals = ctx.calendar.list_busy_intervals(
+            start=fetch_start,
+            end=fetch_end,
+            timezone=owner_tz,
+        )
+    except Exception:  # noqa: BLE001
+        logger.warning("CalendarProvider.list_busy_intervals failed", exc_info=True)
+        return max(qualifying, key=lambda s: s.score)
+
+    tuples = busy_intervals_to_tuples(intervals)
+    busy_by_day: dict[date, list[tuple[datetime, datetime]]] = {d: [] for d in slot_dates}
+    events_per_day: dict[date, int] = {d: 0 for d in slot_dates}
+    for bi_start, bi_end in tuples:
+        d = bi_start.astimezone(ZoneInfo(owner_tz)).date()
+        busy_by_day.setdefault(d, []).append((bi_start, bi_end))
+        events_per_day[d] = events_per_day.get(d, 0) + 1
+
+    config = ctx.scoring_config or ScoringConfig()
+    return _rescore_with_busy_tuples(qualifying, busy_by_day, events_per_day, req, config)
+
+
+def find_consensus(
+    db_or_ctx: Any,
+    request_id: str,
+    *,
+    owner_events_by_day: dict[date, list[dict[str, Any]]] | None = None,
+    scoring_config: ScoringConfig | None = None,
+) -> TimeSlot | None:
+    """Return the slot where ALL participants voted ``yes`` or ``if_needed``.
+
+    Supports two calling conventions:
+
+    **New (Phase B)** — pass a ``SchedulingContext`` as the first argument::
+
+        find_consensus(ctx, request_id)
+
+    **Legacy (deprecated)** — pass a ``db`` handle + optional kwargs::
+
+        find_consensus(db, request_id, owner_events_by_day=..., scoring_config=...)
+
+    The legacy signature emits a ``DeprecationWarning`` and delegates to the
+    same internal logic. It will be removed in M4.
+
+    Returns None if no slot has unanimous acceptance yet.
+    """
+    # Dispatch: if first arg has an ``owner`` attribute, it's a SchedulingContext.
+    if hasattr(db_or_ctx, "owner"):
+        return _find_consensus_ctx(db_or_ctx, request_id)
+
+    # --- Legacy path (deprecation shim) ---
+    import warnings
+
+    warnings.warn(
+        "find_consensus(db, request_id, owner_events_by_day=...) is deprecated. "
+        "Pass a SchedulingContext as the first argument instead.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
+
+    req, qualifying = _find_qualifying_slots(db_or_ctx, request_id)
+    if not qualifying or req is None:
+        return None
+
+    if owner_events_by_day is None:
+        return max(qualifying, key=lambda s: s.score)
+
+    config = scoring_config or ScoringConfig()
+    owner_tz = req.preferred_timezone or "UTC"
+
+    busy_by_day: dict[date, list[tuple[datetime, datetime]]] = {}
+    events_per_day: dict[date, int] = {}
+    for d, events in owner_events_by_day.items():
+        busy_by_day[d] = events_to_busy_intervals(events, owner_tz)
+        events_per_day[d] = len(events)
+
+    return _rescore_with_busy_tuples(qualifying, busy_by_day, events_per_day, req, config)
 
 
 # ---------------------------------------------------------------------------
