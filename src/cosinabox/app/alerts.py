@@ -45,8 +45,29 @@ def send_auth_error_alert(
         logger.exception("Failed to send auth-error alert via Telegram")
 
 
-def wire_telegram_output(scheduler: SchedulerRunner, send_fn: Any) -> None:
-    """Wrap each job's run() to send output to Telegram."""
+def wire_telegram_output(
+    scheduler: SchedulerRunner,
+    send_fn: Any,
+    *,
+    memory: Any | None = None,
+    dm_session: str | None = None,
+) -> None:
+    """Wrap each job's run() to send output to Telegram.
+
+    When ``memory`` and ``dm_session`` are provided, the same text we send
+    to Telegram is also persisted under ``dm_session`` as
+    ``role=assistant``. This is the wrapper-side counterpart to PR #51's
+    fix in PostMeetingDebriefJob: every wrapped job (pre-meeting prep,
+    morning briefing, evening wrap, weekly review, follow-up reminder,
+    ...) returns a body string from ``run()`` that this wrapper forwards
+    to Telegram. Without the persist, the DM agent loop loads
+    ``dm-{chat_id}`` history and sees zero record of those sends -- so
+    follow-ups like "rewrite the briefing for the team" hit a bot with
+    no recall.
+
+    The persist is best-effort: a failure to write to memory must never
+    block the user from receiving the message.
+    """
     NO_OP = ("no upcoming", "no events", "no meetings", "(no ")
 
     for jname, registered_job in scheduler._jobs.items():
@@ -59,10 +80,25 @@ def wire_telegram_output(scheduler: SchedulerRunner, send_fn: Any) -> None:
                     return result
                 if any(m in result.lower() for m in NO_OP):
                     return result
+                payload = f"[{name}]\n\n{result}"
                 try:
-                    send_fn(f"[{name}]\n\n{result}")
+                    send_fn(payload)
                 except Exception:
                     logger.exception("Telegram send failed for %s", name)
+                if memory is not None and dm_session is not None:
+                    try:
+                        memory.store_message(
+                            role="assistant",
+                            content=payload,
+                            session_id=dm_session,
+                        )
+                    except Exception:
+                        logger.warning(
+                            "Failed to persist wrapped-job send (%s) to DM session %s",
+                            name,
+                            dm_session,
+                            exc_info=True,
+                        )
                 return result
 
             return wrapped

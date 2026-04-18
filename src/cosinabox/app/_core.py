@@ -102,10 +102,21 @@ class App:
     # ------------------------------------------------------------------
 
     @staticmethod
-    def _wire_telegram_output(scheduler: SchedulerRunner, send_fn: Any) -> None:
+    def _wire_telegram_output(
+        scheduler: SchedulerRunner,
+        send_fn: Any,
+        *,
+        memory: Any | None = None,
+        dm_session: str | None = None,
+    ) -> None:
         from cosinabox.app.alerts import wire_telegram_output
 
-        wire_telegram_output(scheduler, send_fn)
+        wire_telegram_output(
+            scheduler,
+            send_fn,
+            memory=memory,
+            dm_session=dm_session,
+        )
 
     # ------------------------------------------------------------------
     # Main entry point
@@ -312,7 +323,12 @@ class App:
             chat_id=chat_id,
         )
 
-        self._wire_telegram_output(scheduler, send_telegram)
+        self._wire_telegram_output(
+            scheduler,
+            send_telegram,
+            memory=memory,
+            dm_session=f"dm-{chat_id}",
+        )
 
         # --- Start scheduler ---
         logger.info("Starting scheduler with %d jobs", len(scheduler._jobs))
