@@ -309,6 +309,7 @@ class App:
             rela_agent=rela_agent,
             scheduling_ctx=scheduling_ctx,
             anthropic_factory=_Anthropic,
+            chat_id=chat_id,
         )
 
         self._wire_telegram_output(scheduler, send_telegram)

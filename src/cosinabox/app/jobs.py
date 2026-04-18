@@ -101,6 +101,7 @@ def register_telegram_jobs(
     rela_agent: Any,
     scheduling_ctx: Any | None,  # SchedulingContext or None
     anthropic_factory: Any,
+    chat_id: str,
 ) -> None:
     """Register jobs that need send_telegram (runs AFTER send_telegram exists)."""
     for job_name, cfg in jobs_config.items():
@@ -170,6 +171,8 @@ def register_telegram_jobs(
                     [],
                 ),
                 rela=rela_agent,
+                memory=memory,
+                dm_session=f"dm-{chat_id}",
             )
             cron = cfg.get("schedule", "*/5 * * * *")
             scheduler.add_job(job, cron=cron)

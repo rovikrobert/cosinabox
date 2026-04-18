@@ -66,6 +66,8 @@ class PostMeetingDebriefJob(Job):
         send_fn: Callable[[str], None],
         skip_titles: list[str] | None = None,
         rela: Any | None = None,
+        memory: Any | None = None,
+        dm_session: str | None = None,
     ) -> None:
         self.calendar = calendar
         self.fireflies = fireflies
@@ -73,6 +75,14 @@ class PostMeetingDebriefJob(Job):
         self.send_fn = send_fn
         self.skip_titles = [t.lower() for t in (skip_titles or [])]
         self.rela = rela
+        # When wired, every text we send via send_fn is also persisted under
+        # this session as role=assistant. The DM agent loop reads from
+        # ``dm-{chat_id}``; persisting here lets follow-up replies like
+        # "wrong meeting" or "tell me more about the action items" find the
+        # original debrief in the conversation history. Optional so legacy
+        # call sites and isolated unit tests still construct cleanly.
+        self.memory = memory
+        self.dm_session = dm_session
 
     def _is_debriefed(self, uid: str) -> bool:
         cur = self.db._conn.execute(
@@ -88,6 +98,31 @@ class PostMeetingDebriefJob(Job):
             (uid, ts),
         )
         self.db._conn.commit()
+
+    def _send_and_persist(self, text: str) -> None:
+        """Send ``text`` via send_fn and persist a copy to the DM session.
+
+        The persist step is best-effort: a failure to write to memory must
+        never block the user from receiving the message. We log and
+        continue. Per audit (PR #51): without this, the DM agent loads
+        ``dm-{chat_id}`` history and sees zero record of scheduled sends,
+        so follow-ups like "wrong meeting" hit a bot with no recall.
+        """
+        self.send_fn(text)
+        if self.memory is None or self.dm_session is None:
+            return
+        try:
+            self.memory.store_message(
+                role="assistant",
+                content=text,
+                session_id=self.dm_session,
+            )
+        except Exception:
+            logger.warning(
+                "Failed to persist debrief to DM session %s",
+                self.dm_session,
+                exc_info=True,
+            )
 
     def run(self, context: Any = None) -> str:
         if self.calendar is None:
@@ -144,7 +179,7 @@ class PostMeetingDebriefJob(Job):
 
             lines.append("\nAnything to add? Decisions, next steps, things that changed?")
 
-            self.send_fn("\n".join(lines))
+            self._send_and_persist("\n".join(lines))
             self._mark_debriefed(uid)
             debriefed += 1
 
