@@ -5,7 +5,6 @@ from __future__ import annotations
 from datetime import UTC, date, datetime, timedelta
 
 import pytest
-
 from cosinabox.jobs.scheduling_poll_check import SchedulingPollCheckJob
 from cosinabox.memory import Memory
 from cosinabox.scheduling import db as sched_db
@@ -372,3 +371,108 @@ def test_no_outreach_sent_at_is_not_nudged(mem, job_factory):
     assert "0 nudged" in result
     assert "0 expired" in result
     assert sched_db.get_request(mem, req_id).status == SchedulingStatus.POLLING.value
+
+
+# ---------------------------------------------------------------------------
+# DM-session persistence (parallels PR #51 for PostMeetingDebriefJob)
+# ---------------------------------------------------------------------------
+
+
+class TestPersistsToDmSession:
+    """When dm_session+memory are wired, every text the user sees on Telegram
+    (consensus reached, nudge sent, owner-review banner) must also land in
+    the DM session as role=assistant. Otherwise follow-ups like "remind me
+    why we expired Bob" hit a bot with no recall.
+    """
+
+    def test_consensus_message_persisted_to_dm_session(self, mem):
+        send = _FakeSend()
+        alice = Participant(name="Alice", email="a@x.com", timezone="UTC", channel="gmail")
+        bob = Participant(name="Bob", email="b@x.com", timezone="UTC", channel="gmail")
+        req_id = _make_polling_request(mem, participants=[alice, bob], n_slots=2)
+
+        hydrated = sched_db.get_request(mem, req_id)
+        slot0 = hydrated.slots[0]
+        p_alice, p_bob = hydrated.participants
+
+        for p in (p_alice, p_bob):
+            sched_db.record_response(
+                mem,
+                request_id=req_id,
+                participant_db_id=p.db_id,
+                slot_db_id=slot0.db_id,
+                response="yes",
+            )
+            sched_db.update_participant_status(mem, p.db_id, "responded")
+
+        ctx = _make_ctx(mem)
+        job = SchedulingPollCheckJob(
+            ctx=ctx,
+            send_fn=send,
+            memory=mem,
+            dm_session="dm-12345",
+        )
+        job.run()
+
+        history = mem.recent_messages(session_id="dm-12345")
+        assistant_msgs = [m for m in history if m["role"] == "assistant"]
+        assert assistant_msgs, "consensus message should be persisted as assistant"
+        joined = "\n".join(m["content"] for m in assistant_msgs)
+        assert "Team sync" in joined
+        assert "consensus" in joined.lower()
+
+    def test_nudge_message_persisted_to_dm_session(self, mem):
+        send = _FakeSend()
+        alice = Participant(name="Alice", email="a@x.com", timezone="UTC", channel="gmail")
+        req_id = _make_polling_request(mem, participants=[alice])
+
+        hydrated = sched_db.get_request(mem, req_id)
+        p = hydrated.participants[0]
+
+        _set_outreach_sent_at(
+            mem,
+            p.db_id,
+            datetime.now(UTC) - timedelta(hours=25),
+            status="sent",
+        )
+
+        ctx = _make_ctx(mem)
+        job = SchedulingPollCheckJob(
+            ctx=ctx,
+            send_fn=send,
+            memory=mem,
+            dm_session="dm-12345",
+        )
+        job.run()
+
+        history = mem.recent_messages(session_id="dm-12345")
+        assistant_msgs = [m for m in history if m["role"] == "assistant"]
+        assert assistant_msgs, "nudge message should be persisted as assistant"
+        joined = "\n".join(m["content"] for m in assistant_msgs)
+        assert "Alice" in joined
+        assert "nudge" in joined.lower()
+        # Used in the request title above.
+        assert "Team sync" in joined
+
+    def test_no_persist_when_dm_session_not_configured(self, mem):
+        """Backwards-compat: legacy callers without dm_session must work."""
+        send = _FakeSend()
+        alice = Participant(name="Alice", email="a@x.com", timezone="UTC", channel="gmail")
+        req_id = _make_polling_request(mem, participants=[alice])
+
+        hydrated = sched_db.get_request(mem, req_id)
+        p = hydrated.participants[0]
+
+        _set_outreach_sent_at(
+            mem,
+            p.db_id,
+            datetime.now(UTC) - timedelta(hours=25),
+            status="sent",
+        )
+
+        ctx = _make_ctx(mem)
+        job = SchedulingPollCheckJob(ctx=ctx, send_fn=send)  # no memory/dm_session
+        job.run()
+
+        assert send.calls, "send_fn should still be called"
+        assert mem.recent_messages(session_id="dm-anything") == []

@@ -3,7 +3,6 @@ from __future__ import annotations
 from unittest.mock import MagicMock
 
 import pytest
-
 from cosinabox.jobs.inbound_email_check import InboundEmailCheckJob, is_urgent_sender
 from cosinabox.memory import Memory
 
@@ -102,3 +101,68 @@ class TestInboundEmailCheckJob:
 
         job.run()
         assert alert.call_count == 1  # still 1, not 2
+
+
+class TestPersistsToDmSession:
+    """When dm_session+memory are wired, the urgent-email alert the user sees
+    on Telegram must also land in the DM session as role=assistant. This is
+    what lets the agent recall the alert when the user replies "draft a
+    reply" or "who else got copied" in their DM.
+    """
+
+    def _make_urgent_msg(self, sender: str = "alice@bigcorp.com"):
+        from cosinabox.tools.google.gmail import GmailMessage
+
+        return GmailMessage(
+            id="m-persist-1",
+            sender=sender,
+            subject="Project status",
+            snippet="quick update on the launch",
+            date="2026-04-12",
+        )
+
+    def test_alert_text_persisted_to_dm_session_as_assistant(self, mem):
+        msg = self._make_urgent_msg()
+        mock_gmail = MagicMock()
+        mock_gmail.search.return_value = [msg]
+        sent: list[str] = []
+
+        job = InboundEmailCheckJob(
+            gmail=mock_gmail,
+            db=mem,
+            send_alert=sent.append,
+            urgent_senders=["@bigcorp.com"],
+            memory=mem,
+            dm_session="dm-12345",
+        )
+        job.run()
+
+        assert sent, "send_alert should have been called"
+        history = mem.recent_messages(session_id="dm-12345")
+        assistant_msgs = [m for m in history if m["role"] == "assistant"]
+        assert assistant_msgs, "alert text should be persisted as assistant"
+        # The DM-recall use case requires the EXACT text the user saw to be
+        # findable, so we assert the sender (the most distinctive signal a
+        # follow-up reply would reference) survives the persist.
+        joined = "\n".join(m["content"] for m in assistant_msgs)
+        assert "alice@bigcorp.com" in joined
+
+    def test_no_persist_when_dm_session_not_configured(self, mem):
+        """Backwards-compat: jobs constructed without dm_session/memory
+        must still alert and not error. (Existing OSS user repos may not
+        pass these params yet.)"""
+        msg = self._make_urgent_msg("bob@bigcorp.com")
+        mock_gmail = MagicMock()
+        mock_gmail.search.return_value = [msg]
+        sent: list[str] = []
+
+        job = InboundEmailCheckJob(
+            gmail=mock_gmail,
+            db=mem,
+            send_alert=sent.append,
+            urgent_senders=["@bigcorp.com"],
+        )
+        job.run()
+
+        assert sent, "send_alert should still fire when DM persist is off"
+        assert mem.recent_messages(session_id="dm-anything") == []
