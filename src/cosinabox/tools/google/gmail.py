@@ -30,6 +30,22 @@ class GmailMessage:
     date: str
 
 
+@dataclass
+class ThreadSummary:
+    """Thread-level view for the 'needs-my-reply' bucket.
+
+    ``last_sent_by_me`` is derived from the last message's ``SENT`` label —
+    no need to plumb through the user's own email address.
+    """
+
+    thread_id: str
+    subject: str
+    last_sender: str
+    last_date: str
+    last_snippet: str
+    last_sent_by_me: bool
+
+
 def _header(payload: dict[str, Any], name: str) -> str:
     for h in payload.get("headers", []):
         if h["name"].lower() == name.lower():
@@ -149,6 +165,54 @@ class GmailTool:
                 if msg.id not in seen:
                     seen.add(msg.id)
                     out.append(msg)
+        return out
+
+    def list_threads_needing_reply(
+        self, *, hours: int = 24, max_results: int = 15
+    ) -> list[ThreadSummary]:
+        """Return inbox threads where the LAST message isn't from the user.
+
+        Filters out promotions/social to cut noise. For each matching thread,
+        fetches the full thread metadata and inspects the last message's
+        ``SENT`` label — if it's there, the user already replied and the
+        thread is excluded. Otherwise the thread is surfaced with the other
+        party listed as ``last_sender``.
+        """
+        query = f"in:inbox newer_than:{hours}h -category:promotions -category:social"
+        seen: set[str] = set()
+        out: list[ThreadSummary] = []
+        for svc in self._services:
+            resp = (
+                svc.users().threads().list(userId="me", q=query, maxResults=max_results).execute()
+            )
+            for ref in resp.get("threads", []):
+                tid = ref["id"]
+                if tid in seen:
+                    continue
+                seen.add(tid)
+
+                thread = svc.users().threads().get(userId="me", id=tid, format="metadata").execute()
+                messages = thread.get("messages", [])
+                if not messages:
+                    continue
+
+                last = messages[-1]
+                labels = last.get("labelIds", []) or []
+                sent_by_me = "SENT" in labels
+                if sent_by_me:
+                    continue
+
+                payload = last.get("payload", {})
+                out.append(
+                    ThreadSummary(
+                        thread_id=tid,
+                        subject=_header(payload, "Subject"),
+                        last_sender=_header(payload, "From"),
+                        last_date=_header(payload, "Date"),
+                        last_snippet=last.get("snippet", ""),
+                        last_sent_by_me=False,
+                    )
+                )
         return out
 
     def compose_draft(
