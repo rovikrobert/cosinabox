@@ -1,3 +1,5 @@
+# ruff: noqa: I001  # pre-commit pins ruff<0.5 which groups stdlib + third-party;
+# CI installs latest which splits them. Suppress file-wide rather than pin CI.
 """Tests for `call_with_failover` — model-chain failover on 429/529.
 
 Ported from cos-agent (`agent_failover.py`) — see
@@ -10,6 +12,7 @@ from unittest.mock import MagicMock
 
 import anthropic
 import pytest
+
 from cosinabox.agent.failover import call_with_failover
 
 # ---------------------------------------------------------------------------
