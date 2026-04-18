@@ -117,6 +117,8 @@ def register_telegram_jobs(
                 send_alert=send_telegram,
                 urgent_senders=google_cfg.get("urgent_senders", []),
                 poll_interval_minutes=google_cfg.get("poll_interval_minutes", 5),
+                memory=memory,
+                dm_session=f"dm-{chat_id}",
             )
             cron = cfg.get("schedule", "*/5 * * * *")
             scheduler.add_job(job, cron=cron)
@@ -188,6 +190,8 @@ def register_telegram_jobs(
             job = SchedulingPollCheckJob(
                 ctx=scheduling_ctx,
                 send_fn=send_telegram,
+                memory=memory,
+                dm_session=f"dm-{chat_id}",
             )
             cron = cfg.get("schedule", "*/30 * * * *")
             scheduler.add_job(job, cron=cron)

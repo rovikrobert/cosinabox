@@ -60,13 +60,46 @@ class SchedulingPollCheckJob(Job):
         *,
         ctx: Any,
         send_fn: Callable[[str], None],
+        memory: Any | None = None,
+        dm_session: str | None = None,
     ) -> None:
         self.ctx = ctx
         self.send_fn = send_fn
+        # When wired, every text we send via send_fn is also persisted under
+        # this session as role=assistant. The DM agent loop reads from
+        # ``dm-{chat_id}``; persisting here lets follow-ups like "remind me
+        # why we expired Bob" find the original notification in the
+        # conversation history. Optional so legacy call sites and isolated
+        # unit tests still construct cleanly. See PR #51 (debrief) for the
+        # originating pattern.
+        self.memory = memory
+        self.dm_session = dm_session
 
     @property
     def db(self) -> Any:
         return self.ctx.db
+
+    def _send_and_persist(self, text: str) -> None:
+        """Send ``text`` via send_fn and persist a copy to the DM session.
+
+        Persist is best-effort: a failure to write to memory must never
+        block the user from seeing the notification. We log and continue.
+        """
+        self.send_fn(text)
+        if self.memory is None or self.dm_session is None:
+            return
+        try:
+            self.memory.store_message(
+                role="assistant",
+                content=text,
+                session_id=self.dm_session,
+            )
+        except Exception:
+            logger.warning(
+                "Failed to persist scheduling-poll send to DM session %s",
+                self.dm_session,
+                exc_info=True,
+            )
 
     def _send_nudge(self, participant: Any, title: str, age_hours: float) -> None:
         """Send a nudge notification.
@@ -122,7 +155,7 @@ class SchedulingPollCheckJob(Job):
             if sent_direct:
                 nudge_text += " (direct nudge sent)"
 
-        self.send_fn(nudge_text)
+        self._send_and_persist(nudge_text)
 
     def run(self, context: Any = None) -> str:
         active = sched_db.get_active_requests(
@@ -165,7 +198,7 @@ class SchedulingPollCheckJob(Job):
                     )
                     converged += 1
                     if consensus:
-                        self.send_fn(
+                        self._send_and_persist(
                             f"Scheduling: consensus reached for '{req.title}' -- "
                             f"slot {consensus.start_time.isoformat()}. "
                             "Use the book action to confirm."
@@ -250,7 +283,7 @@ class SchedulingPollCheckJob(Job):
                         SchedulingStatus.OWNER_REVIEW,
                     )
                     owner_review_total += 1
-                    self.send_fn(
+                    self._send_and_persist(
                         f"Scheduling: '{req.title}' returned for review -- "
                         f"expired without response: {', '.join(expired_names)}. "
                         "Book with partial responses, extend, or cancel."

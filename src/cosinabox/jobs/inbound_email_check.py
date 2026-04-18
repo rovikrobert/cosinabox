@@ -37,12 +37,45 @@ class InboundEmailCheckJob(Job):
         send_alert: Callable[[str], None],
         urgent_senders: list[str] | None = None,
         poll_interval_minutes: int = 5,
+        memory: Any | None = None,
+        dm_session: str | None = None,
     ) -> None:
         self.gmail = gmail
         self.db = db
         self.send_alert = send_alert
         self.urgent_senders = urgent_senders or []
         self.poll_interval_minutes = poll_interval_minutes
+        # When wired, every alert we send via send_alert is also persisted
+        # under this session as role=assistant. The DM agent loop reads
+        # from ``dm-{chat_id}``; persisting here lets follow-ups like
+        # "draft a reply" or "who else got copied" find the original
+        # alert in the conversation history. Optional so legacy call
+        # sites and isolated unit tests still construct cleanly. See
+        # PR #51 (PostMeetingDebriefJob) for the originating pattern.
+        self.memory = memory
+        self.dm_session = dm_session
+
+    def _send_and_persist(self, text: str) -> None:
+        """Send ``text`` via send_alert and persist a copy to the DM session.
+
+        Persist is best-effort: a failure to write to memory must never
+        block the user from seeing the alert. We log and continue.
+        """
+        self.send_alert(text)
+        if self.memory is None or self.dm_session is None:
+            return
+        try:
+            self.memory.store_message(
+                role="assistant",
+                content=text,
+                session_id=self.dm_session,
+            )
+        except Exception:
+            logger.warning(
+                "Failed to persist inbound-email alert to DM session %s",
+                self.dm_session,
+                exc_info=True,
+            )
 
     def run(self, context: Any = None) -> str:
         if self.gmail is None:
@@ -88,7 +121,7 @@ class InboundEmailCheckJob(Job):
             )
 
             if is_urgent_sender(msg.sender, self.urgent_senders):
-                self.send_alert(
+                self._send_and_persist(
                     f"[URGENT EMAIL] From: {msg.sender} | Subject: {msg.subject}\n{msg.snippet}"
                 )
                 alert_count += 1
