@@ -12,7 +12,11 @@ cosinabox is the engine for an open-source Chief of Staff agent. It ships as:
 - A Docker base image (`cosinabox/runtime:0.1.x`)
 - A user-repo template that's scaffolded by `cosinabox init`
 
-The engine is opinionated about being a Chief of Staff. See `docs/superpowers/specs/2026-04-11-cosinabox-design.md` (in the Cantina repo, until this file moves to engine) for the full design and the v0.1 scope.
+The engine is opinionated about being a Chief of Staff. See `docs/specs/2026-04-11-cosinabox-design.md` for the full design and the v0.1 scope.
+
+## Cutover context
+
+The primary maintainer is migrating a legacy private Chief of Staff implementation onto cosinabox. New CoS features should default to this engine. External contributors can ignore this — the engine is self-contained and every feature here is meant for OSS users. The migration plan itself lives in the maintainer's private repo, not here.
 
 ## Project structure
 
@@ -36,7 +40,7 @@ cosinabox/
 ├── tests/
 ├── docs/
 │   ├── retros/             # One retro per completed plan
-│   └── discipline/         # Engine-side discipline doc (mirrors Cantina's)
+│   └── discipline/         # Engine-side discipline doc
 ├── pyproject.toml
 ├── .pre-commit-config.yaml
 ├── .github/workflows/      # CI: test, lint, type-check, release
@@ -77,7 +81,7 @@ These are strong defaults. Breaking them requires a one-line justification in th
 
 ## Workflow rules
 
-1. **Read the active plan first.** Every session that's executing a plan starts by reading the plan from `docs/superpowers/plans/`, finding the next unchecked task, and starting there. Do not re-read prior conversation transcripts. The plan is the source of truth.
+1. **Read the active plan first.** Every session that's executing a plan starts by reading the plan from `docs/plans/`, finding the next unchecked task, and starting there. Do not re-read prior conversation transcripts. The plan is the source of truth.
 
 2. **Estimate every task.** When writing or executing a plan, each task has an estimate (5 min / 30 min / 2 hr / 1 day). When a task overshoots by 2x or more, note the overshoot in the milestone retro.
 
@@ -91,7 +95,7 @@ These are strong defaults. Breaking them requires a one-line justification in th
 
 Every line of code, config, and documentation in this engine will be read by someone who didn't write it. Adopt the perspective of a founder who just ran `cosinabox init` and is setting up their CoS for the first time via Claude Code.
 
-1. **No hardcoded names, orgs, or domains.** Descriptions, prompts, and tool schemas must be generic. "Search emails matching a query" not "Search Rovik's Gmail." If you see a hardcoded name in a schema or prompt, fix it.
+1. **No hardcoded names, orgs, or domains.** Descriptions, prompts, and tool schemas must be generic. "Search emails matching a query" not "Search the user's Gmail for Acme invoices." If you see a hardcoded name in a schema or prompt, fix it.
 
 2. **Every capability must be discoverable.** If a feature exists but can only be found by reading source code, it doesn't exist for OSS users. Agent-facing docs (`docs/agent/`) are the discovery surface — update them when adding or changing features.
 
@@ -107,7 +111,7 @@ Every line of code, config, and documentation in this engine will be read by som
 
 ## Proactive suggestions (things to watch for and surface)
 
-These aren't rules — they're patterns the agent should notice and surface to Rovik without being asked.
+These aren't rules — they're patterns the agent should notice and surface to the maintainer without being asked.
 
 1. **A task is taking too long.** If you've been on Task N for >2x the estimate, surface the overshoot and ask whether to continue, defer, or revise the task.
 
@@ -117,7 +121,7 @@ These aren't rules — they're patterns the agent should notice and surface to R
 
 4. **A defaults.py value is being overridden in business logic.** If you see `if cost > 0.75:` instead of `if cost > defaults.COST_PER_MESSAGE_CAP_USD:`, fix it. Magic numbers are a leak of operational defaults.
 
-5. **A test imports personal data.** If a test references "Daniel" or "Cantina" or any specific stakeholder, surface it — the engine should be generic.
+5. **A test imports personal data.** If a test references any specific real-world name, company, or stakeholder, surface it — the engine should be generic.
 
 6. **The plan is drifting.** If the current commit touches files that aren't mentioned in any task of the active plan, surface the drift and ask whether to pause and update the plan.
 
@@ -159,11 +163,11 @@ The currently-executing plan is referenced in `docs/active-plan.md` (a one-line 
 
 ## Related
 
-- **Spec:** `docs/superpowers/specs/2026-04-11-cosinabox-design.md` (Cantina, until moved)
-- **Plan 1:** `docs/superpowers/plans/2026-04-11-cosinabox-engine-mvp.md` (Cantina, until moved)
-- **Engine-side discipline doc:** `docs/discipline/cosinabox-development-discipline.md` (will be a sibling of this file once it moves)
+- **Spec:** `docs/specs/2026-04-11-cosinabox-design.md`
+- **Plan 1:** `docs/plans/2026-04-11-cosinabox-engine-mvp.md`
+- **Engine-side discipline doc:** `docs/discipline/cosinabox-development-discipline.md`
 - **User-repo CLAUDE.md template:** `src/cosinabox/templates/user-repo/CLAUDE.md` (the canonical template that every `cosinabox init` user receives)
 
 ## What's next
 
-If you're a fresh session and the plan says "execute the next unchecked task," go to `docs/active-plan.md`, follow the link, find the next `- [ ]` checkbox, and start there. If anything in this CLAUDE.md is unclear or contradicts the plan, surface the contradiction to Rovik before proceeding — don't guess.
+If you're a fresh session and the plan says "execute the next unchecked task," go to `docs/active-plan.md`, follow the link, find the next `- [ ]` checkbox, and start there. If anything in this CLAUDE.md is unclear or contradicts the plan, surface the contradiction to the maintainer before proceeding — don't guess.
