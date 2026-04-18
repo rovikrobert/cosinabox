@@ -117,3 +117,10 @@ KEEP_WARM_MAX_BRIEFING_ROWS: int = 10
 # real cases without allowing back-to-back meetings to cross-match.
 # (2026-04-17 — added when fixing cross-matched debrief transcripts.)
 TRANSCRIPT_TIME_WINDOW_SECONDS: int = 30 * 60
+
+# Auth-health watcher cadence. Every 15 min is short enough that a revoked
+# refresh token surfaces within a meeting-length window, and long enough
+# that we don't hammer Google's token endpoint. Chosen 2026-04-17 after a
+# revoked token looped `invalid_grant` silently for days. See
+# docs/specs/2026-04-17-auth-health-watcher-design.md.
+AUTH_HEALTH_DEFAULT_SCHEDULE: str = "*/15 * * * *"
