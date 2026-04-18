@@ -72,3 +72,24 @@ MODEL_FAILOVER_CHAIN: tuple[str, ...] = (
 # (2026-04-12)
 ADVISOR_ENABLED: bool = True
 ADVISOR_MAX_USES: int = 2
+
+# Personal-block title patterns that short-circuit pre-meeting prep and
+# post-meeting debrief jobs. These are "not a real meeting" signals — the
+# calendar entry exists to block time, not to convene with others. Matched
+# as case-insensitive substrings. Users can extend via per-job `skip_titles`
+# in integrations.yaml. (2026-04-18 — triggered by a 22:30 "Decompress" block
+# generating a full prep brief.)
+DEFAULT_PERSONAL_BLOCK_PATTERNS: frozenset[str] = frozenset(
+    {
+        "decompress",
+        "focus",
+        "deep work",
+        "lunch",
+        "break",
+        "commute",
+        "gym",
+        "workout",
+        "block",
+        "hold",
+    }
+)

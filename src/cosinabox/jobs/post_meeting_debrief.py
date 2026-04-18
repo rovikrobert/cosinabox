@@ -7,6 +7,7 @@ from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
+from cosinabox.jobs._meeting_filter import is_prep_worthy
 from cosinabox.jobs.base import Job
 
 logger = logging.getLogger(__name__)
@@ -106,7 +107,9 @@ class PostMeetingDebriefJob(Job):
                 continue
             if not (window_start <= evt.end <= window_end):
                 continue
-            if any(skip in evt.summary.lower() for skip in self.skip_titles):
+            if not is_prep_worthy(evt, skip_titles=self.skip_titles):
+                # Solo block, personal pattern, or user skip — no debrief.
+                # Mark it so we don't re-evaluate every poll cycle.
                 self._mark_debriefed(uid)
                 continue
 

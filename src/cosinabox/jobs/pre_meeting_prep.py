@@ -6,6 +6,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from cosinabox import defaults
+from cosinabox.jobs._meeting_filter import is_prep_worthy
 from cosinabox.jobs.base import Job, JobContext
 
 
@@ -52,7 +53,7 @@ class PreMeetingPrepJob(Job):
             for e in events
             if e.id not in self._prepped
             and window_start <= e.start <= window_end
-            and not any(skip in e.summary.lower() for skip in self.skip_titles)
+            and is_prep_worthy(e, skip_titles=self.skip_titles)
         ]
 
     def run(self, context: JobContext) -> str:
