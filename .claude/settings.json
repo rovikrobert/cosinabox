@@ -2,8 +2,12 @@
   "hooks": {
     "SessionStart": [
       {
-        "command": ".claude/hooks/session-start-worktree-check.sh",
-        "matchers": []
+        "hooks": [
+          {
+            "type": "command",
+            "command": ".claude/hooks/session-start-worktree-check.sh"
+          }
+        ]
       }
     ]
   }
