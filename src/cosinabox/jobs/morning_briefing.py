@@ -60,12 +60,30 @@ class MorningBriefingJob(Job):
         except Exception:
             sections.append("RECENT EMAIL:\n(unavailable)")
 
-        # Email — unreplied (search for unread)
+        # Email — threads where the LAST message isn't from the user.
+        # `is:unread` is a bad proxy: it catches things you opened on mobile
+        # and things you already replied to on another device. `threads.list`
+        # + SENT-label check on the last message is deterministic.
         try:
-            unreplied = self.gmail.search("is:unread newer_than:24h", max_results=10)
-            if unreplied:
-                lines = [f"- From: {e.sender} | Subject: {e.subject}" for e in unreplied]
-                sections.append("UNREPLIED EMAIL (24h):\n" + "\n".join(lines))
+            needs_reply = self.gmail.list_threads_needing_reply(hours=24, max_results=10)
+            if needs_reply:
+                lines = [
+                    f"- From: {t.last_sender} | Subject: {t.subject}"
+                    + (f" | Snippet: {t.last_snippet[:120]}" if t.last_snippet else "")
+                    for t in needs_reply
+                ]
+                sections.append("INBOX NEEDING REPLY (24h):\n" + "\n".join(lines))
+        except AttributeError:
+            # Older GmailTool without list_threads_needing_reply — fall back
+            # to the old unread search so existing deployments stay working
+            # until they upgrade. Remove once the grace window lapses.
+            try:
+                unreplied = self.gmail.search("is:unread newer_than:24h", max_results=10)
+                if unreplied:
+                    lines = [f"- From: {e.sender} | Subject: {e.subject}" for e in unreplied]
+                    sections.append("UNREAD EMAIL (24h):\n" + "\n".join(lines))
+            except Exception:
+                pass
         except Exception:
             pass
 
@@ -108,14 +126,23 @@ class MorningBriefingJob(Job):
             f"Generate {self.name_for_briefing}'s morning briefing for TODAY: {today}.\n\n"
             "FORMAT: Max 25 lines. One line per item. Skip empty sections.\n"
             "1. SCHEDULE — meetings with times. Flag any needing prep.\n"
-            "2. EMAIL — only items needing action TODAY. Who, subject, action needed.\n"
+            "2. EMAIL — items where the ball is in the user's court.\n"
+            "   Only surface threads from INBOX NEEDING REPLY. For each, lead with\n"
+            "   the pending ask; don't recommend actions the user already took.\n"
             "3. PRIORITIES — top 3 based on calendar + email signals.\n"
             "4. STALE FOLLOW-UPS — anyone overdue on contact cadence.\n\n"
             "RULES:\n"
             "- Do not invent items not in the pre-fetched data.\n"
             "- If a section has nothing, skip it entirely.\n"
             "- Be direct. No filler. Lead with the most important thing.\n"
-            "- Reference people by name, not email address.\n\n"
+            "- Reference people by name, not email address.\n"
+            "- The INBOX NEEDING REPLY bucket only contains threads where the\n"
+            "  LAST message is not from the user — the ball is already in the\n"
+            '  user\'s court. Frame each item as an open ask, not as "verify"\n'
+            '  or "confirm you replied".\n'
+            "- If a thread isn't in INBOX NEEDING REPLY, the user has replied\n"
+            "  (or the thread is archived). Do not recommend further action on\n"
+            "  it unless the user explicitly asked about it.\n\n"
             f"--- PRE-FETCHED DATA ---\n{prefetched}\n--- END ---"
         )
 
