@@ -4,6 +4,7 @@ from datetime import UTC, datetime, timedelta
 from unittest.mock import MagicMock
 
 import pytest
+
 from cosinabox.jobs.post_meeting_debrief import PostMeetingDebriefJob, _transcript_matches
 from cosinabox.memory import Memory
 

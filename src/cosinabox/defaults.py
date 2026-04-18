@@ -111,3 +111,9 @@ KEEP_WARM_DEFAULT_CADENCE_DAYS: int = 14
 # Briefings cap at 10 overdue rows so a quiet week doesn't crowd out
 # other signals when something slipped a month ago.
 KEEP_WARM_MAX_BRIEFING_ROWS: int = 10
+
+# Fireflies transcripts and calendar events drift by ~minutes due to clock
+# skew and meeting-end vs transcript-creation timing. +/-30min covers most
+# real cases without allowing back-to-back meetings to cross-match.
+# (2026-04-17 — added when fixing cross-matched debrief transcripts.)
+TRANSCRIPT_TIME_WINDOW_SECONDS: int = 30 * 60
