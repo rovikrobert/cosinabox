@@ -4,6 +4,7 @@ from datetime import UTC, datetime, timedelta
 from unittest.mock import MagicMock
 
 import pytest
+
 from cosinabox.jobs.post_meeting_debrief import PostMeetingDebriefJob, _transcript_matches
 from cosinabox.memory import Memory
 
@@ -433,25 +434,3 @@ class TestPersistsToDmSession:
         assert sent, "send_fn should still be called when DM persist is off"
         # No DM session key should have been written.
         assert mem.recent_messages(session_id="dm-anything") == []
-
-    def test_no_persist_when_dm_session_not_configured(self, mem):
-        """Backwards-compat: jobs constructed without dm_session/memory
-        must still send and not error. (Existing call sites in OSS user
-        repos may not pass these params yet.)"""
-        cal = self._calendar_with_one_ended_meeting("Standup")
-        sent: list[str] = []
-
-        job = PostMeetingDebriefJob(
-            calendar=cal,
-            fireflies=None,
-            db=mem,
-            send_fn=sent.append,
-            skip_titles=[],
-        )
-        result = job.run()
-
-        assert "1" in result
-        assert sent, "send_fn should still be called when DM persist is off"
-        # No DM session key should have been written.
-        assert mem.recent_messages(session_id="dm-anything") == []
->>>>>>> b408158 (test: persist scheduled-job sends to DM session for recall (red))
