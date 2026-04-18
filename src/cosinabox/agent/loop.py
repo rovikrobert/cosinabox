@@ -22,6 +22,9 @@ from cosinabox import defaults
 from cosinabox.agent.cost import CostExceeded, CostTracker, estimate_cost
 from cosinabox.agent.routing import SONNET_MODEL_ID, Router
 
+# Imported lazily inside run() to avoid a module-level circular import:
+# failover.py needs _ADVISOR_TOOL / _ADVISOR_BETA from this module.
+
 logger = logging.getLogger(__name__)
 
 # Advisor tool definition (beta API)
@@ -260,31 +263,19 @@ class AgentLoop:
                 return result
 
             try:
-                call_kwargs: dict[str, Any] = {
-                    "model": model,
-                    "max_tokens": 4096,
-                    "messages": call_messages,
-                }
+                from cosinabox.agent.failover import call_with_failover
 
-                # Prompt caching: mark system prompt for cache
-                if effective_system:
-                    call_kwargs["system"] = _add_cache_control(effective_system)
-
-                if thinking:
-                    call_kwargs["thinking"] = thinking
-
-                # Inject tools: advisor + user tools when advisor is active,
-                # just user tools otherwise
-                if use_advisor:
-                    call_kwargs["tools"] = [_ADVISOR_TOOL] + effective_tool_definitions
-                    response = self.client.beta.messages.create(
-                        betas=[_ADVISOR_BETA],
-                        **call_kwargs,
-                    )
-                else:
-                    if effective_tool_definitions:
-                        call_kwargs["tools"] = effective_tool_definitions
-                    response = self.client.messages.create(**call_kwargs)
+                system_payload = _add_cache_control(effective_system) if effective_system else None
+                response, model_used = call_with_failover(
+                    self.client,
+                    model,
+                    system=system_payload,
+                    tools=effective_tool_definitions,
+                    messages=call_messages,
+                    max_tokens=4096,
+                    thinking=thinking,
+                    use_advisor=use_advisor,
+                )
 
                 # Reset circuit breaker on success
                 with _circuit_breaker_lock:
@@ -314,9 +305,10 @@ class AgentLoop:
             result.input_tokens += response.usage.input_tokens
             result.output_tokens += response.usage.output_tokens
 
-            # Track session cost
+            # Track session cost against the model that actually responded
+            # (failover may have stepped down from the requested model).
             call_cost = estimate_cost(
-                model,
+                model_used,
                 response.usage.input_tokens,
                 response.usage.output_tokens,
             )

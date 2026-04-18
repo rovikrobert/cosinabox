@@ -57,6 +57,16 @@ DEFAULT_TIMEZONE: str = "UTC"
 SONNET_MODEL_ID: str = "claude-sonnet-4-6"
 OPUS_MODEL_ID: str = "claude-opus-4-6"
 
+# API failover chain. On 429/529/overloaded, the agent walks this list
+# from the requested model forward. Chosen 2026-04-11 (originally in
+# cos-agent) — Opus for strategy, Sonnet as workhorse, Haiku as the
+# last-resort reply-with-something model. Ported to cosinabox 2026-04-17.
+MODEL_FAILOVER_CHAIN: tuple[str, ...] = (
+    "claude-opus-4-6",
+    "claude-sonnet-4-6",
+    "claude-haiku-4-5-20251001",
+)
+
 # Advisor tool: Sonnet executor + Opus advisor (beta API).
 # When enabled, strategic prompts route to Sonnet + advisor instead of Opus.
 # (2026-04-12)
