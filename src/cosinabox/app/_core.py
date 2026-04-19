@@ -83,6 +83,7 @@ class App:
         personality: str,
         name: str,
         stakeholders: list[dict[str, Any]],
+        event_relevance: dict[str, list[str]] | None = None,
     ) -> None:
         from cosinabox.app.jobs import register_core_jobs
 
@@ -95,6 +96,7 @@ class App:
             personality=personality,
             name=name,
             stakeholders=stakeholders,
+            event_relevance=event_relevance,
         )
 
     # ------------------------------------------------------------------
@@ -124,6 +126,17 @@ class App:
         personality, name, timezone = self._load_personality()
         jobs_config = self._load_jobs()
         integrations = self._load_integrations()
+
+        # Optional event-relevance allowlist (pre_meeting_prep +
+        # post_meeting_debrief only). Empty = no narrowing.
+        from cosinabox.app.config import load_personality_frontmatter
+
+        frontmatter = load_personality_frontmatter(self.config_dir)
+        event_relevance_raw = frontmatter.get("event_relevance") or {}
+        event_relevance: dict[str, list[str]] = {
+            "keywords": list(event_relevance_raw.get("keywords") or []),
+            "domains": list(event_relevance_raw.get("domains") or []),
+        }
 
         # Set runtime timezone from personality.md — scheduler uses this
         from cosinabox.timezone import set_timezone
@@ -284,6 +297,7 @@ class App:
             personality=personality,
             name=name,
             stakeholders=stakeholders,
+            event_relevance=event_relevance,
         )
 
         # --- Telegram ---
@@ -309,6 +323,7 @@ class App:
             rela_agent=rela_agent,
             scheduling_ctx=scheduling_ctx,
             anthropic_factory=_Anthropic,
+            event_relevance=event_relevance,
         )
 
         self._wire_telegram_output(scheduler, send_telegram)
