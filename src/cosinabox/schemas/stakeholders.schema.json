@@ -14,6 +14,7 @@
           "name": {"type": "string"},
           "role": {"type": "string"},
           "cadence": {"enum": ["daily", "weekly", "biweekly", "monthly", "quarterly"]},
+          "email": {"type": "string", "format": "email"},
           "last_contact": {"type": "string", "format": "date"},
           "notes": {"type": "string"}
         }
