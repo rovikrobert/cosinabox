@@ -67,6 +67,8 @@ class PostMeetingDebriefJob(Job):
         send_fn: Callable[[str], None],
         skip_titles: list[str] | None = None,
         rela: Any | None = None,
+        relevance_keywords: list[str] | None = None,
+        relevance_domains: list[str] | None = None,
     ) -> None:
         self.calendar = calendar
         self.fireflies = fireflies
@@ -74,6 +76,8 @@ class PostMeetingDebriefJob(Job):
         self.send_fn = send_fn
         self.skip_titles = [t.lower() for t in (skip_titles or [])]
         self.rela = rela
+        self.relevance_keywords = list(relevance_keywords or [])
+        self.relevance_domains = list(relevance_domains or [])
 
     def _is_debriefed(self, uid: str) -> bool:
         cur = self.db._conn.execute(
@@ -107,7 +111,12 @@ class PostMeetingDebriefJob(Job):
                 continue
             if not (window_start <= evt.end <= window_end):
                 continue
-            if not is_prep_worthy(evt, skip_titles=self.skip_titles):
+            if not is_prep_worthy(
+                evt,
+                skip_titles=self.skip_titles,
+                relevance_keywords=self.relevance_keywords,
+                relevance_domains=self.relevance_domains,
+            ):
                 # Solo block, personal pattern, or user skip — no debrief.
                 # Mark it so we don't re-evaluate every poll cycle.
                 self._mark_debriefed(uid)

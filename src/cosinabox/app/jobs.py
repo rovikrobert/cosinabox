@@ -22,6 +22,7 @@ def register_core_jobs(
     personality: str,
     name: str,
     stakeholders: list[dict[str, Any]],
+    event_relevance: dict[str, list[str]] | None = None,
 ) -> None:
     """Register the 5 core scheduled jobs (no send_telegram dependency)."""
     from cosinabox.jobs.evening_wrap import EveningWrapJob
@@ -29,6 +30,9 @@ def register_core_jobs(
     from cosinabox.jobs.morning_briefing import MorningBriefingJob
     from cosinabox.jobs.pre_meeting_prep import PreMeetingPrepJob
     from cosinabox.jobs.weekly_review import WeeklyReviewJob
+
+    relevance_keywords = list((event_relevance or {}).get("keywords") or [])
+    relevance_domains = list((event_relevance or {}).get("domains") or [])
 
     for job_name, cfg in jobs_config.items():
         if not cfg.get("enabled"):
@@ -62,6 +66,8 @@ def register_core_jobs(
                 agent_loop=loop,
                 personality=personality,
                 skip_titles=cfg.get("skip_if_calendar_title_matches", []),
+                relevance_keywords=relevance_keywords,
+                relevance_domains=relevance_domains,
             )
             cron = cfg.get("schedule", "*/5 * * * *")
             scheduler.add_job(job, cron=cron)
@@ -105,8 +111,11 @@ def register_telegram_jobs(
     rela_agent: Any,
     scheduling_ctx: Any | None,  # SchedulingContext or None
     anthropic_factory: Any,
+    event_relevance: dict[str, list[str]] | None = None,
 ) -> None:
     """Register jobs that need send_telegram (runs AFTER send_telegram exists)."""
+    relevance_keywords = list((event_relevance or {}).get("keywords") or [])
+    relevance_domains = list((event_relevance or {}).get("domains") or [])
     for job_name, cfg in jobs_config.items():
         if not cfg.get("enabled"):
             continue
@@ -174,6 +183,8 @@ def register_telegram_jobs(
                     [],
                 ),
                 rela=rela_agent,
+                relevance_keywords=relevance_keywords,
+                relevance_domains=relevance_domains,
             )
             cron = cfg.get("schedule", "*/5 * * * *")
             scheduler.add_job(job, cron=cron)

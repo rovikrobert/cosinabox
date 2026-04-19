@@ -22,6 +22,8 @@ class PreMeetingPrepJob(Job):
         minutes_before: int = defaults.PRE_MEETING_PREP_MINUTES_BEFORE,
         window_minutes: int = defaults.PRE_MEETING_PREP_WINDOW_MINUTES,
         skip_titles: list[str] | None = None,
+        relevance_keywords: list[str] | None = None,
+        relevance_domains: list[str] | None = None,
     ) -> None:
         self.calendar = calendar
         self.agent_loop = agent_loop
@@ -29,6 +31,8 @@ class PreMeetingPrepJob(Job):
         self.minutes_before = minutes_before
         self.window = window_minutes
         self.skip_titles = [t.lower() for t in (skip_titles or [])]
+        self.relevance_keywords = list(relevance_keywords or [])
+        self.relevance_domains = list(relevance_domains or [])
         # Track which events we've already prepped, with timestamps so we
         # can evict entries older than the prep window * 2. Prevents
         # unbounded memory growth on long-running deployments.
@@ -53,7 +57,12 @@ class PreMeetingPrepJob(Job):
             for e in events
             if e.id not in self._prepped
             and window_start <= e.start <= window_end
-            and is_prep_worthy(e, skip_titles=self.skip_titles)
+            and is_prep_worthy(
+                e,
+                skip_titles=self.skip_titles,
+                relevance_keywords=self.relevance_keywords,
+                relevance_domains=self.relevance_domains,
+            )
         ]
 
     def run(self, context: JobContext) -> str:
