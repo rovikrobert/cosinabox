@@ -80,7 +80,11 @@ def register_core_jobs(
             logger.info("Registered %s at %s", job_name, cfg["schedule"])
 
         elif job_name == "followup_reminder":
-            job = FollowupReminderJob(stakeholders=stakeholders)
+            # Pass gmail so the job can check recent sent-mail to each
+            # stakeholder's email — the yaml ``last_contact`` field rarely
+            # auto-updates and would otherwise produce false-positive
+            # "cooling" reminders for people you emailed yesterday.
+            job = FollowupReminderJob(stakeholders=stakeholders, gmail=gmail)
             cron = cfg.get("schedule", "30 9 * * *")
             scheduler.add_job(job, cron=cron)
             logger.info("Registered %s at %s", job_name, cron)
