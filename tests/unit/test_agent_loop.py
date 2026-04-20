@@ -3,6 +3,7 @@ from __future__ import annotations
 from unittest.mock import MagicMock
 
 import pytest
+
 from cosinabox.agent.cost import CostTracker
 from cosinabox.agent.loop import AgentLoop
 from cosinabox.agent.routing import Router
