@@ -30,13 +30,30 @@ from cosinabox.consult.rate_limit import (
     reset_default_rate_limiter,
 )
 
+# The MCP server factory depends on the optional ``mcp`` extra. Importing
+# it lazily keeps ``from cosinabox.consult import ...`` usable for callers
+# that only want the handler + primitives without installing the MCP SDK.
+try:
+    from cosinabox.consult.server import (
+        HandlerDeps,
+        MemoryClientAdapter,
+        build_consult_server,
+    )
+except ImportError:  # pragma: no cover - exercised when mcp extra is absent
+    HandlerDeps = None  # type: ignore[assignment,misc]
+    MemoryClientAdapter = None  # type: ignore[assignment,misc]
+    build_consult_server = None  # type: ignore[assignment]
+
 __all__ = [
     "ConsultError",
     "ConsultRequest",
     "ConsultResponse",
+    "HandlerDeps",
+    "MemoryClientAdapter",
     "Metrics",
     "Persona",
     "RateLimiter",
+    "build_consult_server",
     "build_consult_system_prompt",
     "get_default_metrics",
     "get_default_rate_limiter",
