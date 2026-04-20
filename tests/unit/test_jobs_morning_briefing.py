@@ -130,3 +130,110 @@ def test_grounded_mode_uses_commitments_for_priorities(tmp_path) -> None:
     assert "VERIFIED DONE" in prompt
     # No fallback text when db is present.
     assert "top 3 based on calendar + email signals" not in prompt
+
+
+def test_keep_warm_section_rendered_from_attio_overdue() -> None:
+    """When Attio returns overdue Keep Warm people, prefetch + prompt include them."""
+    from cosinabox.tools.attio import KeepWarmPerson
+
+    gmail = MagicMock()
+    gmail.list_recent.return_value = []
+    gmail.list_threads_needing_reply.return_value = []
+    cal = MagicMock()
+    cal.list_events.return_value = []
+
+    attio = MagicMock()
+    attio.get_keep_warm_overdue.return_value = [
+        KeepWarmPerson(
+            name="Sarah Chen",
+            record_id="r1",
+            cadence_days=30,
+            note="Lead Investor",
+            last_interaction="2026-03-01T00:00:00Z",
+            days_since=45,
+        ),
+        KeepWarmPerson(
+            name="Tom Vasquez",
+            record_id="r2",
+            cadence_days=14,
+            note=None,
+            last_interaction="2026-03-22T00:00:00Z",
+            days_since=29,
+        ),
+    ]
+
+    fake_loop = MagicMock()
+    fake_loop.run.return_value.final_text = "ok"
+    job = MorningBriefingJob(
+        gmail=gmail,
+        calendar=cal,
+        agent_loop=fake_loop,
+        personality="",
+        name_for_briefing="Alex",
+        attio=attio,
+    )
+    job.run(JobContext())
+
+    prompt = fake_loop.run.call_args.kwargs["prompt"]
+    assert "KEEP WARM — OVERDUE" in prompt
+    assert "Sarah Chen" in prompt
+    assert "Tom Vasquez" in prompt
+    assert "45d since last contact" in prompt
+    assert "cadence: 30d" in prompt
+    # Note surfaces when present, absent when not.
+    assert "Lead Investor" in prompt
+    # Prompt adds the section 5 instruction.
+    assert "5. KEEP WARM" in prompt
+
+
+def test_keep_warm_omitted_when_no_overdue() -> None:
+    """Attio returns an empty overdue list → KEEP WARM section quietly skipped."""
+    gmail = MagicMock()
+    gmail.list_recent.return_value = []
+    gmail.list_threads_needing_reply.return_value = []
+    cal = MagicMock()
+    cal.list_events.return_value = []
+
+    attio = MagicMock()
+    attio.get_keep_warm_overdue.return_value = []
+
+    fake_loop = MagicMock()
+    fake_loop.run.return_value.final_text = "ok"
+    job = MorningBriefingJob(
+        gmail=gmail,
+        calendar=cal,
+        agent_loop=fake_loop,
+        personality="",
+        name_for_briefing="Alex",
+        attio=attio,
+    )
+    job.run(JobContext())
+
+    prompt = fake_loop.run.call_args.kwargs["prompt"]
+    # Section 5 instruction may still be in the prompt but the data block
+    # does not contain a KEEP WARM section header.
+    assert "KEEP WARM — OVERDUE:\n-" not in prompt
+
+
+def test_keep_warm_section_skipped_when_attio_none() -> None:
+    """No attio plumbed → no API call, no section, briefing still works."""
+    gmail = MagicMock()
+    gmail.list_recent.return_value = []
+    gmail.list_threads_needing_reply.return_value = []
+    cal = MagicMock()
+    cal.list_events.return_value = []
+
+    fake_loop = MagicMock()
+    fake_loop.run.return_value.final_text = "ok"
+    job = MorningBriefingJob(
+        gmail=gmail,
+        calendar=cal,
+        agent_loop=fake_loop,
+        personality="",
+        name_for_briefing="Alex",
+        # attio omitted → None default
+    )
+    job.run(JobContext())
+
+    prompt = fake_loop.run.call_args.kwargs["prompt"]
+    assert "KEEP WARM — OVERDUE" not in prompt

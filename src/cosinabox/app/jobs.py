@@ -24,6 +24,7 @@ def register_core_jobs(
     stakeholders: list[dict[str, Any]],
     event_relevance: dict[str, list[str]] | None = None,
     memory: Any | None = None,
+    attio: Any | None = None,
 ) -> None:
     """Register the 5 core scheduled jobs (no send_telegram dependency)."""
     from cosinabox.jobs.evening_wrap import EveningWrapJob
@@ -48,6 +49,7 @@ def register_core_jobs(
                 name_for_briefing=name,
                 stakeholders=stakeholders,
                 db=memory,
+                attio=attio,
             )
             scheduler.add_job(job, cron=cfg["schedule"])
             logger.info("Registered %s at %s", job_name, cfg["schedule"])

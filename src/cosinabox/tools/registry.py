@@ -271,6 +271,60 @@ ATTIO_TOOL_DEFINITIONS: list[dict[str, Any]] = [
             "required": [],
         },
     },
+    {
+        "name": "keep_warm_set",
+        "description": (
+            "Flag a person as Keep Warm with a per-person cadence in days. "
+            "The morning briefing will surface them as overdue when "
+            "days-since-last-contact exceeds their cadence. Use when the user "
+            "asks to remember someone (e.g., 'remind me to stay in touch with "
+            "Sarah every two weeks'). Cadence is clamped to [1, 365]."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "person": {"type": "string", "description": "Person's name."},
+                "cadence_days": {
+                    "type": "integer",
+                    "description": "How many days between touches (e.g., 14).",
+                },
+                "note": {
+                    "type": "string",
+                    "description": "Optional short note (e.g., 'Lead investor').",
+                },
+            },
+            "required": ["person", "cadence_days"],
+        },
+    },
+    {
+        "name": "keep_warm_unset",
+        "description": (
+            "Remove a person from Keep Warm. Use when a relationship is "
+            "paused, deprioritized, or the person moved on. Optional note "
+            "captures why (e.g., 'deprioritized 2026-05-12')."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "person": {"type": "string"},
+                "note": {"type": "string"},
+            },
+            "required": ["person"],
+        },
+    },
+    {
+        "name": "keep_warm_list",
+        "description": (
+            "List all Keep Warm people, most overdue first. Shows days since "
+            "last contact and per-person cadence. Use when the user asks "
+            "'who's on Keep Warm' or 'who am I overdue on.'"
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {},
+            "required": [],
+        },
+    },
 ]
 
 # ---------------------------------------------------------------------------
@@ -504,10 +558,51 @@ def _build_attio_handlers(attio: Any) -> dict[str, Callable[..., str]]:
         results = attio.list_people(limit=limit)
         return _serialize(results)
 
+    def _format_keep_warm_row(p: Any) -> str:
+        note_part = f". Note: {p.note}" if p.note else ""
+        days = (
+            f"{p.days_since}d since last contact"
+            if p.days_since is not None
+            else "no last contact on record"
+        )
+        return f"- {p.name} — {days} (cadence: {p.cadence_days}d){note_part}"
+
+    def keep_warm_set(person: str, cadence_days: int, note: str | None = None) -> str:
+        try:
+            out = attio.set_keep_warm(person=person, cadence_days=cadence_days, note=note)
+        except Exception as exc:
+            return f"keep_warm_set failed: {exc}"
+        if out.get("status") != "ok":
+            return f"keep_warm_set failed: {out.get('message', 'unknown')}"
+        return f"Flagged {out['person']} as Keep Warm (cadence: {out['cadence_days']}d)."
+
+    def keep_warm_unset(person: str, note: str | None = None) -> str:
+        try:
+            out = attio.unset_keep_warm(person=person, note=note)
+        except Exception as exc:
+            return f"keep_warm_unset failed: {exc}"
+        if out.get("status") != "ok":
+            return f"keep_warm_unset failed: {out.get('message', 'unknown')}"
+        return f"Removed {out['person']} from Keep Warm."
+
+    def keep_warm_list() -> str:
+        try:
+            people = attio.list_keep_warm()
+        except Exception as exc:
+            return f"keep_warm_list failed: {exc}"
+        if not people:
+            return "No one flagged as Keep Warm."
+        lines = [f"{len(people)} Keep Warm people (most overdue first):"]
+        lines.extend(_format_keep_warm_row(p) for p in people)
+        return "\n".join(lines)
+
     return {
         "crm_search_people": crm_search_people,
         "crm_get_person": crm_get_person,
         "crm_list_people": crm_list_people,
+        "keep_warm_set": keep_warm_set,
+        "keep_warm_unset": keep_warm_unset,
+        "keep_warm_list": keep_warm_list,
     }
 
 

@@ -85,6 +85,7 @@ class App:
         stakeholders: list[dict[str, Any]],
         event_relevance: dict[str, list[str]] | None = None,
         memory: Any | None = None,
+        attio: Any | None = None,
     ) -> None:
         from cosinabox.app.jobs import register_core_jobs
 
@@ -99,6 +100,7 @@ class App:
             stakeholders=stakeholders,
             event_relevance=event_relevance,
             memory=memory,
+            attio=attio,
         )
 
     # ------------------------------------------------------------------
@@ -303,6 +305,7 @@ class App:
             stakeholders=stakeholders,
             event_relevance=event_relevance,
             memory=memory,
+            attio=tool_instances.get("attio"),
         )
 
         # --- Telegram ---
