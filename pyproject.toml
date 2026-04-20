@@ -30,6 +30,13 @@ google = [
 fireflies = ["httpx>=0.27"]
 search = ["httpx>=0.27"]
 attio = ["httpx>=0.27"]
+# MCP consult endpoint (cosinabox consult-serve). Optional per CLAUDE.md rule 5:
+# not every deployment exposes a consult server, so the `mcp` Python SDK stays
+# out of the core install. `pip install cosinabox[consult]` pulls it in.
+# Minimum pinned to 1.12 because that's the oldest version where the FastMCP
+# surface + run(transport=...) + TokenVerifier auth are jointly documented
+# (see "M1 SDK vetting log" appendix in docs/plans/2026-04-20-port-consult-mcp.md).
+consult = ["mcp>=1.12"]
 dev = [
   "pytest>=8.0",
   "pytest-asyncio>=0.23",
@@ -38,6 +45,9 @@ dev = [
   "pre-commit>=3.7",
   "types-PyYAML",
   "types-jsonschema",
+  # CI runs consult tests, so pull in the consult extra. Keep in sync with
+  # the `consult` group above.
+  "mcp>=1.12",
 ]
 
 [project.scripts]

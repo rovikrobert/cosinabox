@@ -12,7 +12,7 @@ def test_set_persona_creates_file(tmp_path: Path) -> None:
     result = runner.invoke(cli, ["-C", str(tmp_path), "set-persona", "--role", "founder"])
     assert result.exit_code == 0
     text = (tmp_path / "personality.md").read_text()
-    assert "schema_version: 1" in text
+    assert "schema_version: 2" in text
     assert "# Voice" in text
 
 
@@ -30,4 +30,4 @@ def test_set_persona_force_overwrites(tmp_path: Path) -> None:
         cli, ["-C", str(tmp_path), "set-persona", "--role", "founder", "--force"]
     )
     assert result.exit_code == 0
-    assert "schema_version: 1" in (tmp_path / "personality.md").read_text()
+    assert "schema_version: 2" in (tmp_path / "personality.md").read_text()

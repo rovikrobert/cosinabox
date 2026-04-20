@@ -37,7 +37,7 @@ class IdentityStep(Step):
         name, role, company, tz_raw = parts
         tz = resolve_timezone(tz_raw) or tz_raw
         text = (
-            f"---\nschema_version: 1\nname: {name}\n"
+            f"---\nschema_version: 2\nname: {name}\n"
             f"role: {role} at {company}\ntimezone: {tz}\n---\n\n"
             f"# Voice\n(filled in by step 3)\n\n"
             f"# Stakes\n(filled in by step 2)\n\n"

@@ -9,7 +9,7 @@ from cosinabox.cli.main import cli
 
 def _seed(tmp: Path) -> None:
     (tmp / "personality.md").write_text(
-        "---\nschema_version: 1\nname: A\ntimezone: UTC\n---\n\n# Voice\nbe brief\n"
+        "---\nschema_version: 2\nname: A\ntimezone: UTC\n---\n\n# Voice\nbe brief\n"
     )
     (tmp / "stakeholders.yaml").write_text("schema_version: 1\nstakeholders: []\n")
     (tmp / "jobs.yaml").write_text("schema_version: 1\njobs: {}\n")

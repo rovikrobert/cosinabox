@@ -118,6 +118,30 @@ KEEP_WARM_MAX_BRIEFING_ROWS: int = 10
 # (2026-04-17 — added when fixing cross-matched debrief transcripts.)
 TRANSCRIPT_TIME_WINDOW_SECONDS: int = 30 * 60
 
+# --- Consult (MCP endpoint) ---
+# 2026-04-20 — per cos-agent precedent; one stray Cowork/Claude Code loop
+# calling consult() in a tight loop shouldn't rack up $40 before the owner
+# notices. 30/hour = ~$0.02 average cost per call × 30 = under $1/hr worst-case.
+CONSULT_RATE_LIMIT_PER_HOUR: int = 30
+# 2026-04-20 — same as cos-agent; guards against pathological inputs (e.g.,
+# accidentally pasting a whole codebase into the prompt field).
+CONSULT_MAX_PROMPT_CHARS: int = 10_000
+# 2026-04-20 — Sonnet is the consult default. Brainstorm mode routes via the
+# agent Router, which may pick Opus for strategic prompts. Uses the symbolic
+# SONNET_MODEL_ID so a future model bump is a single-line change.
+CONSULT_DEFAULT_MODEL: str = SONNET_MODEL_ID
+# 2026-04-20 — cos-agent sends 4096; plenty for a no-tool reasoning reply.
+# Consult responses are expected to be a few paragraphs, not long-form docs.
+CONSULT_MAX_TOKENS: int = 4096
+# 2026-04-20 — engine default for brainstorm mode. Overridable per persona via
+# personality.md:consult_brainstorm_override. Phrasing is OSS-safe (no names)
+# and matches cos-agent's adversarial framing.
+CONSULT_BRAINSTORM_OVERRIDE_DEFAULT: str = (
+    "You are now in adversarial brainstorm mode. Argue against the user's framing. "
+    "Surface the weakest assumption. Prefer uncomfortable truths over validation. "
+    "Do not agree unless the user's position is genuinely strong."
+)
+
 # Auth-health watcher cadence. Every 15 min is short enough that a revoked
 # refresh token surfaces within a meeting-length window, and long enough
 # that we don't hammer Google's token endpoint. Chosen 2026-04-17 after a
