@@ -66,6 +66,11 @@ class Metrics:
         over since the last record(). `latency_ms` is stored as an integer
         (microsecond resolution is not meaningful for human-facing metrics).
         """
+        if cost_usd < 0 or latency_ms < 0:
+            raise ValueError(
+                f"cost_usd and latency_ms must be non-negative, "
+                f"got cost_usd={cost_usd}, latency_ms={latency_ms}"
+            )
         with self._lock:
             today = self._today_in_tz()
             if self._date_str != today:

@@ -38,6 +38,10 @@ class RateLimiter:
     # Marked repr=False + compare=False so dataclass identity behavior is unaffected.
     _lock: threading.Lock = field(default_factory=threading.Lock, repr=False, compare=False)
 
+    def __post_init__(self) -> None:
+        if self.limit <= 0:
+            raise ValueError(f"RateLimiter limit must be positive, got {self.limit}")
+
     def allow(self) -> bool:
         with self._lock:
             now = time.time()

@@ -180,6 +180,21 @@ def test_default_metrics_reset_hook_drops_instance() -> None:
     assert first is not second
 
 
+def test_metrics_record_rejects_negative_cost_or_latency() -> None:
+    """Negative cost or latency indicates a bug upstream — fail fast.
+
+    A silently-accepted negative value would quietly skew totals and hide
+    whatever produced the bad input.
+    """
+    m = Metrics()
+    with pytest.raises(ValueError, match="must be non-negative"):
+        m.record(cost_usd=-0.01, latency_ms=10)
+    with pytest.raises(ValueError, match="must be non-negative"):
+        m.record(cost_usd=0.01, latency_ms=-10)
+    # State must not have been mutated by the rejected calls.
+    assert m.snapshot()["calls_today"] == 0
+
+
 def test_metrics_record_is_thread_safe() -> None:
     """50 concurrent record() calls must aggregate without losing updates.
 

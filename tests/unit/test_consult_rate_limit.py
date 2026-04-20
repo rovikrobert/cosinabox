@@ -99,6 +99,18 @@ def test_default_singleton_reset_hook_drops_instance() -> None:
     assert first is not second
 
 
+def test_rate_limiter_rejects_non_positive_limit() -> None:
+    """Limit <= 0 is meaningless: 0 permanently denies, negatives are nonsense.
+
+    Fail fast at construction time rather than silently producing a limiter
+    that rejects every request.
+    """
+    with pytest.raises(ValueError, match="limit must be positive"):
+        RateLimiter(limit=0)
+    with pytest.raises(ValueError, match="limit must be positive"):
+        RateLimiter(limit=-5)
+
+
 def test_rate_limiter_allow_is_thread_safe() -> None:
     """50 concurrent callers against limit=30 must see exactly 30 True / 20 False.
 
