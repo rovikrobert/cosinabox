@@ -163,6 +163,47 @@ CREATE TABLE IF NOT EXISTS scheduling_moves (
     created_at TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_scheduling_moves_request ON scheduling_moves(request_id);
+
+-- Commitments: structured tracking of open work items. Ported from
+-- cos-agent 2026-04-19. Postgres SERIAL/TIMESTAMPTZ translated to SQLite
+-- INTEGER AUTOINCREMENT / TEXT (ISO 8601); CHECK constraints preserved.
+-- Owner defaults to 'user' (OSS-safe); cos-agent used 'rovik'.
+CREATE TABLE IF NOT EXISTS commitments (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    title TEXT NOT NULL,
+    description TEXT,
+    owner TEXT NOT NULL DEFAULT 'user',
+    status TEXT NOT NULL DEFAULT 'open'
+        CHECK (status IN ('open', 'in_progress', 'done', 'blocked', 'cancelled')),
+    priority INTEGER NOT NULL DEFAULT 3
+        CHECK (priority BETWEEN 1 AND 5),
+    deadline TEXT,
+    source TEXT NOT NULL DEFAULT 'manual'
+        CHECK (source IN ('chat', 'email', 'meeting', 'manual')),
+    source_ref TEXT,
+    stakeholder TEXT,
+    workstream TEXT,
+    last_verdict TEXT,
+    last_verdict_at TEXT,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_commitments_status ON commitments(status);
+CREATE INDEX IF NOT EXISTS idx_commitments_deadline ON commitments(deadline);
+CREATE INDEX IF NOT EXISTS idx_commitments_owner ON commitments(owner);
+
+CREATE TABLE IF NOT EXISTS manual_closures (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    commitment_id INTEGER NOT NULL REFERENCES commitments(id),
+    verb TEXT NOT NULL CHECK (verb IN ('close', 'dismiss')),
+    reason TEXT,
+    closed_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    closed_by TEXT NOT NULL DEFAULT 'user'
+);
+CREATE INDEX IF NOT EXISTS idx_manual_closures_commitment
+    ON manual_closures(commitment_id);
+CREATE INDEX IF NOT EXISTS idx_manual_closures_closed_at
+    ON manual_closures(closed_at);
 """
 
 
