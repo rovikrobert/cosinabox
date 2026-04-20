@@ -245,6 +245,46 @@ def test_stdio_default_does_not_require_api_key(tmp_path: Path) -> None:
 
 
 # ---------------------------------------------------------------------------
+# _SharedSecretVerifier.verify_token — direct 401 coverage (M5 follow-up)
+# ---------------------------------------------------------------------------
+
+
+def test_verifier_returns_none_on_wrong_token() -> None:
+    """A wrong token must produce ``None`` (mapped to HTTP 401 by the SDK)."""
+    from cosinabox.consult.server import _SharedSecretVerifier
+
+    verifier = _SharedSecretVerifier("correct-secret")
+    result = asyncio.run(verifier.verify_token("wrong-secret"))
+
+    assert result is None
+
+
+def test_verifier_returns_none_on_empty_token() -> None:
+    """An empty token short-circuits before the compare_digest call."""
+    from cosinabox.consult.server import _SharedSecretVerifier
+
+    verifier = _SharedSecretVerifier("correct-secret")
+    result = asyncio.run(verifier.verify_token(""))
+
+    assert result is None
+
+
+def test_verifier_returns_access_token_on_match() -> None:
+    """A matching token returns an AccessToken carrying the caller's
+    credentials, matching the SDK's contract."""
+    from mcp.server.auth.provider import AccessToken
+
+    from cosinabox.consult.server import _SharedSecretVerifier
+
+    verifier = _SharedSecretVerifier("correct-secret")
+    result = asyncio.run(verifier.verify_token("correct-secret"))
+
+    assert isinstance(result, AccessToken)
+    assert result.token == "correct-secret"
+    assert "user" in result.scopes
+
+
+# ---------------------------------------------------------------------------
 # Memory adapter
 # ---------------------------------------------------------------------------
 

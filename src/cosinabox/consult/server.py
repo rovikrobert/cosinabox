@@ -166,6 +166,14 @@ def build_consult_server(
     *,
     handler_deps: HandlerDeps | None = None,
     api_key: str | None = None,
+    # SECURITY: require_auth defaults to False because stdio transport has no
+    # auth (parent-process trust — Claude Code spawns the server directly).
+    # HTTP transport callers (e.g., the ``consult-serve`` CLI) MUST pass
+    # require_auth=True to enforce Bearer authentication via the SDK's
+    # TokenVerifier. An HTTP server with require_auth=False + no api_key will
+    # NOT reject unauthenticated requests — never do this. The ``consult-serve``
+    # CLI enforces this pairing by refusing to start an HTTP transport
+    # without CONSULT_API_KEY in the environment.
     require_auth: bool = False,
 ) -> FastMCP:
     """Build a ``FastMCP`` server exposing ``consult`` + ``brainstorm``.
