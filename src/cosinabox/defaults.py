@@ -103,3 +103,11 @@ AUTO_RESOLVE_LOOKBACK_DAYS: int = 7
 AUTO_RESOLVE_CONCURRENCY: int = 5
 AUTO_RESOLVE_TIMEOUT_PER_ITEM_S: int = 8
 AUTO_RESOLVE_MAX_ITEMS: int = 20
+
+# Keep Warm default cadence when a person is flagged without a specific
+# cadence_days value. 14 days matches cos-agent. Users override per-person
+# via set_keep_warm. (2026-04-20, ported from cos-agent.)
+KEEP_WARM_DEFAULT_CADENCE_DAYS: int = 14
+# Briefings cap at 10 overdue rows so a quiet week doesn't crowd out
+# other signals when something slipped a month ago.
+KEEP_WARM_MAX_BRIEFING_ROWS: int = 10
