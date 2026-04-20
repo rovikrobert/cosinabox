@@ -10,5 +10,30 @@
         ]
       }
     ]
+  },
+  "permissions": {
+    "allow": [
+      "Bash(source .venv/bin/activate)",
+      "Bash(pytest)",
+      "Bash(pytest *)",
+      "Bash(mypy)",
+      "Bash(mypy *)",
+      "Bash(pre-commit run *)",
+      "Bash(.venv/bin/pytest *)",
+      "Bash(.venv/bin/mypy *)",
+      "Bash(.venv/bin/ruff check src)",
+      "Bash(.venv/bin/ruff check tests)",
+      "Bash(.venv/bin/ruff check src tests)",
+      "Bash(.venv/bin/ruff format --check *)",
+      "Bash(rtk proxy pytest)",
+      "Bash(rtk proxy pytest *)",
+      "Bash(rtk proxy mypy *)",
+      "Bash(rtk proxy ruff check *)",
+      "Bash(rtk proxy ruff format --check *)",
+      "Bash(rtk proxy pre-commit *)",
+      "Bash(railway logs)",
+      "Bash(railway logs *)",
+      "Bash(railway variables)"
+    ]
   }
 }
