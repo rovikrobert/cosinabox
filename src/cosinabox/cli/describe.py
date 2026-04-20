@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import importlib.util
 import json
 import re
 from pathlib import Path
@@ -23,6 +24,26 @@ def _load_yaml(path: Path) -> dict[str, Any]:
         result: dict[str, Any] = yaml.safe_load(path.read_text()) or {}
         return result
     return {}
+
+
+def _consult_metrics_snapshot() -> dict[str, Any] | None:
+    """Return today's consult metrics, or ``None`` if the ``mcp`` extra
+    isn't installed.
+
+    We detect the extra via ``importlib.util.find_spec("mcp")`` rather than
+    ``try: import mcp`` so the check stays cheap + side-effect-free even
+    when the SDK is installed. If the extra is missing, the whole
+    ``Consult:`` section is omitted (graceful degradation per CLAUDE.md
+    engine rule 6) — never printed as zeros or as an error.
+    """
+    if importlib.util.find_spec("mcp") is None:
+        return None
+    # Lazy import — importing the metrics module when ``mcp`` is missing
+    # would still succeed today, but the import is local either way to
+    # keep the happy path (no consult) out of the describe hot path.
+    from cosinabox.consult import metrics as consult_metrics
+
+    return consult_metrics.get_default_metrics().snapshot()
 
 
 def _commitment_counts(config_dir: Path) -> dict[str, int] | None:
@@ -90,6 +111,7 @@ def _build_data(config_dir: Path) -> dict[str, Any]:
         "disabled_integrations": disabled_integrations,
         "memory_backend": memory_backend,
         "commitments": _commitment_counts(config_dir),
+        "consult": _consult_metrics_snapshot(),
     }
 
 
@@ -159,6 +181,16 @@ def _format_english(data: dict[str, Any]) -> str:
         done_n = counts.get("done", 0)
         cancelled_n = counts.get("cancelled", 0)
         lines.append(f"Commitments: {open_n} open, {done_n} done, {cancelled_n} cancelled")
+
+    consult = data.get("consult")
+    if consult is not None:
+        # Section only present when the ``mcp`` extra is installed — if
+        # the user never wired consult-serve, don't surface it at all.
+        lines.append("")
+        calls = consult.get("calls_today", 0)
+        cost = consult.get("cost_today_usd", 0.0)
+        avg_ms = consult.get("avg_latency_ms", 0)
+        lines.append(f"Consult: {calls} calls today, ${cost:.2f}, avg {avg_ms}ms latency")
 
     return "\n".join(lines)
 
