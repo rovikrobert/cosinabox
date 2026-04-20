@@ -48,6 +48,16 @@ def test_default_pattern_lunch() -> None:
     assert is_prep_worthy(_event("Lunch", attendees=["a@x.com", "b@x.com"])) is False
 
 
+def test_default_pattern_flight() -> None:
+    """Flight events are personal travel blocks, not meetings worth prepping."""
+    assert is_prep_worthy(_event("Flight to SFO", attendees=["a@x.com", "b@x.com"])) is False
+
+
+def test_default_pattern_flights_plural() -> None:
+    """Substring match → 'Flights' (plural) trips the 'flight' pattern."""
+    assert is_prep_worthy(_event("Flights", attendees=["a@x.com", "b@x.com"])) is False
+
+
 def test_default_pattern_substring_match() -> None:
     """Patterns match as substrings — 'Deep Work Block' trips 'deep work'."""
     assert is_prep_worthy(_event("Deep Work Block", attendees=["a@x.com", "b@x.com"])) is False
