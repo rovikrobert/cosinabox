@@ -10,6 +10,14 @@ and MCP server land in subsequent milestones of
 `docs/plans/2026-04-20-port-consult-mcp.md`.
 """
 
+from cosinabox.consult.handler import (
+    ConsultError,
+    ConsultRequest,
+    ConsultResponse,
+    Persona,
+    handle_consult,
+    persona_from_config,
+)
 from cosinabox.consult.metrics import (
     Metrics,
     get_default_metrics,
@@ -23,11 +31,17 @@ from cosinabox.consult.rate_limit import (
 )
 
 __all__ = [
+    "ConsultError",
+    "ConsultRequest",
+    "ConsultResponse",
     "Metrics",
+    "Persona",
     "RateLimiter",
     "build_consult_system_prompt",
     "get_default_metrics",
     "get_default_rate_limiter",
+    "handle_consult",
+    "persona_from_config",
     "reset_default_metrics",
     "reset_default_rate_limiter",
 ]
