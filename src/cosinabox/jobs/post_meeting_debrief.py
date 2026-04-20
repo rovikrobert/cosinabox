@@ -190,6 +190,8 @@ class PostMeetingDebriefJob(Job):
         relevance_keywords: list[str] | None = None,
         relevance_domains: list[str] | None = None,
         owner_emails: list[str] | None = None,
+        memory: Any | None = None,
+        dm_session: str | None = None,
     ) -> None:
         self.calendar = calendar
         self.fireflies = fireflies
@@ -201,6 +203,14 @@ class PostMeetingDebriefJob(Job):
         self.relevance_domains = list(relevance_domains or [])
         # Lower-cased set for cheap membership checks during matching.
         self.owner_emails: set[str] = {e.lower() for e in (owner_emails or [])}
+        # When wired, every text we send via send_fn is also persisted under
+        # this session as role=assistant. The DM agent loop reads from
+        # ``dm-{chat_id}``; persisting here lets follow-up replies like
+        # "wrong meeting" or "tell me more about the action items" find the
+        # original debrief in the conversation history. Optional so legacy
+        # call sites and isolated unit tests still construct cleanly.
+        self.memory = memory
+        self.dm_session = dm_session
 
     def _is_debriefed(self, uid: str) -> bool:
         cur = self.db._conn.execute(
@@ -218,8 +228,30 @@ class PostMeetingDebriefJob(Job):
         self.db._conn.commit()
 
     def _send_body(self, body: str) -> None:
-        for chunk in _split_for_telegram(body):
+        """Split the body at sentence boundaries and send each chunk.
+        Also persists the full body to the DM session (if wired) so the
+        DM agent has recall when the user replies.
+
+        Persist is best-effort: a failure writing to memory must not
+        block the user from seeing the message.
+        """
+        chunks = _split_for_telegram(body)
+        for chunk in chunks:
             self.send_fn(chunk)
+        if self.memory is None or self.dm_session is None:
+            return
+        try:
+            self.memory.store_message(
+                role="assistant",
+                content=body,
+                session_id=self.dm_session,
+            )
+        except Exception:
+            logger.warning(
+                "Failed to persist debrief to DM session %s",
+                self.dm_session,
+                exc_info=True,
+            )
 
     def run(self, context: Any = None) -> str:
         if self.calendar is None:

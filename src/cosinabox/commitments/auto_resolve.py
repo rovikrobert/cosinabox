@@ -297,11 +297,12 @@ def _record(
     commitment_id = commitment.get("id")
     if db is not None and commitment_id is not None:
         try:
-            db._conn.execute(
-                "UPDATE commitments SET last_verdict = ?, last_verdict_at = ? WHERE id = ?",
-                (verdict, datetime.now(UTC).isoformat(), commitment_id),
-            )
-            db._conn.commit()
+            with db.lock:
+                db._conn.execute(
+                    "UPDATE commitments SET last_verdict = ?, last_verdict_at = ? WHERE id = ?",
+                    (verdict, datetime.now(UTC).isoformat(), commitment_id),
+                )
+                db._conn.commit()
         except Exception:
             logger.warning(
                 "auto_resolve: could not persist verdict for #%s",

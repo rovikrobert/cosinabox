@@ -105,6 +105,18 @@ def register_core_jobs(
             scheduler.add_job(job, cron=cron)
             logger.info("Registered %s at %s", job_name, cron)
 
+    # auth_health: always-on by default; registered outside the iteration loop
+    # so existing user repos whose jobs.yaml predates this change still get
+    # silent-failure protection.
+    from cosinabox import defaults
+    from cosinabox.jobs.auth_health import AuthHealthJob
+
+    auth_health_cfg = jobs_config.get("auth_health", {})
+    if auth_health_cfg.get("enabled", True):
+        cron = auth_health_cfg.get("schedule", defaults.AUTH_HEALTH_DEFAULT_SCHEDULE)
+        scheduler.add_job(AuthHealthJob(), cron=cron)
+        logger.info("Registered auth_health at %s", cron)
+
 
 def register_telegram_jobs(
     scheduler: SchedulerRunner,
@@ -121,6 +133,7 @@ def register_telegram_jobs(
     rela_agent: Any,
     scheduling_ctx: Any | None,  # SchedulingContext or None
     anthropic_factory: Any,
+    chat_id: str,
     event_relevance: dict[str, list[str]] | None = None,
 ) -> None:
     """Register jobs that need send_telegram (runs AFTER send_telegram exists)."""
@@ -208,6 +221,8 @@ def register_telegram_jobs(
                 relevance_keywords=relevance_keywords,
                 relevance_domains=relevance_domains,
                 owner_emails=owner_emails,
+                memory=memory,
+                dm_session=f"dm-{chat_id}",
             )
             cron = cfg.get("schedule", "*/5 * * * *")
             scheduler.add_job(job, cron=cron)

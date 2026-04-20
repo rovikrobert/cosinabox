@@ -48,35 +48,40 @@ def create_commitment(
     safe_source = source if source in VALID_SOURCES else "manual"
 
     ts = _now_iso()
-    cur = db._conn.execute(
-        """INSERT INTO commitments
-           (title, description, owner, priority, deadline, source, source_ref,
-            stakeholder, workstream, created_at, updated_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-        (
-            title,
-            description,
-            owner,
-            clamped_priority,
-            deadline,
-            safe_source,
-            source_ref,
-            stakeholder,
-            workstream,
-            ts,
-            ts,
-        ),
-    )
-    db._conn.commit()
-    new_id = cur.lastrowid
-    assert new_id is not None
-    return get_commitment(db, new_id)
+    # Serialize against other threads on the same SQLite connection.
+    # Without this, concurrent APScheduler + Telegram + SubAgent writes
+    # can corrupt cursor state → sqlite3.InterfaceError.
+    with db.lock:
+        cur = db._conn.execute(
+            """INSERT INTO commitments
+               (title, description, owner, priority, deadline, source, source_ref,
+                stakeholder, workstream, created_at, updated_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (
+                title,
+                description,
+                owner,
+                clamped_priority,
+                deadline,
+                safe_source,
+                source_ref,
+                stakeholder,
+                workstream,
+                ts,
+                ts,
+            ),
+        )
+        db._conn.commit()
+        new_id = cur.lastrowid
+        assert new_id is not None
+        return get_commitment(db, new_id)
 
 
 def get_commitment(db: Memory, commitment_id: int) -> dict[str, Any]:
     """Return a single commitment as a dict. Raises CommitmentNotFound."""
-    cur = db._conn.execute("SELECT * FROM commitments WHERE id = ?", (commitment_id,))
-    row = cur.fetchone()
+    with db.lock:
+        cur = db._conn.execute("SELECT * FROM commitments WHERE id = ?", (commitment_id,))
+        row = cur.fetchone()
     if row is None:
         raise CommitmentNotFound(f"#{commitment_id}")
     return _row_to_dict(row)
@@ -104,8 +109,10 @@ def list_commitments(
         "CASE WHEN deadline IS NULL THEN 1 ELSE 0 END, "
         "deadline ASC, id ASC LIMIT ?"
     )
-    cur = db._conn.execute(query, (*status_filter, limit))
-    return [_row_to_dict(row) for row in cur.fetchall()]
+    with db.lock:
+        cur = db._conn.execute(query, (*status_filter, limit))
+        rows = cur.fetchall()
+    return [_row_to_dict(row) for row in rows]
 
 
 def update_commitment(
@@ -128,11 +135,12 @@ def update_commitment(
             changes["priority"] = max(1, min(5, int(changes["priority"])))
         set_clause = ", ".join(f"{k} = ?" for k in changes)
         values = [*changes.values(), _now_iso(), commitment_id]
-        db._conn.execute(
-            f"UPDATE commitments SET {set_clause}, updated_at = ? WHERE id = ?",
-            values,
-        )
-        db._conn.commit()
+        with db.lock:
+            db._conn.execute(
+                f"UPDATE commitments SET {set_clause}, updated_at = ? WHERE id = ?",
+                values,
+            )
+            db._conn.commit()
     return get_commitment(db, commitment_id)
 
 
@@ -153,17 +161,18 @@ def close_commitment(
         raise CommitmentAlreadyClosed(f"#{commitment_id} already {current['status']}")
 
     ts = _now_iso()
-    db._conn.execute(
-        "UPDATE commitments SET status = ?, updated_at = ? WHERE id = ?",
-        (CommitmentStatus.DONE.value, ts, commitment_id),
-    )
-    db._conn.execute(
-        "INSERT INTO manual_closures "
-        "(commitment_id, verb, reason, closed_at, closed_by) "
-        "VALUES (?, 'close', ?, ?, ?)",
-        (commitment_id, reason, ts, closed_by),
-    )
-    db._conn.commit()
+    with db.lock:
+        db._conn.execute(
+            "UPDATE commitments SET status = ?, updated_at = ? WHERE id = ?",
+            (CommitmentStatus.DONE.value, ts, commitment_id),
+        )
+        db._conn.execute(
+            "INSERT INTO manual_closures "
+            "(commitment_id, verb, reason, closed_at, closed_by) "
+            "VALUES (?, 'close', ?, ?, ?)",
+            (commitment_id, reason, ts, closed_by),
+        )
+        db._conn.commit()
     return get_commitment(db, commitment_id)
 
 
@@ -180,17 +189,18 @@ def dismiss_commitment(
         raise CommitmentAlreadyClosed(f"#{commitment_id} already {current['status']}")
 
     ts = _now_iso()
-    db._conn.execute(
-        "UPDATE commitments SET status = ?, updated_at = ? WHERE id = ?",
-        (CommitmentStatus.CANCELLED.value, ts, commitment_id),
-    )
-    db._conn.execute(
-        "INSERT INTO manual_closures "
-        "(commitment_id, verb, reason, closed_at, closed_by) "
-        "VALUES (?, 'dismiss', ?, ?, ?)",
-        (commitment_id, reason, ts, closed_by),
-    )
-    db._conn.commit()
+    with db.lock:
+        db._conn.execute(
+            "UPDATE commitments SET status = ?, updated_at = ? WHERE id = ?",
+            (CommitmentStatus.CANCELLED.value, ts, commitment_id),
+        )
+        db._conn.execute(
+            "INSERT INTO manual_closures "
+            "(commitment_id, verb, reason, closed_at, closed_by) "
+            "VALUES (?, 'dismiss', ?, ?, ?)",
+            (commitment_id, reason, ts, closed_by),
+        )
+        db._conn.commit()
     return get_commitment(db, commitment_id)
 
 
@@ -202,11 +212,12 @@ def reopen_commitment(
     current = get_commitment(db, commitment_id)
     if current["status"] not in TERMINAL_STATUSES:
         raise CommitmentNotClosed(f"#{commitment_id} is {current['status']}, not closed")
-    db._conn.execute(
-        "UPDATE commitments SET status = ?, updated_at = ? WHERE id = ?",
-        (CommitmentStatus.OPEN.value, _now_iso(), commitment_id),
-    )
-    db._conn.commit()
+    with db.lock:
+        db._conn.execute(
+            "UPDATE commitments SET status = ?, updated_at = ? WHERE id = ?",
+            (CommitmentStatus.OPEN.value, _now_iso(), commitment_id),
+        )
+        db._conn.commit()
     return get_commitment(db, commitment_id)
 
 
@@ -216,8 +227,10 @@ def list_recent_closures(
     limit: int = 25,
 ) -> list[dict[str, Any]]:
     """Return the most recent manual_closures rows (for audit views)."""
-    cur = db._conn.execute(
-        "SELECT * FROM manual_closures ORDER BY id DESC LIMIT ?",
-        (limit,),
-    )
-    return [_row_to_dict(row) for row in cur.fetchall()]
+    with db.lock:
+        cur = db._conn.execute(
+            "SELECT * FROM manual_closures ORDER BY id DESC LIMIT ?",
+            (limit,),
+        )
+        rows = cur.fetchall()
+    return [_row_to_dict(row) for row in rows]

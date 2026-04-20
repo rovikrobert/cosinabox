@@ -141,3 +141,10 @@ CONSULT_BRAINSTORM_OVERRIDE_DEFAULT: str = (
     "Surface the weakest assumption. Prefer uncomfortable truths over validation. "
     "Do not agree unless the user's position is genuinely strong."
 )
+
+# Auth-health watcher cadence. Every 15 min is short enough that a revoked
+# refresh token surfaces within a meeting-length window, and long enough
+# that we don't hammer Google's token endpoint. Chosen 2026-04-17 after a
+# revoked token looped `invalid_grant` silently for days. See
+# docs/specs/2026-04-17-auth-health-watcher-design.md.
+AUTH_HEALTH_DEFAULT_SCHEDULE: str = "*/15 * * * *"
