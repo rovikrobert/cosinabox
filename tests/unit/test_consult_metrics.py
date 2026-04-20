@@ -31,15 +31,25 @@ def test_metrics_empty_snapshot_has_zero_avg_and_null_last_call() -> None:
     }
 
 
-def test_metrics_record_increments_and_averages(monkeypatch: pytest.MonkeyPatch) -> None:
-    fixed_date = dt.date(2026, 4, 20)
+def _patch_metrics_now(monkeypatch: pytest.MonkeyPatch, current: list[dt.datetime]) -> None:
+    """Pin `cosinabox.consult.metrics.datetime.now(tz)` to return current[0].
 
-    class _FixedDate(dt.date):
+    Tests mutate `current[0]` in-place to advance the clock. Rollover logic
+    now keys off `datetime.now(tz).date()`, so patching datetime is the
+    right seam.
+    """
+
+    class _FakeDatetime(dt.datetime):
         @classmethod
-        def today(cls) -> dt.date:  # type: ignore[override]
-            return fixed_date
+        def now(cls, tz: dt.tzinfo | None = None) -> dt.datetime:  # type: ignore[override]
+            return current[0].astimezone(tz) if tz is not None else current[0]
 
-    monkeypatch.setattr("cosinabox.consult.metrics.date", _FixedDate)
+    monkeypatch.setattr("cosinabox.consult.metrics.datetime", _FakeDatetime)
+
+
+def test_metrics_record_increments_and_averages(monkeypatch: pytest.MonkeyPatch) -> None:
+    current = [dt.datetime(2026, 4, 20, 12, 0, tzinfo=dt.UTC)]
+    _patch_metrics_now(monkeypatch, current)
 
     m = Metrics(timezone="UTC")
     m.record(cost_usd=0.01, latency_ms=100)
@@ -56,14 +66,8 @@ def test_metrics_record_increments_and_averages(monkeypatch: pytest.MonkeyPatch)
 
 
 def test_metrics_snapshot_rounds_cost_to_4dp(monkeypatch: pytest.MonkeyPatch) -> None:
-    fixed_date = dt.date(2026, 4, 20)
-
-    class _FixedDate(dt.date):
-        @classmethod
-        def today(cls) -> dt.date:  # type: ignore[override]
-            return fixed_date
-
-    monkeypatch.setattr("cosinabox.consult.metrics.date", _FixedDate)
+    current = [dt.datetime(2026, 4, 20, 12, 0, tzinfo=dt.UTC)]
+    _patch_metrics_now(monkeypatch, current)
 
     m = Metrics()
     m.record(cost_usd=0.00012345, latency_ms=10)
@@ -73,14 +77,8 @@ def test_metrics_snapshot_rounds_cost_to_4dp(monkeypatch: pytest.MonkeyPatch) ->
 
 
 def test_metrics_reset_on_day_rollover(monkeypatch: pytest.MonkeyPatch) -> None:
-    day: list[dt.date] = [dt.date(2026, 4, 20)]
-
-    class _MovingDate(dt.date):
-        @classmethod
-        def today(cls) -> dt.date:  # type: ignore[override]
-            return day[0]
-
-    monkeypatch.setattr("cosinabox.consult.metrics.date", _MovingDate)
+    current = [dt.datetime(2026, 4, 20, 12, 0, tzinfo=dt.UTC)]
+    _patch_metrics_now(monkeypatch, current)
 
     m = Metrics()
     m.record(cost_usd=0.10, latency_ms=500)
@@ -88,7 +86,7 @@ def test_metrics_reset_on_day_rollover(monkeypatch: pytest.MonkeyPatch) -> None:
     assert m.snapshot()["calls_today"] == 2
 
     # Advance wall-clock day.
-    day[0] = dt.date(2026, 4, 21)
+    current[0] = dt.datetime(2026, 4, 21, 12, 0, tzinfo=dt.UTC)
 
     # Pre-record snapshot should reflect the rollover (stale day → zeros).
     stale = m.snapshot()
@@ -116,14 +114,9 @@ def test_metrics_no_division_by_zero_when_empty() -> None:
 def test_metrics_last_call_respects_configured_timezone(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    fixed_date = dt.date(2026, 4, 20)
-
-    class _FixedDate(dt.date):
-        @classmethod
-        def today(cls) -> dt.date:  # type: ignore[override]
-            return fixed_date
-
-    monkeypatch.setattr("cosinabox.consult.metrics.date", _FixedDate)
+    # Mid-day UTC on 2026-04-20 is 05:00 PT the same day — no rollover ambiguity.
+    current = [dt.datetime(2026, 4, 20, 12, 0, tzinfo=dt.UTC)]
+    _patch_metrics_now(monkeypatch, current)
 
     m = Metrics(timezone="America/Los_Angeles")
     m.record(cost_usd=0.01, latency_ms=100)
@@ -134,6 +127,41 @@ def test_metrics_last_call_respects_configured_timezone(
     last_call = snap["last_call"]
     assert isinstance(last_call, str)
     assert ("-07:00" in last_call) or ("-08:00" in last_call)
+
+
+def test_metrics_day_rollover_uses_configured_timezone(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Day rollover must honor self.timezone, not system-local date.today().
+
+    Regression: a UTC-hosted server with timezone='America/Los_Angeles'
+    would previously roll over at 00:00 UTC (17:00 PT) instead of 00:00 PT,
+    contradicting the docstring.
+    """
+    la = dt.timezone(dt.timedelta(hours=-7))  # PT in DST — matches 2026-04-20.
+    current = [dt.datetime(2026, 4, 20, 23, 30, tzinfo=la)]
+
+    class _FakeDatetime(dt.datetime):
+        @classmethod
+        def now(cls, tz: dt.tzinfo | None = None) -> dt.datetime:  # type: ignore[override]
+            return current[0].astimezone(tz) if tz is not None else current[0]
+
+    monkeypatch.setattr("cosinabox.consult.metrics.datetime", _FakeDatetime)
+
+    m = Metrics(timezone="America/Los_Angeles")
+
+    # 2026-04-20 23:30 PT — still day 20.
+    m.record(cost_usd=0.1, latency_ms=100)
+    # Advance to 23:45 PT — still day 20.
+    current[0] = dt.datetime(2026, 4, 20, 23, 45, tzinfo=la)
+    m.record(cost_usd=0.2, latency_ms=200)
+    # Two calls on the same PT day: no rollover should have occurred.
+    assert m.snapshot()["calls_today"] == 2
+
+    # Advance to 2026-04-21 00:05 PT — new PT day, should reset.
+    current[0] = dt.datetime(2026, 4, 21, 0, 5, tzinfo=la)
+    m.record(cost_usd=0.05, latency_ms=50)
+    assert m.snapshot()["calls_today"] == 1
 
 
 def test_default_metrics_singleton_returns_same_instance() -> None:

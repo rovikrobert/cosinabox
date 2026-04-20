@@ -13,7 +13,7 @@ prints the current day's totals.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import date, datetime
+from datetime import datetime
 from typing import Any
 from zoneinfo import ZoneInfo
 
@@ -43,6 +43,16 @@ class Metrics:
     timezone: str = "UTC"
     _date_str: str = field(default="", repr=False)
 
+    def _today_in_tz(self) -> str:
+        """Return the ISO date for 'today' in `self.timezone`.
+
+        Drives the day-rollover check in record() and snapshot(). Using the
+        configured timezone here — rather than `date.today()` — ensures a
+        UTC-hosted server with a PT persona rolls over at 00:00 PT, not 00:00
+        UTC. Matches the docstring contract.
+        """
+        return datetime.now(ZoneInfo(self.timezone)).date().isoformat()
+
     def record(self, cost_usd: float, latency_ms: float) -> None:
         """Record a single consult call's cost + latency.
 
@@ -50,7 +60,7 @@ class Metrics:
         over since the last record(). `latency_ms` is stored as an integer
         (microsecond resolution is not meaningful for human-facing metrics).
         """
-        today = date.today().isoformat()
+        today = self._today_in_tz()
         if self._date_str != today:
             self.calls_today = 0
             self.cost_today_usd = 0.0
@@ -68,7 +78,7 @@ class Metrics:
         snapshot reflects the rollover (zeros, null last_call) — this matches
         cos-agent and avoids stale values leaking across midnight.
         """
-        today = date.today().isoformat()
+        today = self._today_in_tz()
         if self._date_str != today:
             return {
                 "calls_today": 0,
