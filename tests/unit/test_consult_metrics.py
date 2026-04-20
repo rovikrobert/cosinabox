@@ -9,6 +9,7 @@ poking module globals.
 from __future__ import annotations
 
 import datetime as dt
+from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 
 import pytest
@@ -177,6 +178,27 @@ def test_default_metrics_reset_hook_drops_instance() -> None:
     reset_default_metrics()
     second = get_default_metrics()
     assert first is not second
+
+
+def test_metrics_record_is_thread_safe() -> None:
+    """50 concurrent record() calls must aggregate without losing updates.
+
+    Counters are read-modify-write across four fields; a missing lock can
+    drop increments. Test may still pass on CPython via GIL luck — the
+    lock is required to pin the contract.
+    """
+    m = Metrics()
+
+    def _one() -> None:
+        m.record(cost_usd=0.01, latency_ms=10)
+
+    with ThreadPoolExecutor(max_workers=50) as ex:
+        list(ex.map(lambda _: _one(), range(50)))
+
+    snap = m.snapshot()
+    assert snap["calls_today"] == 50
+    assert snap["cost_today_usd"] == pytest.approx(0.5, abs=1e-9)
+    assert snap["avg_latency_ms"] == 10
 
 
 def test_metrics_snapshot_shape_is_exactly_four_keys() -> None:

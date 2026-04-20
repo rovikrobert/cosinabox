@@ -10,8 +10,9 @@ Defaults live in `cosinabox.defaults.CONSULT_RATE_LIMIT_PER_HOUR`.
 
 from __future__ import annotations
 
+import threading
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 
@@ -33,23 +34,28 @@ class RateLimiter:
     count: int = 0
     window_start: float = 0.0
     window_seconds: int = 3600
+    # Non-init lock: shared across threads holding the same limiter instance.
+    # Marked repr=False + compare=False so dataclass identity behavior is unaffected.
+    _lock: threading.Lock = field(default_factory=threading.Lock, repr=False, compare=False)
 
     def allow(self) -> bool:
-        now = time.time()
-        if now - self.window_start >= self.window_seconds:
-            self.count = 0
-            self.window_start = now
-        if self.count >= self.limit:
-            return False
-        self.count += 1
-        return True
+        with self._lock:
+            now = time.time()
+            if now - self.window_start >= self.window_seconds:
+                self.count = 0
+                self.window_start = now
+            if self.count >= self.limit:
+                return False
+            self.count += 1
+            return True
 
     def snapshot(self) -> dict[str, Any]:
-        return {
-            "count": self.count,
-            "limit": self.limit,
-            "window_start": self.window_start,
-        }
+        with self._lock:
+            return {
+                "count": self.count,
+                "limit": self.limit,
+                "window_start": self.window_start,
+            }
 
 
 _default: RateLimiter | None = None

@@ -12,6 +12,7 @@ prints the current day's totals.
 
 from __future__ import annotations
 
+import threading
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any
@@ -42,6 +43,11 @@ class Metrics:
     last_call: str | None = None
     timezone: str = "UTC"
     _date_str: str = field(default="", repr=False)
+    # Non-init lock: guards all mutating reads + writes to the counters so
+    # concurrent MCP handler invocations (or describe CLI snapshots) cannot
+    # interleave increments. Marked repr=False + compare=False so dataclass
+    # identity behavior is unaffected.
+    _lock: threading.Lock = field(default_factory=threading.Lock, repr=False, compare=False)
 
     def _today_in_tz(self) -> str:
         """Return the ISO date for 'today' in `self.timezone`.
@@ -60,16 +66,17 @@ class Metrics:
         over since the last record(). `latency_ms` is stored as an integer
         (microsecond resolution is not meaningful for human-facing metrics).
         """
-        today = self._today_in_tz()
-        if self._date_str != today:
-            self.calls_today = 0
-            self.cost_today_usd = 0.0
-            self.total_latency_ms = 0
-            self._date_str = today
-        self.calls_today += 1
-        self.cost_today_usd += cost_usd
-        self.total_latency_ms += int(round(latency_ms))
-        self.last_call = datetime.now(ZoneInfo(self.timezone)).isoformat()
+        with self._lock:
+            today = self._today_in_tz()
+            if self._date_str != today:
+                self.calls_today = 0
+                self.cost_today_usd = 0.0
+                self.total_latency_ms = 0
+                self._date_str = today
+            self.calls_today += 1
+            self.cost_today_usd += cost_usd
+            self.total_latency_ms += int(round(latency_ms))
+            self.last_call = datetime.now(ZoneInfo(self.timezone)).isoformat()
 
     def snapshot(self) -> dict[str, Any]:
         """Return today's metrics as a serializable dict.
@@ -78,21 +85,22 @@ class Metrics:
         snapshot reflects the rollover (zeros, null last_call) — this matches
         cos-agent and avoids stale values leaking across midnight.
         """
-        today = self._today_in_tz()
-        if self._date_str != today:
+        with self._lock:
+            today = self._today_in_tz()
+            if self._date_str != today:
+                return {
+                    "calls_today": 0,
+                    "cost_today_usd": 0.0,
+                    "avg_latency_ms": 0,
+                    "last_call": None,
+                }
+            avg_ms = int(round(self.total_latency_ms / self.calls_today)) if self.calls_today else 0
             return {
-                "calls_today": 0,
-                "cost_today_usd": 0.0,
-                "avg_latency_ms": 0,
-                "last_call": None,
+                "calls_today": self.calls_today,
+                "cost_today_usd": round(self.cost_today_usd, 4),
+                "avg_latency_ms": avg_ms,
+                "last_call": self.last_call,
             }
-        avg_ms = int(round(self.total_latency_ms / self.calls_today)) if self.calls_today else 0
-        return {
-            "calls_today": self.calls_today,
-            "cost_today_usd": round(self.cost_today_usd, 4),
-            "avg_latency_ms": avg_ms,
-            "last_call": self.last_call,
-        }
 
 
 _default: Metrics | None = None

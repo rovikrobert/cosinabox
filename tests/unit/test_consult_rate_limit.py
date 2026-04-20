@@ -15,6 +15,7 @@ before implementation lands. Once the module is in place, the suite pins:
 from __future__ import annotations
 
 import time
+from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 
 import pytest
@@ -96,6 +97,22 @@ def test_default_singleton_reset_hook_drops_instance() -> None:
     second = get_default_rate_limiter()
     # After reset, accessor rebuilds a fresh instance.
     assert first is not second
+
+
+def test_rate_limiter_allow_is_thread_safe() -> None:
+    """50 concurrent callers against limit=30 must see exactly 30 True / 20 False.
+
+    Without a lock, two threads can pass the `count < limit` check before
+    either increments, leaking extra True responses. The test may pass on
+    CPython via GIL luck — the lock is still required to pin the behavior.
+    """
+    limiter = RateLimiter(limit=30, window_start=time.time())
+
+    with ThreadPoolExecutor(max_workers=50) as ex:
+        results = list(ex.map(lambda _: limiter.allow(), range(50)))
+
+    assert results.count(True) == 30
+    assert results.count(False) == 20
 
 
 def test_default_singleton_fresh_instance_window_starts_at_wall_clock(
