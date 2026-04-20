@@ -4,10 +4,14 @@
   "type": "object",
   "required": ["schema_version", "name", "timezone"],
   "properties": {
-    "schema_version": {"const": 1},
+    "schema_version": {"const": 2},
     "name": {"type": "string", "minLength": 1},
     "role": {"type": "string"},
     "timezone": {"type": "string", "minLength": 1},
+    "consult_brainstorm_override": {
+      "type": "string",
+      "description": "Optional adversarial prompt for consult-serve brainstorm mode. If omitted, the engine's CONSULT_BRAINSTORM_OVERRIDE_DEFAULT is used."
+    },
     "event_relevance": {
       "type": "object",
       "description": "Optional allowlist that narrows which calendar events get agent-generated prep / debrief. Solo blocks and personal-block titles are still skipped regardless. If both lists are empty or absent, every non-blocked event is prep-worthy (the default).",

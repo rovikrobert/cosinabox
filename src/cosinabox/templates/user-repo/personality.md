@@ -1,8 +1,13 @@
 ---
-schema_version: 1
+schema_version: 2
 name: <YOUR NAME>
 role: <YOUR ROLE>
 timezone: <e.g. America/Los_Angeles>
+# Optional: override the brainstorm-mode prompt used by `cosinabox consult-serve`.
+# When unset, the engine default is used. Keep it sharp — brainstorm mode is for
+# adversarial stress-testing, not validation. Example:
+#   consult_brainstorm_override: "Argue against me from an engineering-risk perspective."
+# consult_brainstorm_override: ""
 ---
 
 # Voice
