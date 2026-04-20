@@ -196,6 +196,15 @@ DEFAULT_RULES: list[PolicyRule] = [
         priority=200,
         description="Commitment CRUD — SQLite-local, no outbound side effects",
     ),
+    # Keep Warm — flips two boolean/int fields on the user's own Attio
+    # person record. No external sends, no PII exfiltration (data is
+    # already the user's own CRM). Safe to auto-allow like CRM reads.
+    PolicyRule(
+        "keep_warm_*",
+        Decision.ALLOW,
+        priority=200,
+        description="Keep Warm flag + cadence on Attio — user's own CRM state",
+    ),
     # Drafts are safe (user reviews before sending)
     PolicyRule(
         "gmail_compose",

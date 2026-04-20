@@ -118,7 +118,14 @@ class TestBuildToolRegistry:
     def test_attio_only(self) -> None:
         defs, handlers = build_tool_registry({"attio": _make_attio()})
         assert len(defs) == len(ATTIO_TOOL_DEFINITIONS)
-        assert set(handlers.keys()) == {"crm_search_people", "crm_get_person", "crm_list_people"}
+        assert set(handlers.keys()) == {
+            "crm_search_people",
+            "crm_get_person",
+            "crm_list_people",
+            "keep_warm_set",
+            "keep_warm_unset",
+            "keep_warm_list",
+        }
 
     def test_all_tools(self) -> None:
         instances = {
@@ -185,9 +192,9 @@ class TestBuildToolRegistry:
         for d in defs:
             desc_lower = d["description"].lower()
             for word in forbidden:
-                assert word not in desc_lower, (
-                    f"Tool '{d['name']}' description contains '{word}' — not OSS-friendly"
-                )
+                assert (
+                    word not in desc_lower
+                ), f"Tool '{d['name']}' description contains '{word}' — not OSS-friendly"
 
 
 # ---------------------------------------------------------------------------
