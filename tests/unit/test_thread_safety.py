@@ -13,6 +13,8 @@ from __future__ import annotations
 import threading
 from unittest.mock import MagicMock
 
+import anthropic
+
 from cosinabox.agent import loop as loop_module
 from cosinabox.agent.cost import CostTracker
 from cosinabox.agent.loop import AgentLoop
@@ -87,7 +89,9 @@ class TestCircuitBreakerThreadSafety:
 
         def _build_loop() -> AgentLoop:
             client = MagicMock()
-            client.messages.create.side_effect = Exception("boom")
+            client.messages.create.side_effect = anthropic.APIError(
+                message="boom", request=None, body=None
+            )
             return AgentLoop(
                 anthropic_client=client,
                 router=Router(),

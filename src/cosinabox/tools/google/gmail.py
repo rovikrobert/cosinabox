@@ -16,7 +16,12 @@ except ImportError as e:
         "cosinabox[google] extra is required. Run: pip install 'cosinabox[google]'"
     ) from e
 
+from google.auth.exceptions import RefreshError, TransportError
+
+from cosinabox.tools.google._runtime_alert import runtime_oauth_alert as _runtime_oauth_alert
 from cosinabox.tools.google.auth import build_all_credentials
+
+_GOOGLE_AUTH_ERRORS = (RefreshError, TransportError)
 
 logger = logging.getLogger(__name__)
 
@@ -108,10 +113,15 @@ class GmailTool:
         seen: set[str] = set()
         out: list[GmailMessage] = []
         for svc in self._services:
-            for msg in _fetch_messages(svc, query, max_results):
-                if msg.id not in seen:
-                    seen.add(msg.id)
-                    out.append(msg)
+            try:
+                for msg in _fetch_messages(svc, query, max_results):
+                    if msg.id not in seen:
+                        seen.add(msg.id)
+                        out.append(msg)
+            except _GOOGLE_AUTH_ERRORS as exc:
+                logger.warning("Gmail OAuth failure: %s", exc)
+                _runtime_oauth_alert(exc)
+                return []
         return out
 
     def get_recipients(self, message_id: str) -> list[str]:
@@ -161,10 +171,15 @@ class GmailTool:
         seen: set[str] = set()
         out: list[GmailMessage] = []
         for svc in self._services:
-            for msg in _fetch_messages(svc, query, max_results):
-                if msg.id not in seen:
-                    seen.add(msg.id)
-                    out.append(msg)
+            try:
+                for msg in _fetch_messages(svc, query, max_results):
+                    if msg.id not in seen:
+                        seen.add(msg.id)
+                        out.append(msg)
+            except _GOOGLE_AUTH_ERRORS as exc:
+                logger.warning("Gmail OAuth failure: %s", exc)
+                _runtime_oauth_alert(exc)
+                return []
         return out
 
     def list_threads_needing_reply(
