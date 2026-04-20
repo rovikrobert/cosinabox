@@ -133,6 +133,7 @@ def register_telegram_jobs(
     rela_agent: Any,
     scheduling_ctx: Any | None,  # SchedulingContext or None
     anthropic_factory: Any,
+    chat_id: str,
     event_relevance: dict[str, list[str]] | None = None,
 ) -> None:
     """Register jobs that need send_telegram (runs AFTER send_telegram exists)."""
@@ -220,6 +221,8 @@ def register_telegram_jobs(
                 relevance_keywords=relevance_keywords,
                 relevance_domains=relevance_domains,
                 owner_emails=owner_emails,
+                memory=memory,
+                dm_session=f"dm-{chat_id}",
             )
             cron = cfg.get("schedule", "*/5 * * * *")
             scheduler.add_job(job, cron=cron)

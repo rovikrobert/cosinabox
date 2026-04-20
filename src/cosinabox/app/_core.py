@@ -335,6 +335,7 @@ class App:
             scheduling_ctx=scheduling_ctx,
             anthropic_factory=_Anthropic,
             event_relevance=event_relevance,
+            chat_id=chat_id,
         )
 
         self._wire_telegram_output(scheduler, send_telegram)
