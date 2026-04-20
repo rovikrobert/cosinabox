@@ -527,3 +527,88 @@ None remaining from the scope doc — all 5 were locked by the maintainer before
 - **Shared-process mode.** Running consult-serve in the same process as the bot once the bot grows a FastAPI surface. Needs memory-SQLite-lock consideration.
 - **Per-persona model pinning.** Let `personality.md` declare a `consult_model` override (e.g., "always Opus for consult"). Currently hardcoded to Sonnet per scope doc.
 - **MCP resources.** Expose `personality.md`, `stakeholders.yaml` as MCP **resources** (read-only context) alongside the two tools. Non-trivial design — defer.
+
+---
+
+## M1 SDK vetting log (2026-04-20)
+
+Captured before writing any code in M1 per the plan. Future milestones (especially M4) should start from this log rather than re-running context7.
+
+**SDK under test:** `mcp` on PyPI (`/modelcontextprotocol/python-sdk`). Latest released version at vet time: **1.27.0** (docs on context7 track `v1.12.4` snippets — the high-level `FastMCP` API has been stable across this range).
+
+**Decision gate:** PASS. SDK is ≥1.0 (1.27.0 shipped), has stable `FastMCP` high-level API, supports the transports we need, and ships first-class auth via `TokenVerifier`. Proceeding to implement M1 deliverables.
+
+### 1. Minimum Python version
+
+Docs explicitly say "Python 3.10 or higher" (CONTRIBUTING.md + examples README). cosinabox already requires Python ≥3.11 (pyproject.toml), so we exceed the SDK floor — no change needed.
+
+### 2. `FastMCP` high-level API
+
+Import path: `from mcp.server.fastmcp import FastMCP`.
+
+Server creation:
+
+```python
+mcp = FastMCP("server-name")                       # stateful (default)
+mcp = FastMCP("server-name", stateless_http=True, json_response=True)  # recommended for HTTP prod
+```
+
+Tool registration via decorator (our M4 factory uses this):
+
+```python
+@mcp.tool()
+def consult(prompt: str, context: str | None = None) -> str:
+    ...
+```
+
+Run methods (single `run()` entry point with `transport=` kwarg, not separate `run_stdio()` / `run_http()` methods):
+
+```python
+mcp.run(transport="stdio")                                    # stdio (default)
+mcp.run(transport="streamable-http", host="127.0.0.1", port=8080)  # production HTTP
+mcp.run(transport="sse", host="127.0.0.1", port=8000)         # legacy SSE
+```
+
+**Note for M5:** the plan's example CLI code calls `server.run_stdio()` / `server.run_http(...)`. These methods do **not** exist in the current SDK — use `server.run(transport="stdio")` / `server.run(transport="streamable-http", host=..., port=...)` instead. The plan text is stale; M5 implementer should follow the SDK's actual API.
+
+### 3. Transports supported
+
+- **stdio** — subprocess communication (the default; what Claude Code spawns for local MCP servers).
+- **streamable-http** — recommended for production remote deployments.
+- **sse** — server-sent events (legacy; supported but superseded by streamable-http).
+
+M1 decision: we target **stdio + streamable-http** for M4, per the plan. SSE is a fallback only if clients require it.
+
+### 4. HTTP auth
+
+The SDK ships **OAuth 2.1 Resource Server** primitives, not a simple Bearer middleware. Relevant surface:
+
+```python
+from mcp.server.auth.provider import AccessToken, TokenVerifier
+from mcp.server.auth.settings import AuthSettings
+from mcp.server.fastmcp import FastMCP
+
+class SharedSecretVerifier(TokenVerifier):
+    async def verify_token(self, token: str) -> AccessToken | None:
+        # hmac.compare_digest(token, CONSULT_API_KEY) check goes here
+        ...
+
+mcp = FastMCP(
+    "cosinabox-consult",
+    token_verifier=SharedSecretVerifier(),
+    auth=AuthSettings(
+        issuer_url=AnyHttpUrl("https://..."),
+        resource_server_url=AnyHttpUrl("http://..."),
+        required_scopes=["user"],
+    ),
+)
+```
+
+**Implication for M4:** the plan's "shared-secret via `CONSULT_API_KEY`" design fits as a degenerate `TokenVerifier` — we treat the env var as a single valid token and return an `AccessToken` on match, `None` otherwise. This keeps us on the SDK's supported path (no custom middleware) while preserving the shared-secret UX from cos-agent.
+
+`AuthSettings.issuer_url` and `resource_server_url` are required by `AuthSettings` but irrelevant in the shared-secret case — M4 should set them to placeholder local URLs (e.g., the bind address). If this turns out to fight the SDK at M4, fall back to wrapping the `starlette`/ASGI app the SDK exposes with a thin Bearer middleware (also documented).
+
+### 5. Version pin for `pyproject.toml`
+
+Pinning `mcp>=1.12` balances stability (docs snippets track 1.12.4) with room to uptake fixes. 1.0.0 is the advertised stable floor but 1.12.x is the oldest version where all four vetting dimensions (tool decorator, `run(transport=...)`, `TokenVerifier`, `stateless_http`) are jointly documented. M1 sets the extra to `mcp>=1.12`.
+
