@@ -54,7 +54,13 @@ Consult ships as an optional extra because it pulls in the `mcp` SDK, which not 
 
 Stdio transport spawns the server as a subprocess of the MCP client. No network surface, no API key, no auth — trust comes from the parent process. This is the default and the safest option.
 
-Claude Code MCP config (`~/.claude.json` or equivalent):
+**Easiest path — `claude mcp add`:**
+
+```bash
+claude mcp add cosinabox --scope user -- cosinabox -C /path/to/your/cos-repo consult-serve
+```
+
+**Alternative — project-scoped `.mcp.json`** in whatever repo you want `cosinabox` to be available from:
 
 ```json
 {
@@ -67,7 +73,7 @@ Claude Code MCP config (`~/.claude.json` or equivalent):
 }
 ```
 
-Restart Claude Code. The `consult` and `brainstorm` tools should show up.
+Restart Claude Code after either approach. The `consult` and `brainstorm` tools should show up.
 
 ### 2b. Remote (HTTP) — for pairing over the network
 
