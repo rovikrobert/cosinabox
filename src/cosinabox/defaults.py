@@ -91,6 +91,10 @@ DEFAULT_PERSONAL_BLOCK_PATTERNS: frozenset[str] = frozenset(
         "workout",
         "block",
         "hold",
+        # Travel blocks: "Flight", "Flights", "Flight to SFO". Personal
+        # time, not prep-worthy. Substring match; see note above.
+        # (2026-04-20 — added after long briefs on travel events.)
+        "flight",
     }
 )
 
