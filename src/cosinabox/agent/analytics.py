@@ -178,9 +178,11 @@ def get_error_patterns(
 
 # Module-level cache so the system prompt doesn't re-query the DB every
 # turn. 5-minute TTL is arbitrary but matches cos-agent and feels right
-# for a slow-changing signal.
+# for a slow-changing signal. ``_AT`` is ``-inf`` so the first read
+# always misses regardless of how small ``time.monotonic()`` is (e.g.,
+# fresh CI runners where monotonic is only a few seconds).
 _ERROR_SUMMARY_CACHE: str = ""
-_ERROR_SUMMARY_AT: float = 0.0
+_ERROR_SUMMARY_AT: float = float("-inf")
 _ERROR_SUMMARY_TTL_S: float = 300.0
 
 
@@ -190,7 +192,11 @@ def invalidate_error_summary_cache() -> None:
     """
     global _ERROR_SUMMARY_CACHE, _ERROR_SUMMARY_AT
     _ERROR_SUMMARY_CACHE = ""
-    _ERROR_SUMMARY_AT = 0.0
+    # Sentinel so the cache always looks stale on the next read regardless
+    # of what ``time.monotonic()`` returns. Using 0.0 would look fresh for
+    # ~5 minutes on any process that started less than TTL seconds ago
+    # (e.g., CI runners), causing stale-empty-string leaks between tests.
+    _ERROR_SUMMARY_AT = float("-inf")
 
 
 def get_error_pattern_summary(db: Any, days: int = 7) -> str:
