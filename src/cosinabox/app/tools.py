@@ -43,6 +43,23 @@ def build_tools(
                 "Run `cosinabox auth google` to refresh tokens."
             )
 
+        # Drive is opt-in so users with refresh tokens minted before the
+        # `drive.readonly` scope landed aren't forced to re-auth. When the
+        # scope is present and the integration is configured, the Drive
+        # tool just works; otherwise it's silently absent.
+        if google_cfg.get("drive_enabled"):
+            try:
+                from cosinabox.tools.google.drive import DriveTool
+
+                tools["drive"] = DriveTool()
+                logger.info("Google Drive tool loaded")
+            except Exception as exc:
+                logger.warning("Google Drive unavailable", exc_info=True)
+                errors.append(
+                    f"Google Drive init failed: {exc}. "
+                    "Re-run `cosinabox auth google` to grant drive.readonly."
+                )
+
     if integrations.get("fireflies", {}).get("enabled"):
         api_key = os.getenv("FIREFLIES_API_KEY")
         if not api_key:

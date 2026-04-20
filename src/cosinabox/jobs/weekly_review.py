@@ -21,6 +21,7 @@ class WeeklyReviewJob(Job):
         name_for_briefing: str,
         stakeholders: list[dict[str, Any]] | None = None,
         db: Any | None = None,
+        drive: Any | None = None,
     ) -> None:
         self.gmail = gmail
         self.calendar = calendar
@@ -29,6 +30,7 @@ class WeeklyReviewJob(Job):
         self.name_for_briefing = name_for_briefing
         self.stakeholders = stakeholders or []
         self.db = db
+        self.drive = drive
 
     def _prefetch(self) -> str:
         sections: list[str] = []
@@ -78,7 +80,7 @@ class WeeklyReviewJob(Job):
                     verify_all_open_commitments,
                 )
 
-                verified = verify_all_open_commitments(self.db, self.gmail)
+                verified = verify_all_open_commitments(self.db, self.gmail, drive=self.drive)
                 formatted = format_for_briefing(verified)
                 if formatted:
                     sections.append(formatted)
