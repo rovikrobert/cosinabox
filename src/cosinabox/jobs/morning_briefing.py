@@ -21,6 +21,7 @@ class MorningBriefingJob(Job):
         name_for_briefing: str,
         stakeholders: list[dict[str, Any]] | None = None,
         db: Any | None = None,
+        attio: Any | None = None,
     ) -> None:
         self.gmail = gmail
         self.calendar = calendar
@@ -29,6 +30,7 @@ class MorningBriefingJob(Job):
         self.name_for_briefing = name_for_briefing
         self.stakeholders = stakeholders or []
         self.db = db
+        self.attio = attio
 
     def _prefetch(self) -> str:
         """Pre-fetch all data sources and assemble into a single block."""
@@ -104,6 +106,26 @@ class MorningBriefingJob(Job):
             except Exception:
                 pass
 
+        # Keep Warm — Attio-curated overdue relationships. Grounded data
+        # only; quiet when no one is overdue (don't announce "no overdue"
+        # and crowd the briefing).
+        if self.attio is not None:
+            try:
+                from cosinabox.defaults import KEEP_WARM_MAX_BRIEFING_ROWS
+
+                overdue = self.attio.get_keep_warm_overdue()
+                if overdue:
+                    lines = []
+                    for p in overdue[:KEEP_WARM_MAX_BRIEFING_ROWS]:
+                        note_part = f". Note: {p.note}" if p.note else ""
+                        lines.append(
+                            f"- {p.name} — {p.days_since}d since last contact "
+                            f"(cadence: {p.cadence_days}d){note_part}"
+                        )
+                    sections.append("KEEP WARM — OVERDUE:\n" + "\n".join(lines))
+            except Exception:
+                pass
+
         # Stakeholder pulse
         if self.stakeholders:
             stale = []
@@ -156,6 +178,15 @@ class MorningBriefingJob(Job):
             else ""
         )
 
+        keep_warm_rule = (
+            "5. KEEP WARM — overdue relationships from the curated list\n"
+            "   (see pre-fetched KEEP WARM — OVERDUE). Reference people by\n"
+            "   name only; never mention record IDs. Skip this section if\n"
+            "   KEEP WARM — OVERDUE is absent.\n"
+            if self.attio is not None
+            else ""
+        )
+
         prompt = (
             f"Generate {self.name_for_briefing}'s morning briefing for TODAY: {today}.\n\n"
             "FORMAT: Max 25 lines. One line per item. Skip empty sections.\n"
@@ -164,7 +195,9 @@ class MorningBriefingJob(Job):
             "   Only surface threads from INBOX NEEDING REPLY. For each, lead with\n"
             "   the pending ask; don't recommend actions the user already took.\n"
             f"{priorities_rule}"
-            "4. STALE FOLLOW-UPS — anyone overdue on contact cadence.\n\n"
+            "4. STALE FOLLOW-UPS — anyone overdue on contact cadence.\n"
+            f"{keep_warm_rule}"
+            "\n"
             "RULES:\n"
             "- Do not invent items not in the pre-fetched data.\n"
             "- If a section has nothing, skip it entirely.\n"
