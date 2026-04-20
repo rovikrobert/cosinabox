@@ -15,6 +15,7 @@ from cosinabox.consult.metrics import (
     get_default_metrics,
     reset_default_metrics,
 )
+from cosinabox.consult.prompts import build_consult_system_prompt
 from cosinabox.consult.rate_limit import (
     RateLimiter,
     get_default_rate_limiter,
@@ -24,6 +25,7 @@ from cosinabox.consult.rate_limit import (
 __all__ = [
     "Metrics",
     "RateLimiter",
+    "build_consult_system_prompt",
     "get_default_metrics",
     "get_default_rate_limiter",
     "reset_default_metrics",
