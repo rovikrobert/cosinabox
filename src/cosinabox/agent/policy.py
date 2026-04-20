@@ -187,6 +187,15 @@ DEFAULT_RULES: list[PolicyRule] = [
         priority=200,
         description="Owner decision on own scheduling request (reject/cancel — local only)",
     ),
+    # Commitments — DB-local state only, no PII exfiltration. Close/dismiss
+    # log a row in manual_closures; create/update flip a single status
+    # column. Safe to auto-allow.
+    PolicyRule(
+        "commitment_*",
+        Decision.ALLOW,
+        priority=200,
+        description="Commitment CRUD — SQLite-local, no outbound side effects",
+    ),
     # Drafts are safe (user reviews before sending)
     PolicyRule(
         "gmail_compose",
