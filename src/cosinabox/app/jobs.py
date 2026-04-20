@@ -105,6 +105,18 @@ def register_core_jobs(
             scheduler.add_job(job, cron=cron)
             logger.info("Registered %s at %s", job_name, cron)
 
+    # auth_health: always-on by default; registered outside the iteration loop
+    # so existing user repos whose jobs.yaml predates this change still get
+    # silent-failure protection.
+    from cosinabox import defaults
+    from cosinabox.jobs.auth_health import AuthHealthJob
+
+    auth_health_cfg = jobs_config.get("auth_health", {})
+    if auth_health_cfg.get("enabled", True):
+        cron = auth_health_cfg.get("schedule", defaults.AUTH_HEALTH_DEFAULT_SCHEDULE)
+        scheduler.add_job(AuthHealthJob(), cron=cron)
+        logger.info("Registered auth_health at %s", cron)
+
 
 def register_telegram_jobs(
     scheduler: SchedulerRunner,
