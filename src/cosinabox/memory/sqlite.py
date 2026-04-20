@@ -14,6 +14,7 @@ Schema:
 from __future__ import annotations
 
 import sqlite3
+import threading
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
@@ -222,12 +223,22 @@ class Memory:
             self.db_path,
             check_same_thread=False,  # APScheduler + Telegram use different threads
         )
-        self._conn.execute("PRAGMA journal_mode=WAL")
-        self._conn.execute("PRAGMA foreign_keys=ON")  # enforce REFERENCES constraints
-        self._conn.row_factory = sqlite3.Row
-        self._conn.executescript(_SCHEMA)
-        self._conn.commit()
-        self._migrate()
+        # sqlite3.Connection is not thread-safe for concurrent cursor use
+        # even with check_same_thread=False — the shared cursor/statement
+        # state can corrupt under parallel execute() calls from APScheduler
+        # + Telegram + SubAgent threads. This RLock serializes every call
+        # through the connection. Callers that touch `_conn` directly
+        # should acquire this lock first (use `with mem.lock:` as a context
+        # manager). CRUD helpers in e.g. `cosinabox.commitments.store`
+        # already do this.
+        self.lock: threading.RLock = threading.RLock()
+        with self.lock:
+            self._conn.execute("PRAGMA journal_mode=WAL")
+            self._conn.execute("PRAGMA foreign_keys=ON")  # enforce REFERENCES constraints
+            self._conn.row_factory = sqlite3.Row
+            self._conn.executescript(_SCHEMA)
+            self._conn.commit()
+            self._migrate()
 
     def _migrate(self) -> None:
         """Run additive schema migrations for existing databases."""
