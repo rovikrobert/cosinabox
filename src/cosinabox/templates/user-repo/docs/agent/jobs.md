@@ -58,3 +58,33 @@ Also available: `commitment_list`, `commitment_update`, `commitment_close`, `com
 cosinabox describe
 ```
 shows counts by status (`open`, `done`, `cancelled`).
+
+## Keep Warm (Attio-backed relationship reminders)
+
+A hand-curated list of people you want to stay in touch with, each with a per-person cadence (e.g., every 14 days). The morning briefing surfaces them as overdue when days-since-last-contact exceeds their cadence.
+
+Requires Attio CRM. Without Attio the section is silently omitted from the briefing; `stakeholders.yaml` + `followup_reminder` continue to work for the simpler cadence model.
+
+### Required Attio custom fields (on the People object)
+
+Create these once in the Attio UI (Settings → Objects → People → Attributes):
+
+| Field | Type | Notes |
+|---|---|---|
+| `keep_warm` | checkbox | True = include in the Keep Warm list. |
+| `keep_warm_cadence_days` | number | Days between touches (e.g., 14). |
+| `keep_warm_note` | text | Free-text reminder (e.g., "Lead investor", "Q3 co-author"). |
+
+Attio also has a built-in `last_interaction` timestamp that we use to compute overdueness — no manual field needed.
+
+### Using it conversationally
+
+Tell Claude Code things like:
+
+- *"Add Sarah Chen to Keep Warm, 14-day cadence, note: Lead investor."* → `keep_warm_set`
+- *"Who's overdue on Keep Warm?"* → the briefing's KEEP WARM section, or `keep_warm_list`
+- *"Drop Tom from Keep Warm, he moved on."* → `keep_warm_unset`
+
+### Coexistence with followup_reminder
+
+Both surface overdue people. Use Attio Keep Warm for the handful of relationships you care most about (per-person cadence + note); use `stakeholders.yaml` + `followup_reminder` for the broader stakeholder set with coarse weekly/monthly cadences. The briefing will show them as separate sections.

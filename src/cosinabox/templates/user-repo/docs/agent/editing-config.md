@@ -45,7 +45,7 @@ Each integration gives the CoS new capabilities. All are optional except Google 
 | Integration | What it enables | Without it | Env var needed |
 |-------------|----------------|------------|----------------|
 | **google** | Email search, calendar events, briefings, pre-meeting prep, find free time, create events | Briefings have no email/calendar data. DM can't search mail or schedule. | `GOOGLE_OAUTH_CLIENT_ID`, `GOOGLE_OAUTH_CLIENT_SECRET`, `GOOGLE_OAUTH_REFRESH_TOKEN_1` |
-| **attio** | CRM contact search, relationship profiles, stakeholder tracking synced with Attio | Falls back to `stakeholders.yaml` — static, manually maintained, no search in DM | `ATTIO_API_KEY` |
+| **attio** | CRM contact search, relationship profiles, stakeholder tracking, **Keep Warm** reminders | Falls back to `stakeholders.yaml` — static, manually maintained, no search in DM, no Keep Warm | `ATTIO_API_KEY` |
 | **fireflies** | Meeting transcript search, retrieve what was discussed | No meeting context — agent can't reference past conversations | `FIREFLIES_API_KEY` |
 | **web_search** | Google search during DM conversations | Agent can only use information already in context | `SERPER_API_KEY` |
 | **memory service** | Semantic recall, durable fact storage, extraction pipeline | Falls back to local SQLite with keyword search — works for <10k memories | `MEMORY_SERVICE_URL`, `MEMORY_API_KEY` |
@@ -59,6 +59,18 @@ Each integration gives the CoS new capabilities. All are optional except Google 
 5. Run `cosinabox describe` to confirm it appears in the summary
 
 Never enable an integration without confirming the env var is set in `.env`.
+
+### Attio — extra setup for Keep Warm
+
+After enabling Attio, add three custom fields to the People object in Attio's UI (Settings → Objects → People → Attributes):
+
+| Field slug | Type | Purpose |
+|---|---|---|
+| `keep_warm` | checkbox | True = include in the Keep Warm list. |
+| `keep_warm_cadence_days` | number | Days between touches (e.g., 14). |
+| `keep_warm_note` | text | Free-text reminder. |
+
+Without these fields, the Attio integration still works but Keep Warm tools + the morning briefing's KEEP WARM section stay quiet.
 
 ## Setup & maintenance commands
 
