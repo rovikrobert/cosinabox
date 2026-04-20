@@ -9,6 +9,7 @@ import click
 
 from cosinabox.cli.add_stakeholder import add_stakeholder_cmd
 from cosinabox.cli.auth_google import auth_cmd
+from cosinabox.cli.consult_serve import consult_serve_cmd
 from cosinabox.cli.describe import describe_cmd
 from cosinabox.cli.disable_job import disable_job_cmd
 from cosinabox.cli.doctor import doctor_cmd
@@ -55,6 +56,7 @@ cli.add_command(test_cmd)
 cli.add_command(upgrade_docs_cmd)
 cli.add_command(auth_cmd)
 cli.add_command(doctor_cmd)
+cli.add_command(consult_serve_cmd)
 
 
 if __name__ == "__main__":
