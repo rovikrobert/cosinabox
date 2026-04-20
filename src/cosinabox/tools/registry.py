@@ -549,6 +549,7 @@ def build_tool_registry(
     timezone: str = "UTC",
     rela_agent: Any | None = None,
     scheduling_ctx: Any | None = None,  # SchedulingContext or None
+    memory: Any | None = None,
 ) -> tuple[list[dict[str, Any]], dict[str, Callable[..., str]]]:
     """Build Claude API tool definitions and handler dict from tool instances.
 
@@ -612,6 +613,20 @@ def build_tool_registry(
         definitions.extend(sched_defs)
         handlers.update(build_scheduling_handlers(scheduling_ctx))
         logger.info("Registered %d scheduling tools", len(sched_defs))
+
+    # Commitments tools (registered when a memory/db instance is available).
+    # Agent uses these to create, list, update, close, dismiss, reopen
+    # tracked work items — the source of truth for briefing CARRY-OVER /
+    # MISSES / NEXT WEEK / PRIORITIES sections.
+    if memory is not None:
+        from cosinabox.tools.commitments_tool import (
+            COMMITMENT_TOOL_DEFINITIONS,
+            build_commitment_handlers,
+        )
+
+        definitions.extend(COMMITMENT_TOOL_DEFINITIONS)
+        handlers.update(build_commitment_handlers(memory))
+        logger.info("Registered %d commitment tools", len(COMMITMENT_TOOL_DEFINITIONS))
 
     # Consistency check: every definition has a matching handler
     def_names = {d["name"] for d in definitions}
