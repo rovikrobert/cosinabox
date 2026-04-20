@@ -216,3 +216,111 @@ def test_format_for_briefing_groups_by_verdict() -> None:
 
 def test_format_for_briefing_empty_returns_empty_string() -> None:
     assert format_for_briefing([]) == ""
+
+
+# ---------------------------------------------------------------------------
+# Drive upgrade logic
+# ---------------------------------------------------------------------------
+
+
+def _drive_file(name: str) -> MagicMock:
+    f = MagicMock()
+    f.name = name
+    return f
+
+
+def test_drive_only_match_yields_likely_done(db: Memory) -> None:
+    """Gmail nothing; Drive has 1 matching doc → LIKELY_DONE."""
+    c = create_commitment(db, title="Send NTU proposal draft")
+    gmail = MagicMock()
+    gmail.search.return_value = []
+    drive = MagicMock()
+    drive.search.return_value = [_drive_file("NTU proposal draft v3")]
+
+    got = verify_commitment(c, gmail, drive=drive)
+    assert got["_verdict"] == VERDICT_LIKELY_DONE
+    assert "Drive" in got["_evidence"]
+
+
+def test_drive_multiple_matches_upgrade_to_verified(db: Memory) -> None:
+    """Gmail nothing; Drive has 2+ matching docs → VERIFIED_DONE."""
+    c = create_commitment(db, title="Send NTU proposal draft")
+    gmail = MagicMock()
+    gmail.search.return_value = []
+    drive = MagicMock()
+    drive.search.return_value = [
+        _drive_file("NTU proposal draft v3"),
+        _drive_file("Final NTU proposal"),
+    ]
+
+    got = verify_commitment(c, gmail, drive=drive)
+    assert got["_verdict"] == VERDICT_VERIFIED_DONE
+
+
+def test_drive_and_gmail_both_strong_is_verified(db: Memory) -> None:
+    c = create_commitment(db, title="Send NTU proposal draft")
+    gmail = MagicMock()
+    gmail.search.return_value = [
+        _msg("NTU proposal final"),
+        _msg("Re: NTU proposal"),
+    ]
+    drive = MagicMock()
+    drive.search.return_value = [_drive_file("NTU proposal draft v3")]
+
+    got = verify_commitment(c, gmail, drive=drive)
+    assert got["_verdict"] == VERDICT_VERIFIED_DONE
+    assert "Drive doc" in got["_evidence"]
+    assert "sent mail" in got["_evidence"].lower()
+
+
+def test_drive_file_name_needs_two_keywords(db: Memory) -> None:
+    """Single-keyword filename doesn't count as a Drive hit."""
+    c = create_commitment(db, title="Send NTU proposal draft")
+    gmail = MagicMock()
+    gmail.search.return_value = []
+    drive = MagicMock()
+    # Only 'proposal' matches; 'NTU' and 'draft' are missing.
+    drive.search.return_value = [_drive_file("Sales proposal 2024")]
+
+    got = verify_commitment(c, gmail, drive=drive)
+    assert got["_verdict"] == VERDICT_NO_EVIDENCE
+
+
+def test_drive_none_preserves_old_behavior(db: Memory) -> None:
+    c = create_commitment(db, title="Send NTU proposal draft")
+    gmail = MagicMock()
+    gmail.search.return_value = [
+        _msg("NTU proposal final"),
+        _msg("Re: NTU proposal"),
+    ]
+    # drive param omitted = default None
+    got = verify_commitment(c, gmail)
+    assert got["_verdict"] == VERDICT_VERIFIED_DONE
+    assert "Drive" not in got["_evidence"]
+
+
+def test_drive_exception_does_not_break_verification(db: Memory) -> None:
+    c = create_commitment(db, title="Send NTU proposal draft")
+    gmail = MagicMock()
+    gmail.search.return_value = []
+    drive = MagicMock()
+    drive.search.side_effect = RuntimeError("drive api down")
+
+    got = verify_commitment(c, gmail, drive=drive)
+    # Gmail empty + Drive failed → still NO_EVIDENCE (not an error).
+    assert got["_verdict"] == VERDICT_NO_EVIDENCE
+
+
+def test_verify_all_threads_drive_through(db: Memory) -> None:
+    create_commitment(db, title="a NTU proposal")
+    gmail = MagicMock()
+    gmail.search.return_value = []
+    drive = MagicMock()
+    drive.search.return_value = [
+        _drive_file("NTU proposal v1"),
+        _drive_file("NTU proposal v2"),
+    ]
+
+    results = verify_all_open_commitments(db, gmail, drive=drive)
+    assert len(results) == 1
+    assert results[0]["_verdict"] == VERDICT_VERIFIED_DONE

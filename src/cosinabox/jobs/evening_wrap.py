@@ -28,12 +28,14 @@ class EveningWrapJob(Job):
         personality: str,
         name_for_briefing: str,
         db: Any | None = None,
+        drive: Any | None = None,
     ) -> None:
         self.gmail = gmail
         self.agent_loop = agent_loop
         self.personality = personality
         self.name_for_briefing = name_for_briefing
         self.db = db
+        self.drive = drive
 
     def _prefetch(self) -> str:
         sections: list[str] = []
@@ -57,7 +59,7 @@ class EveningWrapJob(Job):
                     verify_all_open_commitments,
                 )
 
-                verified = verify_all_open_commitments(self.db, self.gmail)
+                verified = verify_all_open_commitments(self.db, self.gmail, drive=self.drive)
                 formatted = format_for_briefing(verified)
                 if formatted:
                     sections.append(formatted)

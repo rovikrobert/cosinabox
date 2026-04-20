@@ -22,6 +22,7 @@ class MorningBriefingJob(Job):
         stakeholders: list[dict[str, Any]] | None = None,
         db: Any | None = None,
         attio: Any | None = None,
+        drive: Any | None = None,
     ) -> None:
         self.gmail = gmail
         self.calendar = calendar
@@ -31,6 +32,7 @@ class MorningBriefingJob(Job):
         self.stakeholders = stakeholders or []
         self.db = db
         self.attio = attio
+        self.drive = drive
 
     def _prefetch(self) -> str:
         """Pre-fetch all data sources and assemble into a single block."""
@@ -99,7 +101,7 @@ class MorningBriefingJob(Job):
                     verify_all_open_commitments,
                 )
 
-                verified = verify_all_open_commitments(self.db, self.gmail)
+                verified = verify_all_open_commitments(self.db, self.gmail, drive=self.drive)
                 formatted = format_for_briefing(verified)
                 if formatted:
                     sections.append(formatted)

@@ -12,9 +12,14 @@ except ImportError as e:
     ) from e
 
 GOOGLE_TOKEN_URI = "https://oauth2.googleapis.com/token"
+# Note: `drive.readonly` is requested but not enforced — existing refresh
+# tokens minted before this scope landed will keep working for Gmail +
+# Calendar; Drive API calls just 403 and the DriveTool catches it.
+# Users who want Drive search run `cosinabox auth google` to re-mint.
 GOOGLE_DEFAULT_SCOPES = (
     "https://www.googleapis.com/auth/gmail.modify",
     "https://www.googleapis.com/auth/calendar",
+    "https://www.googleapis.com/auth/drive.readonly",
 )
 
 

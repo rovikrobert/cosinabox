@@ -86,6 +86,7 @@ class App:
         event_relevance: dict[str, list[str]] | None = None,
         memory: Any | None = None,
         attio: Any | None = None,
+        drive: Any | None = None,
     ) -> None:
         from cosinabox.app.jobs import register_core_jobs
 
@@ -101,6 +102,7 @@ class App:
             event_relevance=event_relevance,
             memory=memory,
             attio=attio,
+            drive=drive,
         )
 
     # ------------------------------------------------------------------
@@ -306,6 +308,7 @@ class App:
             event_relevance=event_relevance,
             memory=memory,
             attio=tool_instances.get("attio"),
+            drive=tool_instances.get("drive"),
         )
 
         # --- Telegram ---

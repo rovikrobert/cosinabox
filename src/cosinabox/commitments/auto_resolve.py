@@ -172,17 +172,44 @@ def _has_single_keyword_match(messages: list[Any], keywords: list[str]) -> bool:
 # ---------------------------------------------------------------------------
 
 
+def _drive_hits(drive: Any, keywords: list[str], max_results: int = 5) -> int:
+    """Count Drive files whose name contains >= 2 keywords.
+
+    Using `name` rather than `fullText` for the match check (Drive returned
+    files already matched the fullText query) so an unrelated file that
+    incidentally contains one word doesn't upgrade the verdict.
+    """
+    if drive is None or not keywords:
+        return 0
+    try:
+        files = drive.search(" ".join(keywords[:4]), max_results=max_results)
+    except Exception:
+        logger.debug("auto_resolve: drive.search raised", exc_info=True)
+        return 0
+
+    hits = 0
+    for f in files:
+        name_lower = (getattr(f, "name", "") or "").lower()
+        match_count = sum(1 for k in keywords if re.search(rf"\b{re.escape(k)}\b", name_lower))
+        if match_count >= 2:
+            hits += 1
+    return hits
+
+
 def verify_commitment(
     commitment: dict[str, Any],
     gmail: Any,
     *,
     db: Memory | None = None,
+    drive: Any | None = None,
     lookback_days: int = defaults.AUTO_RESOLVE_LOOKBACK_DAYS,
 ) -> dict[str, Any]:
-    """Search sent mail for evidence a commitment is done.
+    """Search sent mail (and optionally Drive) for evidence a commitment is done.
 
     Returns the commitment dict with ``_verdict`` and ``_evidence`` added.
     If ``db`` is supplied, persists ``last_verdict`` + ``last_verdict_at``.
+    If ``drive`` is supplied, matching Drive file names can upgrade a
+    weak or empty Gmail verdict.
     """
     title = commitment.get("title", "")
     description = commitment.get("description") or ""
@@ -215,14 +242,35 @@ def verify_commitment(
             db=db,
         )
 
-    if _has_real_match(messages, keywords, min_matches=2):
+    gmail_strong = _has_real_match(messages, keywords, min_matches=2)
+    gmail_weak = not gmail_strong and _has_single_keyword_match(messages, keywords)
+    drive_hits = _drive_hits(drive, keywords)
+
+    if gmail_strong and drive_hits:
+        return _record(
+            commitment,
+            VERDICT_VERIFIED_DONE,
+            f"sent mail subject + Drive doc match '{query}' (last {lookback_days}d)",
+            db=db,
+        )
+    if gmail_strong:
         return _record(
             commitment,
             VERDICT_VERIFIED_DONE,
             f"sent mail subject match '{query}' (last {lookback_days}d)",
             db=db,
         )
-    if _has_single_keyword_match(messages, keywords):
+    if drive_hits:
+        # Drive hit without Gmail strong match — still strong evidence of
+        # activity (someone saved a doc with matching name recently).
+        verdict = VERDICT_VERIFIED_DONE if drive_hits >= 2 else VERDICT_LIKELY_DONE
+        return _record(
+            commitment,
+            verdict,
+            f"Drive doc match '{query}' ({drive_hits} file(s))",
+            db=db,
+        )
+    if gmail_weak:
         return _record(
             commitment,
             VERDICT_LIKELY_DONE,
@@ -267,6 +315,7 @@ def verify_all_open_commitments(
     db: Memory,
     gmail: Any,
     *,
+    drive: Any | None = None,
     limit: int = defaults.AUTO_RESOLVE_MAX_ITEMS,
     concurrency: int = defaults.AUTO_RESOLVE_CONCURRENCY,
     timeout_per_item_s: int = defaults.AUTO_RESOLVE_TIMEOUT_PER_ITEM_S,
@@ -276,6 +325,9 @@ def verify_all_open_commitments(
     Per-item timeout ensures one slow Gmail search doesn't block others;
     errors/timeouts tag the item ``NO_EVIDENCE`` with an explanatory
     evidence string so briefings render something sensible.
+
+    If ``drive`` is provided, Drive-doc name matches can upgrade a weak
+    or empty Gmail verdict.
     """
     open_items = list_commitments(db, limit=limit)
     if not open_items:
@@ -283,7 +335,9 @@ def verify_all_open_commitments(
 
     results: list[dict[str, Any]] = []
     with ThreadPoolExecutor(max_workers=concurrency) as pool:
-        future_to_item = {pool.submit(verify_commitment, c, gmail, db=db): c for c in open_items}
+        future_to_item = {
+            pool.submit(verify_commitment, c, gmail, db=db, drive=drive): c for c in open_items
+        }
         for fut, c in future_to_item.items():
             try:
                 results.append(fut.result(timeout=timeout_per_item_s))
