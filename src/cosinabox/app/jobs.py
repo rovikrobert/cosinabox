@@ -179,6 +179,18 @@ def register_telegram_jobs(
         elif job_name == "post_meeting_debrief":
             from cosinabox.jobs.post_meeting_debrief import PostMeetingDebriefJob
 
+            # Owner emails feed the matcher's "exclude self from overlap"
+            # rule. Without this, every transcript the owner attended
+            # would cross-match every other meeting. Source of truth is
+            # integrations.google.accounts[].email; missing config means
+            # "no owner exclusion" (matcher still requires time + at
+            # least one of title/attendee, so the bot is safe but more
+            # permissive).
+            google_accounts = integrations.get("google", {}).get("accounts", [])
+            owner_emails: list[str] = [
+                str(a["email"]) for a in google_accounts if isinstance(a, dict) and a.get("email")
+            ]
+
             job = PostMeetingDebriefJob(
                 calendar=tool_instances.get("calendar"),
                 fireflies=tool_instances.get("fireflies"),
@@ -191,6 +203,7 @@ def register_telegram_jobs(
                 rela=rela_agent,
                 relevance_keywords=relevance_keywords,
                 relevance_domains=relevance_domains,
+                owner_emails=owner_emails,
             )
             cron = cfg.get("schedule", "*/5 * * * *")
             scheduler.add_job(job, cron=cron)
