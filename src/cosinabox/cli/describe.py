@@ -25,6 +25,27 @@ def _load_yaml(path: Path) -> dict[str, Any]:
     return {}
 
 
+def _commitment_counts(config_dir: Path) -> dict[str, int] | None:
+    """Peek at the commitments table if a memory.db exists. Returns None
+    if the DB isn't there (fresh repo, haven't started the app yet) or
+    can't be read — we stay silent rather than crash ``describe``.
+    """
+    import sqlite3
+
+    db_path = config_dir / ".cosinabox" / "memory.db"
+    if not db_path.exists():
+        return None
+    try:
+        conn = sqlite3.connect(db_path)
+        conn.row_factory = sqlite3.Row
+        cur = conn.execute("SELECT status, COUNT(*) AS n FROM commitments GROUP BY status")
+        counts = {row["status"]: int(row["n"]) for row in cur.fetchall()}
+        conn.close()
+        return counts
+    except sqlite3.Error:
+        return None
+
+
 def _build_data(config_dir: Path) -> dict[str, Any]:
     from cosinabox.stakeholders import get_stakeholders
 
@@ -68,6 +89,7 @@ def _build_data(config_dir: Path) -> dict[str, Any]:
         "integrations": enabled_integrations,
         "disabled_integrations": disabled_integrations,
         "memory_backend": memory_backend,
+        "commitments": _commitment_counts(config_dir),
     }
 
 
@@ -129,6 +151,14 @@ def _format_english(data: dict[str, Any]) -> str:
         }
         parts = [f"{k} ({fallbacks.get(k, 'disabled')})" for k in disabled]
         lines.append("Disabled integrations: " + ", ".join(parts))
+
+    counts = data.get("commitments")
+    if counts:
+        lines.append("")
+        open_n = counts.get("open", 0) + counts.get("in_progress", 0) + counts.get("blocked", 0)
+        done_n = counts.get("done", 0)
+        cancelled_n = counts.get("cancelled", 0)
+        lines.append(f"Commitments: {open_n} open, {done_n} done, {cancelled_n} cancelled")
 
     return "\n".join(lines)
 

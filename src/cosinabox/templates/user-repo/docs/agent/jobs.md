@@ -33,3 +33,28 @@ Requires `urgent_senders` in `integrations.yaml` to know which emails to alert o
 ## CRM sync
 
 Requires both Google (Gmail) and Attio integrations enabled. Updates `last_interaction` timestamps only — no notes or status changes.
+
+## Commitments (open work tracking)
+
+`morning_briefing`, `evening_wrap`, and `weekly_review` all ground their open-work sections (PRIORITIES / CARRY-OVER / MISSES / NEXT WEEK) in the commitments table — **not in conversation memory**. Before surfacing an item as "still open," each job runs every commitment through `auto_resolve.verify_all_open_commitments`:
+
+- Searches the last 7 days of sent mail for subject-line keyword matches.
+- Emits one of three verdicts per commitment:
+  - `VERIFIED_DONE` — 2+ distinct keyword matches in a subject.
+  - `LIKELY_DONE` — a single keyword match.
+  - `NO_EVIDENCE` — nothing found.
+
+Only `NO_EVIDENCE` items can appear as carry-over / misses / priorities. This is the mechanism that prevents "zombie items" (resolved work reappearing in the briefing days later).
+
+### Creating commitments
+
+Tell Claude Code conversationally: *"remind me to follow up with Sarah on the Q3 deck by Friday"*. The agent calls `commitment_create` with the right fields. No need to edit YAML.
+
+Also available: `commitment_list`, `commitment_update`, `commitment_close`, `commitment_dismiss`, `commitment_reopen`. All are read-only-by-default from a sandbox perspective (they only touch the local SQLite db — no outbound effects).
+
+### Viewing state
+
+```bash
+cosinabox describe
+```
+shows counts by status (`open`, `done`, `cancelled`).
