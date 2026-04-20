@@ -26,6 +26,17 @@ from cosinabox.commitments import close_commitment, create_commitment
 from cosinabox.memory import Memory
 
 
+@pytest.fixture(autouse=True)
+def _reset_analytics_cache():
+    """Cache state is module-global. Reset between tests to prevent order
+    dependencies when running under pytest-xdist or with a warm cache from
+    a prior test.
+    """
+    invalidate_error_summary_cache()
+    yield
+    invalidate_error_summary_cache()
+
+
 @pytest.fixture
 def db(tmp_path: Path) -> Memory:
     return Memory(db_path=tmp_path / "t.db")
