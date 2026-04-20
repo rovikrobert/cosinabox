@@ -192,9 +192,9 @@ class TestBuildToolRegistry:
         for d in defs:
             desc_lower = d["description"].lower()
             for word in forbidden:
-                assert (
-                    word not in desc_lower
-                ), f"Tool '{d['name']}' description contains '{word}' — not OSS-friendly"
+                assert word not in desc_lower, (
+                    f"Tool '{d['name']}' description contains '{word}' — not OSS-friendly"
+                )
 
 
 # ---------------------------------------------------------------------------

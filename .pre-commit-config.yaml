@@ -1,6 +1,9 @@
 repos:
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.4.10
+    # Pin matches the ruff version CI installs (via pyproject dev deps).
+    # Version skew caused formatting churn: v0.4 would reformat files that
+    # v0.15 considered clean, and CI would fail on those files.
+    rev: v0.15.11
     hooks:
       - id: ruff
         args: [--fix]
@@ -9,7 +12,11 @@ repos:
     hooks:
       - id: secret-scan
         name: secret-scan
-        entry: bash -c 'git diff --cached --name-only -z | xargs -0 grep -lE "(sk-ant-|xoxb-|AIza[0-9A-Za-z_-]{35}|ghp_[A-Za-z0-9]{36})" && exit 1 || exit 0'
+        # The hook's own regex contains the sentinel prefixes (sk-ant-,
+        # xoxb-, etc.), so greping staged files self-matches whenever
+        # this config itself is staged. Exclude the config file — it's
+        # maintainer-only, never carries user-supplied content.
+        entry: bash -c 'git diff --cached --name-only -z | grep -vz "^\.pre-commit-config\.yaml$" | xargs -0 grep -lE "(sk-ant-|xoxb-|AIza[0-9A-Za-z_-]{35}|ghp_[A-Za-z0-9]{36})" && exit 1 || exit 0'
         language: system
         pass_filenames: false
         stages: [pre-commit]
