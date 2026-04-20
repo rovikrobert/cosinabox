@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import Any
 from unittest.mock import MagicMock
 
+import anthropic
 import pytest
 
 from cosinabox import defaults
@@ -195,15 +196,35 @@ def test_memory_recall_raises_is_tolerated() -> None:
 
 def test_claude_api_error() -> None:
     deps = _make_deps(anthropic_responses=None)
-    deps["anthropic_client"].messages.create.side_effect = RuntimeError("api down")
+    deps["anthropic_client"].messages.create.side_effect = anthropic.APIError(
+        message="api down", request=None, body=None
+    )
     req = ConsultRequest(prompt="why?", context=None, mode="consult")
 
     result = handle_consult(req, **deps)
 
     assert isinstance(result, ConsultError)
     assert result.code == "claude_error"
-    assert "RuntimeError" in result.error
+    assert "APIError" in result.error
     # Metrics NOT recorded on API error — rate limiter IS advanced (intent counted).
+    assert deps["metrics"].snapshot()["calls_today"] == 0
+    assert deps["rate_limiter"].snapshot()["count"] == 1
+
+
+def test_non_api_error_propagates() -> None:
+    """Programming bugs (AttributeError, TypeError, RuntimeError) around the
+    Claude call must propagate — they are NOT service outages and silently
+    mapping them to ``claude_error`` would mask real bugs as flaky API
+    failures."""
+    deps = _make_deps(anthropic_responses=None)
+    deps["anthropic_client"].messages.create.side_effect = RuntimeError("bug")
+    req = ConsultRequest(prompt="why?", context=None, mode="consult")
+
+    with pytest.raises(RuntimeError, match="bug"):
+        handle_consult(req, **deps)
+
+    # Rate-limiter was advanced before the crash (intent was counted), but
+    # metrics were not recorded — the call never completed.
     assert deps["metrics"].snapshot()["calls_today"] == 0
     assert deps["rate_limiter"].snapshot()["count"] == 1
 

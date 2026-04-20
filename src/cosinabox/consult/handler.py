@@ -19,6 +19,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Protocol
 
+import anthropic
+
 from cosinabox import defaults
 from cosinabox.agent.cost import CostExceeded, CostTracker, estimate_cost
 from cosinabox.agent.routing import Router
@@ -27,6 +29,12 @@ from cosinabox.consult.prompts import build_consult_system_prompt
 from cosinabox.consult.rate_limit import RateLimiter
 
 logger = logging.getLogger(__name__)
+
+# Narrow catch around the Anthropic call — matches the house idiom in
+# ``cosinabox.agent.loop``. Programming bugs (AttributeError, TypeError)
+# must propagate; only genuine API/transport failures are mapped to
+# ``claude_error``.
+_ANTHROPIC_API_ERRORS = (anthropic.APIError, anthropic.APIConnectionError)
 
 
 # ---------------------------------------------------------------------------
@@ -248,16 +256,17 @@ def handle_consult(
             system=system_prompt,
             messages=[{"role": "user", "content": user_message}],
         )
-    except Exception as exc:
-        # Broad catch: anthropic's exception tree is large, and tests need
-        # to synthesize failures without instantiating an APIError. The
-        # transport layer re-maps this to a 503 for HTTP callers.
+    except _ANTHROPIC_API_ERRORS as exc:
+        # Narrow catch: only genuine Anthropic API/transport failures are
+        # surfaced as ``claude_error``. Programming bugs (AttributeError,
+        # TypeError, etc.) must propagate so they don't get silently
+        # swallowed and masked as service outages.
         logger.exception("Consult Claude API call failed")
         return ConsultError(
             error=f"Claude API error: {type(exc).__name__}",
             code="claude_error",
         )
-    latency_ms = (time.monotonic() - start) * 1000
+    latency_ms = int((time.monotonic() - start) * 1000)
 
     # 9. Extract text — concatenate every text-bearing content block, same
     #    as cos-agent. ``hasattr`` rather than ``type == "text"`` so tests
@@ -299,5 +308,5 @@ def handle_consult(
         model_used=model,
         cost_usd=round(cost, 4),
         memory_hits=memory_hits,
-        latency_ms=int(latency_ms),
+        latency_ms=latency_ms,
     )
