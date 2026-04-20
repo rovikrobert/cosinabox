@@ -446,7 +446,20 @@ class AgentLoop:
                     time.sleep(self.tool_iteration_delay_s)
                 continue
 
+            # Non-end_turn / non-tool_use stop (max_tokens, stop_sequence,
+            # refusal, pause_turn, unknown). Salvage any text Claude emitted
+            # so callers don't silently get empty final_text.
+            text_blocks = [b.text for b in response.content if b.type == "text"]
+            if text_blocks:
+                result.final_text = "\n".join(text_blocks)
             result.stopped_reason = response.stop_reason or "unknown"
+            if response.stop_reason == "max_tokens":
+                logger.warning(
+                    "Claude response truncated at max_tokens (iteration %d, "
+                    "text_len=%d). Returning partial text.",
+                    iteration,
+                    len(result.final_text),
+                )
             return result
 
         result.stopped_reason = "max_iterations"
