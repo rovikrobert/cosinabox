@@ -1,8 +1,10 @@
+# ruff: noqa: I001  # see test_agent_failover.py — pre-commit/CI ruff version skew
 from __future__ import annotations
 
 from pathlib import Path
 
 from click.testing import CliRunner
+
 from cosinabox.cli.main import cli
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
