@@ -3,7 +3,6 @@ from __future__ import annotations
 from unittest.mock import MagicMock
 
 import pytest
-
 from cosinabox.agent.cost import CostTracker
 from cosinabox.agent.loop import AgentLoop
 from cosinabox.agent.routing import Router
@@ -73,6 +72,19 @@ def test_text_only_response_returns_immediately() -> None:
     result = loop.run(prompt="hi", session_id="s1")
     assert result.final_text == "Hello!"
     assert result.tool_calls == []
+
+
+def test_max_tokens_stop_salvages_partial_text() -> None:
+    """When Claude hits max_tokens, partial text must still reach the caller."""
+    resp = MagicMock()
+    resp.stop_reason = "max_tokens"
+    resp.content = [MagicMock(type="text", text='{"partial": "json cut')]
+    resp.usage.input_tokens = 100
+    resp.usage.output_tokens = 4096
+    loop = make_loop([resp])
+    result = loop.run(prompt="write a long thing", session_id="s1")
+    assert result.stopped_reason == "max_tokens"
+    assert result.final_text == '{"partial": "json cut'
 
 
 def test_single_tool_call_then_final_text() -> None:
