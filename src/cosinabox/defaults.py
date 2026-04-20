@@ -93,3 +93,13 @@ DEFAULT_PERSONAL_BLOCK_PATTERNS: frozenset[str] = frozenset(
         "hold",
     }
 )
+
+# Auto-resolve verifier knobs. Gmail rate limits kick in above ~5 concurrent
+# reads; 8-second per-item cap so one slow search doesn't block the rest.
+# Lookback is 7 days — long enough to catch the common "done yesterday"
+# case, short enough to avoid treating last-month's thread as fresh
+# evidence. (2026-04-19, ported from cos-agent.)
+AUTO_RESOLVE_LOOKBACK_DAYS: int = 7
+AUTO_RESOLVE_CONCURRENCY: int = 5
+AUTO_RESOLVE_TIMEOUT_PER_ITEM_S: int = 8
+AUTO_RESOLVE_MAX_ITEMS: int = 20
