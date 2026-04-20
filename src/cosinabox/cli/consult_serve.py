@@ -69,7 +69,11 @@ def _parse_bind(raw: str) -> tuple[str, int]:
     "--bind",
     default="127.0.0.1:8080",
     show_default=True,
-    help="host:port (HTTP transport only).",
+    help=(
+        "host:port (HTTP transport only). IPv4 only — "
+        "IPv6 bracket syntax (e.g. '[::1]:8080') is not supported; "
+        "bind to an IPv4 interface and front with a proxy if IPv6 is needed."
+    ),
 )
 @click.pass_context
 def consult_serve_cmd(ctx: click.Context, transport: str, bind: str) -> None:

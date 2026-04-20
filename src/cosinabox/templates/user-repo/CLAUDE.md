@@ -38,6 +38,7 @@ These files are intentionally small so the agent can load each one fully when re
 - `docs/agent/adding-custom-jobs.md` — test-first workflow for the escape hatch
 - `docs/agent/oauth-walkthrough.md` — versioned, dated GCP OAuth walkthrough
 - `docs/agent/proactive-suggestions.md` — what the agent should watch for and surface
+- `docs/agent/consult.md` — expose this CoS to external AI tools via MCP (optional, `[consult]` extra)
 
 ## See also
 
