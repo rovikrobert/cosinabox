@@ -20,6 +20,7 @@ class MorningBriefingJob(Job):
         personality: str,
         name_for_briefing: str,
         stakeholders: list[dict[str, Any]] | None = None,
+        db: Any | None = None,
     ) -> None:
         self.gmail = gmail
         self.calendar = calendar
@@ -27,6 +28,7 @@ class MorningBriefingJob(Job):
         self.personality = personality
         self.name_for_briefing = name_for_briefing
         self.stakeholders = stakeholders or []
+        self.db = db
 
     def _prefetch(self) -> str:
         """Pre-fetch all data sources and assemble into a single block."""
@@ -87,6 +89,21 @@ class MorningBriefingJob(Job):
         except Exception:
             pass
 
+        # Commitment verification — grounds PRIORITIES in GENUINELY OPEN.
+        if self.db is not None:
+            try:
+                from cosinabox.commitments.auto_resolve import (
+                    format_for_briefing,
+                    verify_all_open_commitments,
+                )
+
+                verified = verify_all_open_commitments(self.db, self.gmail)
+                formatted = format_for_briefing(verified)
+                if formatted:
+                    sections.append(formatted)
+            except Exception:
+                pass
+
         # Stakeholder pulse
         if self.stakeholders:
             stale = []
@@ -122,6 +139,23 @@ class MorningBriefingJob(Job):
         prefetched = self._prefetch()
         today = datetime.now(UTC).strftime("%A, %B %d, %Y")
 
+        priorities_rule = (
+            "3. PRIORITIES — top 3 items from GENUINELY OPEN, ordered by\n"
+            "   (deadline ascending, priority ascending). If GENUINELY OPEN is\n"
+            "   empty or missing, skip the PRIORITIES section — do NOT infer\n"
+            "   priorities from calendar or email signals.\n"
+            if self.db is not None
+            else "3. PRIORITIES — top 3 based on calendar + email signals.\n"
+        )
+
+        commitment_rules = (
+            "- If COMMITMENT VERIFICATION shows VERIFIED DONE → NEVER list\n"
+            "  as a priority. LIKELY DONE → treat as done.\n"
+            "- Only GENUINELY OPEN commitments can appear in PRIORITIES.\n"
+            if self.db is not None
+            else ""
+        )
+
         prompt = (
             f"Generate {self.name_for_briefing}'s morning briefing for TODAY: {today}.\n\n"
             "FORMAT: Max 25 lines. One line per item. Skip empty sections.\n"
@@ -129,7 +163,7 @@ class MorningBriefingJob(Job):
             "2. EMAIL — items where the ball is in the user's court.\n"
             "   Only surface threads from INBOX NEEDING REPLY. For each, lead with\n"
             "   the pending ask; don't recommend actions the user already took.\n"
-            "3. PRIORITIES — top 3 based on calendar + email signals.\n"
+            f"{priorities_rule}"
             "4. STALE FOLLOW-UPS — anyone overdue on contact cadence.\n\n"
             "RULES:\n"
             "- Do not invent items not in the pre-fetched data.\n"
@@ -142,8 +176,9 @@ class MorningBriefingJob(Job):
             '  or "confirm you replied".\n'
             "- If a thread isn't in INBOX NEEDING REPLY, the user has replied\n"
             "  (or the thread is archived). Do not recommend further action on\n"
-            "  it unless the user explicitly asked about it.\n\n"
-            f"--- PRE-FETCHED DATA ---\n{prefetched}\n--- END ---"
+            "  it unless the user explicitly asked about it.\n"
+            f"{commitment_rules}"
+            f"\n--- PRE-FETCHED DATA ---\n{prefetched}\n--- END ---"
         )
 
         result = self.agent_loop.run(prompt=prompt, session_id=context.session_id)

@@ -92,3 +92,41 @@ def test_prefetch_uses_threads_needing_reply_not_unread() -> None:
     assert "ball" in prompt.lower()
     assert "Adwin" in prompt
     assert "Any update?" in prompt
+
+
+def test_grounded_mode_uses_commitments_for_priorities(tmp_path) -> None:
+    """With a commitments DB, PRIORITIES must come from GENUINELY OPEN —
+    never from 'calendar + email signals'. That prevents zombie-item
+    priorities.
+    """
+    from cosinabox.commitments import create_commitment
+    from cosinabox.memory import Memory
+
+    db = Memory(db_path=tmp_path / "t.db")
+    create_commitment(db, title="close X deck", priority=1)
+
+    gmail = MagicMock()
+    gmail.list_recent.return_value = []
+    gmail.list_threads_needing_reply.return_value = []
+    gmail.search.return_value = []
+    cal = MagicMock()
+    cal.list_events.return_value = []
+
+    fake_loop = MagicMock()
+    fake_loop.run.return_value.final_text = "ok"
+    job = MorningBriefingJob(
+        gmail=gmail,
+        calendar=cal,
+        agent_loop=fake_loop,
+        personality="",
+        name_for_briefing="Alex",
+        db=db,
+    )
+    job.run(JobContext())
+
+    prompt = fake_loop.run.call_args.kwargs["prompt"]
+    assert "top 3 items from GENUINELY OPEN" in prompt
+    assert "close X deck" in prompt
+    assert "VERIFIED DONE" in prompt
+    # No fallback text when db is present.
+    assert "top 3 based on calendar + email signals" not in prompt

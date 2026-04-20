@@ -84,6 +84,7 @@ class App:
         name: str,
         stakeholders: list[dict[str, Any]],
         event_relevance: dict[str, list[str]] | None = None,
+        memory: Any | None = None,
     ) -> None:
         from cosinabox.app.jobs import register_core_jobs
 
@@ -97,6 +98,7 @@ class App:
             name=name,
             stakeholders=stakeholders,
             event_relevance=event_relevance,
+            memory=memory,
         )
 
     # ------------------------------------------------------------------
@@ -219,6 +221,7 @@ class App:
             tool_instances,
             timezone=timezone,
             scheduling_ctx=scheduling_ctx,
+            memory=memory,
         )
 
         loop = AgentLoop(
@@ -264,6 +267,7 @@ class App:
             timezone=timezone,
             rela_agent=rela_agent,
             scheduling_ctx=scheduling_ctx,
+            memory=memory,
         )
         # Patch updated registry into the already-constructed loop
         loop.tools = tool_handlers
@@ -298,6 +302,7 @@ class App:
             name=name,
             stakeholders=stakeholders,
             event_relevance=event_relevance,
+            memory=memory,
         )
 
         # --- Telegram ---

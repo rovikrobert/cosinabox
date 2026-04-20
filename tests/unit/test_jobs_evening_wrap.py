@@ -35,14 +35,10 @@ def test_evening_wrap_skips_missing_gmail() -> None:
     assert "No mail today." in job.run(JobContext())
 
 
-def test_prompt_forbids_carry_over_and_tomorrow_sections() -> None:
-    """Regression: earlier prompts asked for CARRY-OVER / TOMORROW sections,
-    which Claude confabulated from conversation memory when the prefetch only
-    had sent mail. The rovik-keevs 2026-04-18 wrap surfaced zombie items
-    ("Recruiter shortlist", "SOW with Daniel") days after they were resolved.
-
-    Until cosinabox ports the commitments + auto_resolve subsystem, evening
-    wrap must stay grounded in sent mail only.
+def test_prompt_forbids_carry_over_when_no_db() -> None:
+    """Without a commitments DB, the wrap must stay in sent-mail-only mode
+    (PR #56 behavior) — no grounded source for open items, so CARRY-OVER /
+    TOMORROW would hallucinate.
     """
     gmail = MagicMock()
     gmail.search.return_value = []
@@ -57,8 +53,41 @@ def test_prompt_forbids_carry_over_and_tomorrow_sections() -> None:
     job.run(JobContext())
 
     prompt = fake_loop.run.call_args.kwargs["prompt"]
-    # The prompt must not instruct the model to generate these sections.
     assert "Do NOT produce CARRY-OVER" in prompt
-    # Explicit anti-hallucination rule is present.
     assert "Do not invent items" in prompt
     assert "memory" in prompt or "prior briefings" in prompt
+
+
+def test_grounded_mode_restores_carry_over_and_uses_verified_rules(tmp_path) -> None:
+    """With a commitments DB, CARRY-OVER + TOMORROW come back — but the
+    cos-agent absolute rules ground them in the verifier output.
+    """
+    from cosinabox.commitments import create_commitment
+    from cosinabox.memory import Memory
+
+    db = Memory(db_path=tmp_path / "t.db")
+    create_commitment(db, title="send NTU deck")
+
+    gmail = MagicMock()
+    # No subject matches the NTU deck keywords → stays GENUINELY OPEN.
+    gmail.search.return_value = []
+
+    fake_loop = MagicMock()
+    fake_loop.run.return_value.final_text = "ok"
+    job = EveningWrapJob(
+        gmail=gmail,
+        agent_loop=fake_loop,
+        personality="",
+        name_for_briefing="Alex",
+        db=db,
+    )
+    job.run(JobContext())
+
+    prompt = fake_loop.run.call_args.kwargs["prompt"]
+    assert "CARRY-OVER" in prompt
+    assert "TOMORROW" in prompt
+    assert "VERIFIED DONE" in prompt  # rules reference the verifier groups
+    assert "GENUINELY OPEN" in prompt
+    # The commitment verification section appears in the prefetch.
+    assert "GENUINELY OPEN" in prompt
+    assert "send NTU deck" in prompt
