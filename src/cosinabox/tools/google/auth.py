@@ -12,10 +12,15 @@ except ImportError as e:
     ) from e
 
 GOOGLE_TOKEN_URI = "https://oauth2.googleapis.com/token"
-# Note: `drive.readonly` is requested but not enforced — existing refresh
-# tokens minted before this scope landed will keep working for Gmail +
-# Calendar; Drive API calls just 403 and the DriveTool catches it.
-# Users who want Drive search run `cosinabox auth google` to re-mint.
+# Scopes requested when MINTING a fresh refresh token (via `cosinabox auth
+# google`). When refreshing an existing token via google-auth's Credentials
+# class, we do NOT pass these scopes — google-auth would include them on
+# the token refresh request, and Google rejects with
+# `invalid_scope: Bad Request` if they don't exactly match the grant.
+# For tokens minted before `drive.readonly` was added, the whole refresh
+# fails — breaking Gmail + Calendar, not just Drive. Inheriting the
+# grant's scopes (by omitting the kwarg) keeps old tokens working;
+# Drive API calls just 403 for those, which DriveTool catches.
 GOOGLE_DEFAULT_SCOPES = (
     "https://www.googleapis.com/auth/gmail.modify",
     "https://www.googleapis.com/auth/calendar",
@@ -51,7 +56,6 @@ def build_credentials() -> Credentials:
         token_uri=GOOGLE_TOKEN_URI,
         client_id=cid,
         client_secret=secret,
-        scopes=list(GOOGLE_DEFAULT_SCOPES),
     )
 
 
@@ -81,7 +85,6 @@ def build_all_credentials() -> list[Credentials]:
                 token_uri=GOOGLE_TOKEN_URI,
                 client_id=cid,
                 client_secret=secret,
-                scopes=list(GOOGLE_DEFAULT_SCOPES),
             )
         )
 
