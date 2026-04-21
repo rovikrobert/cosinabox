@@ -572,12 +572,49 @@ def _build_attio_handlers(
         return f"- {p.name} — {days} (cadence: {p.cadence_days}d){note_part}"
 
     def keep_warm_set(person: str, cadence_days: int, note: str | None = None) -> str:
+        # Read current note BEFORE delegating so we can snapshot a change
+        current_note: str | None = None
+        current_record_id: str | None = None
+        if memory is not None and note is not None:
+            try:
+                profile = attio.get_person(person)
+                if profile:
+                    current_note = profile.get("keep_warm_note")
+                    current_record_id = str(profile.get("id") or "") or None
+            except Exception:
+                logger.warning(
+                    "keep_warm_set: pre-fetch for history snapshot failed",
+                    exc_info=True,
+                )
+
         try:
             out = attio.set_keep_warm(person=person, cadence_days=cadence_days, note=note)
         except Exception as exc:
             return f"keep_warm_set failed: {exc}"
         if out.get("status") != "ok":
             return f"keep_warm_set failed: {out.get('message', 'unknown')}"
+
+        # Snapshot old note if it existed AND the incoming value differs
+        if (
+            memory is not None
+            and note is not None
+            and current_note
+            and current_note != note
+            and (current_record_id or out.get("record_id"))
+        ):
+            try:
+                from cosinabox.memory.keep_warm_history import archive_note
+
+                archive_note(
+                    memory,
+                    person_record_id=current_record_id or str(out.get("record_id", "")),
+                    person_name=person,
+                    note=current_note,
+                    reason=None,
+                )
+            except Exception:
+                logger.warning("keep_warm_set: history archive failed", exc_info=True)
+
         return f"Flagged {out['person']} as Keep Warm (cadence: {out['cadence_days']}d)."
 
     def keep_warm_unset(person: str, note: str | None = None) -> str:
