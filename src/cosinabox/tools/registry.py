@@ -541,7 +541,11 @@ def _build_calendar_handlers(
     }
 
 
-def _build_attio_handlers(attio: Any) -> dict[str, Callable[..., str]]:
+def _build_attio_handlers(
+    attio: Any,
+    *,
+    memory: Any | None = None,
+) -> dict[str, Callable[..., str]]:
     """Build handler dict from an AttioClient instance."""
 
     def crm_search_people(query: str) -> str:
@@ -674,7 +678,7 @@ def build_tool_registry(
 
     if "attio" in tool_instances:
         definitions.extend(ATTIO_TOOL_DEFINITIONS)
-        handlers.update(_build_attio_handlers(tool_instances["attio"]))
+        handlers.update(_build_attio_handlers(tool_instances["attio"], memory=memory))
         logger.info("Registered %d Attio CRM tools", len(ATTIO_TOOL_DEFINITIONS))
 
     if "fireflies" in tool_instances:
