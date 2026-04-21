@@ -263,3 +263,57 @@ def test_keep_warm_set_no_memory_no_snapshot(tmp_path):
     handlers = _build_attio_handlers(_Attio(), memory=None)
     out = handlers["keep_warm_set"](person="Sarah", cadence_days=14, note="whatever")
     assert "Sarah" in out
+
+
+# ---------------------------------------------------------------------------
+# warning (Task 3.3)
+# ---------------------------------------------------------------------------
+
+
+def test_keep_warm_set_appends_warning_line_when_note_is_commitment_shaped(tmp_path):
+    from cosinabox.memory import Memory
+    from cosinabox.tools.registry import _build_attio_handlers
+
+    class _Attio:
+        def get_person(self, name):
+            return {"id": "rec_1", "name": name, "keep_warm_note": None}
+
+        def set_keep_warm(self, *, person, cadence_days, note=None):
+            return {
+                "status": "ok",
+                "record_id": "rec_1",
+                "person": person,
+                "cadence_days": cadence_days,
+            }
+
+    db = Memory(db_path=tmp_path / "test.db")
+    handlers = _build_attio_handlers(_Attio(), memory=db)
+    out = handlers["keep_warm_set"](
+        person="Daniel", cadence_days=14, note="Send proposal by Friday"
+    )
+    assert "Daniel" in out
+    assert "WARNING:" in out
+    # The matched substring should be quoted in the warning
+    assert "Friday" in out or "by" in out.lower()
+
+
+def test_keep_warm_set_no_warning_on_pure_status_note(tmp_path):
+    from cosinabox.memory import Memory
+    from cosinabox.tools.registry import _build_attio_handlers
+
+    class _Attio:
+        def get_person(self, name):
+            return {"id": "rec_1", "name": name, "keep_warm_note": None}
+
+        def set_keep_warm(self, *, person, cadence_days, note=None):
+            return {
+                "status": "ok",
+                "record_id": "rec_1",
+                "person": person,
+                "cadence_days": cadence_days,
+            }
+
+    db = Memory(db_path=tmp_path / "test.db")
+    handlers = _build_attio_handlers(_Attio(), memory=db)
+    out = handlers["keep_warm_set"](person="Sarah", cadence_days=14, note="Lead Investor")
+    assert "WARNING:" not in out

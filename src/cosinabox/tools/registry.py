@@ -615,7 +615,18 @@ def _build_attio_handlers(
             except Exception:
                 logger.warning("keep_warm_set: history archive failed", exc_info=True)
 
-        return f"Flagged {out['person']} as Keep Warm (cadence: {out['cadence_days']}d)."
+        lines = [f"Flagged {out['person']} as Keep Warm (cadence: {out['cadence_days']}d)."]
+        if note:
+            from cosinabox.commitments.migrate_from_keep_warm import looks_like_commitment
+
+            matched = looks_like_commitment(note)
+            if matched:
+                lines.append(
+                    f'WARNING: note looks commitment-shaped ("{matched}") — '
+                    "consider calling commitment_create instead and keeping the "
+                    "note as relationship context only."
+                )
+        return "\n".join(lines)
 
     def keep_warm_unset(person: str, note: str | None = None) -> str:
         try:
