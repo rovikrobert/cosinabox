@@ -128,6 +128,24 @@ class MorningBriefingJob(Job):
             except Exception:
                 pass
 
+            # Leak detector: notes that look commitment-shaped. Catches
+            # Attio web-UI edits that bypass the write-time guardrail in
+            # keep_warm_set. Pure regex — no LLM cost; only emitted when > 0.
+            try:
+                from cosinabox.commitments.migrate_from_keep_warm import (
+                    looks_like_commitment,
+                )
+
+                all_kw = self.attio.list_keep_warm()
+                leaked = sum(1 for p in all_kw if looks_like_commitment(p.note))
+                if leaked:
+                    sections.append(
+                        f"KEEP WARM — LEAKED: {leaked} notes look "
+                        "commitment-shaped. Ask me to review."
+                    )
+            except Exception:
+                pass
+
         # Stakeholder pulse
         if self.stakeholders:
             stale = []
