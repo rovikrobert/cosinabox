@@ -7,6 +7,7 @@ Free functions operating on a ``Memory`` instance. Matches the
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from typing import Any
 
 from cosinabox.memory import Memory
 
@@ -37,3 +38,24 @@ def archive_note(
             (person_record_id, person_name, note, _now_iso(), reason),
         )
         db._conn.commit()
+
+
+def list_note_history(
+    db: Memory,
+    *,
+    person_record_id: str,
+    limit: int = 25,
+) -> list[dict[str, Any]]:
+    """Return archived notes for a person, newest first.
+
+    Ties (same ``archived_at`` ISO string) are broken by ``id DESC``.
+    """
+    with db.lock:
+        cur = db._conn.execute(
+            "SELECT id, person_record_id, person_name, note, archived_at, reason "
+            "FROM keep_warm_note_history "
+            "WHERE person_record_id = ? "
+            "ORDER BY archived_at DESC, id DESC LIMIT ?",
+            (person_record_id, limit),
+        )
+        return [dict(row) for row in cur.fetchall()]

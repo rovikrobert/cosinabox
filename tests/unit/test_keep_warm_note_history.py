@@ -9,7 +9,7 @@ from pathlib import Path
 import pytest
 
 from cosinabox.memory import Memory
-from cosinabox.memory.keep_warm_history import archive_note
+from cosinabox.memory.keep_warm_history import archive_note, list_note_history
 
 
 @pytest.fixture
@@ -103,3 +103,35 @@ def test_archive_note_multiple_rows_for_same_person(db: Memory) -> None:
             ("rec_x",),
         )
         assert cur.fetchone()[0] == 3
+
+
+def test_list_note_history_returns_newest_first(db: Memory) -> None:
+    """Rows come back newest-first based on archived_at DESC, ties broken by id DESC."""
+    for text in ["oldest", "middle", "newest"]:
+        archive_note(
+            db,
+            person_record_id="rec_abc",
+            person_name="A",
+            note=text,
+            reason=None,
+        )
+    rows = list_note_history(db, person_record_id="rec_abc")
+    assert [r["note"] for r in rows] == ["newest", "middle", "oldest"]
+
+
+def test_list_note_history_filters_by_person(db: Memory) -> None:
+    archive_note(db, person_record_id="rec_a", person_name="A", note="a1", reason=None)
+    archive_note(db, person_record_id="rec_b", person_name="B", note="b1", reason=None)
+    rows = list_note_history(db, person_record_id="rec_a")
+    assert len(rows) == 1
+    assert rows[0]["note"] == "a1"
+
+
+def test_list_note_history_empty_when_no_rows(db: Memory) -> None:
+    assert list_note_history(db, person_record_id="never") == []
+
+
+def test_list_note_history_limit(db: Memory) -> None:
+    for i in range(10):
+        archive_note(db, person_record_id="rec_l", person_name="L", note=f"n{i}", reason=None)
+    assert len(list_note_history(db, person_record_id="rec_l", limit=3)) == 3
