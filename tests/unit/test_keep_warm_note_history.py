@@ -107,6 +107,9 @@ def test_archive_note_multiple_rows_for_same_person(db: Memory) -> None:
 
 def test_list_note_history_returns_newest_first(db: Memory) -> None:
     """Rows come back newest-first based on archived_at DESC, ties broken by id DESC."""
+    # Fast loop may produce identical archived_at strings; the id DESC tie-break
+    # is what actually delivers the newest-first order here. Either path is
+    # correct per the ORDER BY.
     for text in ["oldest", "middle", "newest"]:
         archive_note(
             db,
