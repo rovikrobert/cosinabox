@@ -15,7 +15,18 @@ from collections.abc import Callable
 from datetime import datetime
 from typing import Any
 
+from cosinabox.commitments.migrate_from_keep_warm import (
+    list_flagged_keep_warm_notes,
+    looks_like_commitment,
+)
+from cosinabox.memory.keep_warm_history import archive_note, list_note_history
+
 logger = logging.getLogger(__name__)
+
+# Cap the per-call surface for keep_warm_review so the response fits
+# within typical chat-review budgets (~30 lines). The agent can re-invoke
+# the tool to see the next batch if needed.
+KEEP_WARM_REVIEW_MAX_ROWS = 20
 
 # ---------------------------------------------------------------------------
 # Gmail tool definitions
@@ -275,10 +286,14 @@ ATTIO_TOOL_DEFINITIONS: list[dict[str, Any]] = [
         "name": "keep_warm_set",
         "description": (
             "Flag a person as Keep Warm with a per-person cadence in days. "
-            "The morning briefing will surface them as overdue when "
-            "days-since-last-contact exceeds their cadence. Use when the user "
-            "asks to remember someone (e.g., 'remind me to stay in touch with "
-            "Sarah every two weeks'). Cadence is clamped to [1, 365]."
+            "NOTE FIELD = relationship context: who they are, how you know "
+            "them, what they care about, what makes this relationship current. "
+            "NO future-tense actions, NO deadlines, NO items you owe them — "
+            "if a line tells you what to DO or WHEN, it's a commitment; track "
+            "it via commitment_create instead. The morning briefing surfaces "
+            "overdue Keep Warm people. Use when the user asks to remember "
+            "someone (e.g., 'remind me to stay in touch with Sarah every two "
+            "weeks'). Cadence is clamped to [1, 365]."
         ),
         "input_schema": {
             "type": "object",
@@ -290,10 +305,45 @@ ATTIO_TOOL_DEFINITIONS: list[dict[str, Any]] = [
                 },
                 "note": {
                     "type": "string",
-                    "description": "Optional short note (e.g., 'Lead investor').",
+                    "description": (
+                        "Optional short relationship-context note (e.g., "
+                        "'Lead investor', 'triathlete, met at YC W22'). "
+                        "NO deadlines or action items — use commitment_create "
+                        "for those."
+                    ),
                 },
             },
             "required": ["person", "cadence_days"],
+        },
+    },
+    {
+        "name": "keep_warm_review",
+        "description": (
+            "Scan all Keep Warm people for notes that look commitment-shaped "
+            "(deadline or action-verb phrases) and return them so the user "
+            "can decide whether to extract them into the commitments table. "
+            "Use when the user asks to clean up Keep Warm notes, or when "
+            "the morning briefing surfaces a KEEP WARM — LEAKED count."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {},
+            "required": [],
+        },
+    },
+    {
+        "name": "keep_warm_history",
+        "description": (
+            "Return archived keep-warm notes for a person, newest-first. "
+            "Use when the user asks what the note for someone USED to say, "
+            "or to confirm a prior cleanup was intentional."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "person": {"type": "string", "description": "Person's name."},
+            },
+            "required": ["person"],
         },
     },
     {
@@ -541,7 +591,11 @@ def _build_calendar_handlers(
     }
 
 
-def _build_attio_handlers(attio: Any) -> dict[str, Callable[..., str]]:
+def _build_attio_handlers(
+    attio: Any,
+    *,
+    memory: Any | None = None,
+) -> dict[str, Callable[..., str]]:
     """Build handler dict from an AttioClient instance."""
 
     def crm_search_people(query: str) -> str:
@@ -568,13 +622,106 @@ def _build_attio_handlers(attio: Any) -> dict[str, Callable[..., str]]:
         return f"- {p.name} — {days} (cadence: {p.cadence_days}d){note_part}"
 
     def keep_warm_set(person: str, cadence_days: int, note: str | None = None) -> str:
+        # Read current note BEFORE delegating so we can snapshot a change
+        current_note: str | None = None
+        current_record_id: str | None = None
+        if memory is not None and note is not None:
+            try:
+                profile = attio.get_person(person)
+                if profile:
+                    current_note = profile.get("keep_warm_note")
+                    current_record_id = str(profile.get("id") or "") or None
+            except Exception:
+                logger.warning(
+                    "keep_warm_set: pre-fetch for history snapshot failed (person=%r)",
+                    person,
+                    exc_info=True,
+                )
+
         try:
             out = attio.set_keep_warm(person=person, cadence_days=cadence_days, note=note)
         except Exception as exc:
             return f"keep_warm_set failed: {exc}"
         if out.get("status") != "ok":
             return f"keep_warm_set failed: {out.get('message', 'unknown')}"
-        return f"Flagged {out['person']} as Keep Warm (cadence: {out['cadence_days']}d)."
+
+        # Snapshot old note if it existed AND the incoming value differs
+        if (
+            memory is not None
+            and note is not None
+            and current_note
+            and current_note != note
+            and (current_record_id or out.get("record_id"))
+        ):
+            try:
+                archive_note(
+                    memory,
+                    person_record_id=current_record_id or str(out.get("record_id", "")),
+                    person_name=person,
+                    note=current_note,
+                    reason=None,
+                )
+            except Exception:
+                logger.warning(
+                    "keep_warm_set: history archive failed (person=%r)",
+                    person,
+                    exc_info=True,
+                )
+
+        lines = [f"Flagged {out['person']} as Keep Warm (cadence: {out['cadence_days']}d)."]
+        if note:
+            matched = looks_like_commitment(note)
+            if matched:
+                lines.append(
+                    f'WARNING: note looks commitment-shaped ("{matched}") — '
+                    "consider calling commitment_create instead and keeping the "
+                    "note as relationship context only."
+                )
+        return "\n".join(lines)
+
+    def keep_warm_review() -> str:
+        flagged = list_flagged_keep_warm_notes(attio)
+        if not flagged:
+            return "No Keep Warm notes look commitment-shaped."
+        total = len(flagged)
+        shown = flagged[:KEEP_WARM_REVIEW_MAX_ROWS]
+        header = f"{total} Keep Warm note(s) look commitment-shaped" + (
+            f" (showing first {len(shown)}):" if total > len(shown) else ":"
+        )
+        lines = [header]
+        for row in shown:
+            matches = ", ".join(row["regex_matches"])
+            lines.append(f'- {row["person"]} — note: "{row["note"]}" (matched: {matches})')
+        if total > len(shown):
+            lines.append(f"… and {total - len(shown)} more. Re-run after cleaning these.")
+        lines.append("")
+        lines.append(
+            "For each, propose extracting a commitment (commitment_create) "
+            "and rewriting the note to relationship context only (keep_warm_set "
+            "with the cleaned note). Ask the user to approve each before applying."
+        )
+        return "\n".join(lines)
+
+    def keep_warm_history(person: str) -> str:
+        if memory is None:
+            return "keep_warm_history unavailable: memory/db not configured."
+        try:
+            profile = attio.get_person(person)
+        except Exception as exc:
+            return f"keep_warm_history failed: {exc}"
+        if not profile:
+            return f"No person found matching '{person}'."
+        record_id = str(profile.get("id") or "")
+        if not record_id:
+            return f"No record id for '{person}'."
+
+        rows = list_note_history(memory, person_record_id=record_id)
+        if not rows:
+            return f"No archived note history for {person}."
+        lines = [f"{len(rows)} archived note(s) for {person} (newest first):"]
+        for r in rows:
+            lines.append(f"- [{r['archived_at']}] {r['note']}")
+        return "\n".join(lines)
 
     def keep_warm_unset(person: str, note: str | None = None) -> str:
         try:
@@ -601,6 +748,8 @@ def _build_attio_handlers(attio: Any) -> dict[str, Callable[..., str]]:
         "crm_get_person": crm_get_person,
         "crm_list_people": crm_list_people,
         "keep_warm_set": keep_warm_set,
+        "keep_warm_review": keep_warm_review,
+        "keep_warm_history": keep_warm_history,
         "keep_warm_unset": keep_warm_unset,
         "keep_warm_list": keep_warm_list,
     }
@@ -674,7 +823,7 @@ def build_tool_registry(
 
     if "attio" in tool_instances:
         definitions.extend(ATTIO_TOOL_DEFINITIONS)
-        handlers.update(_build_attio_handlers(tool_instances["attio"]))
+        handlers.update(_build_attio_handlers(tool_instances["attio"], memory=memory))
         logger.info("Registered %d Attio CRM tools", len(ATTIO_TOOL_DEFINITIONS))
 
     if "fireflies" in tool_instances:

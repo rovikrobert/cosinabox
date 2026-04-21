@@ -75,6 +75,8 @@ Create these once in the Attio UI (Settings → Objects → People → Attribute
 | `keep_warm_cadence_days` | number | Days between touches (e.g., 14). |
 | `keep_warm_note` | text | Free-text reminder (e.g., "Lead investor", "Q3 co-author"). |
 
+**Note field rule:** relationship context only. No deadlines, no action items — those go in the commitments table. See `editing-config.md` for the full rule.
+
 Attio also has a built-in `last_interaction` timestamp that we use to compute overdueness — no manual field needed.
 
 ### Using it conversationally

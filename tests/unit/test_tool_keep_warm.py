@@ -137,3 +137,405 @@ def test_keep_warm_list_wraps_exceptions() -> None:
     h = _build_attio_handlers(attio)
     out = h["keep_warm_list"]()
     assert "failed" in out
+
+
+# ---------------------------------------------------------------------------
+# snapshot (Task 3.2)
+# ---------------------------------------------------------------------------
+
+
+def test_keep_warm_set_snapshots_old_note_when_changed(tmp_path):
+    from cosinabox.memory import Memory
+    from cosinabox.memory.keep_warm_history import list_note_history
+    from cosinabox.tools.registry import _build_attio_handlers
+
+    class _Attio:
+        def get_person(self, name):
+            return {"id": "rec_1", "name": name, "keep_warm_note": "old note"}
+
+        def set_keep_warm(self, *, person, cadence_days, note=None):
+            return {
+                "status": "ok",
+                "record_id": "rec_1",
+                "person": person,
+                "cadence_days": cadence_days,
+            }
+
+    db = Memory(db_path=tmp_path / "test.db")
+    handlers = _build_attio_handlers(_Attio(), memory=db)
+    out = handlers["keep_warm_set"](person="Sarah", cadence_days=14, note="new note")
+    assert "Sarah" in out
+    history = list_note_history(db, person_record_id="rec_1")
+    assert len(history) == 1
+    assert history[0]["note"] == "old note"
+
+
+def test_keep_warm_set_no_snapshot_when_note_unchanged(tmp_path):
+    from cosinabox.memory import Memory
+    from cosinabox.memory.keep_warm_history import list_note_history
+    from cosinabox.tools.registry import _build_attio_handlers
+
+    class _Attio:
+        def get_person(self, name):
+            return {"id": "rec_1", "name": name, "keep_warm_note": "same"}
+
+        def set_keep_warm(self, *, person, cadence_days, note=None):
+            return {
+                "status": "ok",
+                "record_id": "rec_1",
+                "person": person,
+                "cadence_days": cadence_days,
+            }
+
+    db = Memory(db_path=tmp_path / "test.db")
+    handlers = _build_attio_handlers(_Attio(), memory=db)
+    handlers["keep_warm_set"](person="Sarah", cadence_days=14, note="same")
+    assert list_note_history(db, person_record_id="rec_1") == []
+
+
+def test_keep_warm_set_no_snapshot_when_note_arg_omitted(tmp_path):
+    from cosinabox.memory import Memory
+    from cosinabox.memory.keep_warm_history import list_note_history
+    from cosinabox.tools.registry import _build_attio_handlers
+
+    class _Attio:
+        def get_person(self, name):
+            return {"id": "rec_1", "name": name, "keep_warm_note": "existing"}
+
+        def set_keep_warm(self, *, person, cadence_days, note=None):
+            return {
+                "status": "ok",
+                "record_id": "rec_1",
+                "person": person,
+                "cadence_days": cadence_days,
+            }
+
+    db = Memory(db_path=tmp_path / "test.db")
+    handlers = _build_attio_handlers(_Attio(), memory=db)
+    handlers["keep_warm_set"](person="Sarah", cadence_days=14)
+    assert list_note_history(db, person_record_id="rec_1") == []
+
+
+def test_keep_warm_set_snapshots_when_clearing_note(tmp_path):
+    from cosinabox.memory import Memory
+    from cosinabox.memory.keep_warm_history import list_note_history
+    from cosinabox.tools.registry import _build_attio_handlers
+
+    class _Attio:
+        def get_person(self, name):
+            return {"id": "rec_1", "name": name, "keep_warm_note": "old stuff"}
+
+        def set_keep_warm(self, *, person, cadence_days, note=None):
+            return {
+                "status": "ok",
+                "record_id": "rec_1",
+                "person": person,
+                "cadence_days": cadence_days,
+            }
+
+    db = Memory(db_path=tmp_path / "test.db")
+    handlers = _build_attio_handlers(_Attio(), memory=db)
+    handlers["keep_warm_set"](person="Sarah", cadence_days=14, note="")
+    history = list_note_history(db, person_record_id="rec_1")
+    assert len(history) == 1
+    assert history[0]["note"] == "old stuff"
+
+
+def test_keep_warm_set_no_memory_no_snapshot(tmp_path):
+    from cosinabox.tools.registry import _build_attio_handlers
+
+    class _Attio:
+        def get_person(self, name):
+            return {"id": "rec_1", "name": name, "keep_warm_note": "old"}
+
+        def set_keep_warm(self, *, person, cadence_days, note=None):
+            return {
+                "status": "ok",
+                "record_id": "rec_1",
+                "person": person,
+                "cadence_days": cadence_days,
+            }
+
+    handlers = _build_attio_handlers(_Attio(), memory=None)
+    out = handlers["keep_warm_set"](person="Sarah", cadence_days=14, note="whatever")
+    assert "Sarah" in out
+
+
+# ---------------------------------------------------------------------------
+# warning (Task 3.3)
+# ---------------------------------------------------------------------------
+
+
+def test_keep_warm_set_appends_warning_line_when_note_is_commitment_shaped(tmp_path):
+    from cosinabox.memory import Memory
+    from cosinabox.tools.registry import _build_attio_handlers
+
+    class _Attio:
+        def get_person(self, name):
+            return {"id": "rec_1", "name": name, "keep_warm_note": None}
+
+        def set_keep_warm(self, *, person, cadence_days, note=None):
+            return {
+                "status": "ok",
+                "record_id": "rec_1",
+                "person": person,
+                "cadence_days": cadence_days,
+            }
+
+    db = Memory(db_path=tmp_path / "test.db")
+    handlers = _build_attio_handlers(_Attio(), memory=db)
+    out = handlers["keep_warm_set"](
+        person="Daniel", cadence_days=14, note="Send proposal by Friday"
+    )
+    assert "Daniel" in out
+    assert "WARNING:" in out
+    # The matched substring should be quoted in the warning.
+    # looks_like_commitment("Send proposal by Friday") returns "Send proposal by"
+    # (deadline-phrase pattern) — that text must appear in the warning.
+    assert "Send proposal by" in out
+
+
+def test_keep_warm_set_no_warning_on_pure_status_note(tmp_path):
+    from cosinabox.memory import Memory
+    from cosinabox.tools.registry import _build_attio_handlers
+
+    class _Attio:
+        def get_person(self, name):
+            return {"id": "rec_1", "name": name, "keep_warm_note": None}
+
+        def set_keep_warm(self, *, person, cadence_days, note=None):
+            return {
+                "status": "ok",
+                "record_id": "rec_1",
+                "person": person,
+                "cadence_days": cadence_days,
+            }
+
+    db = Memory(db_path=tmp_path / "test.db")
+    handlers = _build_attio_handlers(_Attio(), memory=db)
+    out = handlers["keep_warm_set"](person="Sarah", cadence_days=14, note="Lead Investor")
+    assert "WARNING:" not in out
+
+
+# ---------------------------------------------------------------------------
+# keep_warm_review (Task 4.1)
+# ---------------------------------------------------------------------------
+
+
+def test_keep_warm_review_returns_flagged_rows(tmp_path):
+    from cosinabox.memory import Memory
+    from cosinabox.tools.attio import KeepWarmPerson
+    from cosinabox.tools.registry import _build_attio_handlers
+
+    class _Attio:
+        def list_keep_warm(self):
+            return [
+                KeepWarmPerson(
+                    name="Sarah",
+                    record_id="r1",
+                    cadence_days=14,
+                    note="Lead Investor",
+                    last_interaction=None,
+                    days_since=5,
+                ),
+                KeepWarmPerson(
+                    name="Daniel",
+                    record_id="r2",
+                    cadence_days=14,
+                    note="Send proposal by Friday",
+                    last_interaction=None,
+                    days_since=20,
+                ),
+            ]
+
+    db = Memory(db_path=tmp_path / "test.db")
+    handlers = _build_attio_handlers(_Attio(), memory=db)
+    out = handlers["keep_warm_review"]()
+    assert "Daniel" in out
+    assert "Sarah" not in out
+    assert "Friday" in out or "by" in out.lower()
+
+
+def test_keep_warm_review_empty_when_no_leaks(tmp_path):
+    from cosinabox.memory import Memory
+    from cosinabox.tools.attio import KeepWarmPerson
+    from cosinabox.tools.registry import _build_attio_handlers
+
+    class _Attio:
+        def list_keep_warm(self):
+            return [
+                KeepWarmPerson(
+                    name="Sarah",
+                    record_id="r1",
+                    cadence_days=14,
+                    note="Lead Investor",
+                    last_interaction=None,
+                    days_since=5,
+                ),
+            ]
+
+    db = Memory(db_path=tmp_path / "test.db")
+    handlers = _build_attio_handlers(_Attio(), memory=db)
+    out = handlers["keep_warm_review"]()
+    # Empty response should convey "nothing flagged" — exact wording flexible
+    assert "no" in out.lower() or "empty" in out.lower() or "clean" in out.lower()
+
+
+# ---------------------------------------------------------------------------
+# keep_warm_history (Task 4.2)
+# ---------------------------------------------------------------------------
+
+
+def test_keep_warm_history_returns_archived_notes(tmp_path):
+    from cosinabox.memory import Memory
+    from cosinabox.memory.keep_warm_history import archive_note
+    from cosinabox.tools.registry import _build_attio_handlers
+
+    class _Attio:
+        def get_person(self, name):
+            return {"id": "rec_1", "name": name, "keep_warm_note": None}
+
+    db = Memory(db_path=tmp_path / "test.db")
+    for text in ["oldest", "middle", "newest"]:
+        archive_note(
+            db,
+            person_record_id="rec_1",
+            person_name="Sarah",
+            note=text,
+            reason=None,
+        )
+
+    handlers = _build_attio_handlers(_Attio(), memory=db)
+    out = handlers["keep_warm_history"](person="Sarah")
+    # Newest appears first — assert relative order
+    assert out.index("newest") < out.index("middle") < out.index("oldest")
+
+
+def test_keep_warm_history_empty_when_no_records(tmp_path):
+    from cosinabox.memory import Memory
+    from cosinabox.tools.registry import _build_attio_handlers
+
+    class _Attio:
+        def get_person(self, name):
+            return {"id": "rec_1", "name": name, "keep_warm_note": None}
+
+    db = Memory(db_path=tmp_path / "test.db")
+    handlers = _build_attio_handlers(_Attio(), memory=db)
+    out = handlers["keep_warm_history"](person="Sarah")
+    assert "no" in out.lower() or "history" in out.lower() or "empty" in out.lower()
+
+
+def test_keep_warm_history_person_not_found(tmp_path):
+    from cosinabox.memory import Memory
+    from cosinabox.tools.registry import _build_attio_handlers
+
+    class _Attio:
+        def get_person(self, name):
+            return None
+
+    db = Memory(db_path=tmp_path / "test.db")
+    handlers = _build_attio_handlers(_Attio(), memory=db)
+    out = handlers["keep_warm_history"](person="Ghost")
+    assert "not found" in out.lower() or "no person" in out.lower()
+
+
+# ---------------------------------------------------------------------------
+# semantic boundary (Task 4.3)
+# ---------------------------------------------------------------------------
+
+
+def test_keep_warm_set_tool_description_contains_semantic_boundary():
+    from cosinabox.tools.registry import ATTIO_TOOL_DEFINITIONS
+
+    defn = next(d for d in ATTIO_TOOL_DEFINITIONS if d["name"] == "keep_warm_set")
+    desc = defn["description"]
+    assert "relationship context" in desc.lower()
+    assert "commitment" in desc.lower()
+    # Note input-schema description also carries the rule
+    note_desc = defn["input_schema"]["properties"]["note"]["description"]
+    assert "no deadlines" in note_desc.lower() or "relationship" in note_desc.lower()
+
+
+def test_keep_warm_person_note_docstring_contains_semantic_boundary():
+    import inspect
+
+    from cosinabox.tools.attio import KeepWarmPerson
+
+    doc = inspect.getdoc(KeepWarmPerson) or ""
+    combined = doc + " " + (KeepWarmPerson.__doc__ or "")
+    assert "relationship context" in combined.lower()
+    assert "commitment" in combined.lower()
+
+
+# ---------------------------------------------------------------------------
+# user-repo template docs (Task 4.4)
+# ---------------------------------------------------------------------------
+
+
+def test_user_repo_editing_config_mentions_note_boundary():
+    from pathlib import Path
+
+    from cosinabox import templates
+
+    root = Path(list(templates.__path__)[0]) / "user-repo"
+    text = (root / "docs/agent/editing-config.md").read_text()
+    assert "relationship context" in text.lower()
+    assert "commitment" in text.lower()
+
+
+def test_user_repo_jobs_doc_mentions_note_boundary():
+    from pathlib import Path
+
+    from cosinabox import templates
+
+    root = Path(list(templates.__path__)[0]) / "user-repo"
+    text = (root / "docs/agent/jobs.md").read_text()
+    assert "keep warm" in text.lower()
+    assert "relationship context" in text.lower() or "no deadlines" in text.lower()
+
+
+def test_keep_warm_history_memory_not_configured():
+    """When _build_attio_handlers has memory=None, keep_warm_history returns a graceful message."""
+    from cosinabox.tools.registry import _build_attio_handlers
+
+    class _Attio:
+        def get_person(self, name):  # should never be called in this path
+            raise AssertionError("attio.get_person should not be called when memory is None")
+
+    handlers = _build_attio_handlers(_Attio(), memory=None)
+    out = handlers["keep_warm_history"](person="Anyone")
+    assert "unavailable" in out.lower() or "not configured" in out.lower()
+
+
+def test_keep_warm_review_caps_output_when_many_flagged(tmp_path):
+    """Response caps at KEEP_WARM_REVIEW_MAX_ROWS; remainder surfaced as a count."""
+    from cosinabox.memory import Memory
+    from cosinabox.tools.attio import KeepWarmPerson
+    from cosinabox.tools.registry import (
+        KEEP_WARM_REVIEW_MAX_ROWS,
+        _build_attio_handlers,
+    )
+
+    class _Attio:
+        def list_keep_warm(self):
+            return [
+                KeepWarmPerson(
+                    name=f"P{i}",
+                    record_id=f"r{i}",
+                    cadence_days=14,
+                    note=f"Send proposal {i} by Friday",
+                    last_interaction=None,
+                    days_since=20,
+                )
+                for i in range(KEEP_WARM_REVIEW_MAX_ROWS + 5)
+            ]
+
+    db = Memory(db_path=tmp_path / "test.db")
+    handlers = _build_attio_handlers(_Attio(), memory=db)
+    out = handlers["keep_warm_review"]()
+    # Header indicates truncation
+    assert f"showing first {KEEP_WARM_REVIEW_MAX_ROWS}" in out
+    # "… and N more" footer present
+    assert "and 5 more" in out or "… and 5 more" in out
+    # The tool still surfaces the total count
+    assert str(KEEP_WARM_REVIEW_MAX_ROWS + 5) in out

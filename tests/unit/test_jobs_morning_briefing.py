@@ -143,7 +143,7 @@ def test_keep_warm_section_rendered_from_attio_overdue() -> None:
     cal.list_events.return_value = []
 
     attio = MagicMock()
-    attio.get_keep_warm_overdue.return_value = [
+    attio.list_keep_warm.return_value = [
         KeepWarmPerson(
             name="Sarah Chen",
             record_id="r1",
@@ -195,7 +195,7 @@ def test_keep_warm_omitted_when_no_overdue() -> None:
     cal.list_events.return_value = []
 
     attio = MagicMock()
-    attio.get_keep_warm_overdue.return_value = []
+    attio.list_keep_warm.return_value = []
 
     fake_loop = MagicMock()
     fake_loop.run.return_value.final_text = "ok"
@@ -213,6 +213,127 @@ def test_keep_warm_omitted_when_no_overdue() -> None:
     # Section 5 instruction may still be in the prompt but the data block
     # does not contain a KEEP WARM section header.
     assert "KEEP WARM — OVERDUE:\n-" not in prompt
+
+
+def test_prefetch_emits_keep_warm_leaked_line_when_flagged_notes_exist(tmp_path) -> None:
+    """Notes that look commitment-shaped show a LEAKED count in prefetch output."""
+    from cosinabox.jobs.morning_briefing import MorningBriefingJob
+    from cosinabox.tools.attio import KeepWarmPerson
+
+    class _Gmail:
+        def list_recent(self, hours=12, max_results=15):
+            return []
+
+        def list_threads_needing_reply(self, hours=24, max_results=10):
+            return []
+
+    class _Cal:
+        def list_events(self, start, end):
+            return []
+
+    class _Attio:
+        def list_keep_warm(self):
+            return [
+                KeepWarmPerson(
+                    name="Sarah",
+                    record_id="r1",
+                    cadence_days=14,
+                    note="Lead Investor",
+                    last_interaction=None,
+                    days_since=5,
+                ),
+                KeepWarmPerson(
+                    name="Daniel",
+                    record_id="r2",
+                    cadence_days=14,
+                    note="Send proposal by Friday",
+                    last_interaction=None,
+                    days_since=20,
+                ),
+                KeepWarmPerson(
+                    name="Jane",
+                    record_id="r3",
+                    cadence_days=14,
+                    note="Follow up next week",
+                    last_interaction=None,
+                    days_since=3,
+                ),
+            ]
+
+        def get_keep_warm_overdue(self):
+            # Reuse list_keep_warm and filter by cadence so the existing
+            # OVERDUE block has content to render
+            return [
+                r for r in self.list_keep_warm() if r.days_since and r.days_since > r.cadence_days
+            ]
+
+    class _AgentLoop:
+        def run(self, prompt, session_id):
+            raise NotImplementedError("not reached in _prefetch-only test")
+
+    job = MorningBriefingJob(
+        gmail=_Gmail(),
+        calendar=_Cal(),
+        agent_loop=_AgentLoop(),
+        personality="",
+        name_for_briefing="Tester",
+        attio=_Attio(),
+        db=None,
+        drive=None,
+    )
+    prefetched = job._prefetch()
+    assert "KEEP WARM — LEAKED: 2" in prefetched  # Daniel + Jane
+    assert "Ask me to review" in prefetched
+
+
+def test_prefetch_emits_no_leaked_line_when_clean(tmp_path) -> None:
+    """No commitment-shaped notes → no LEAKED section in prefetch output."""
+    from cosinabox.jobs.morning_briefing import MorningBriefingJob
+    from cosinabox.tools.attio import KeepWarmPerson
+
+    class _Gmail:
+        def list_recent(self, hours=12, max_results=15):
+            return []
+
+        def list_threads_needing_reply(self, hours=24, max_results=10):
+            return []
+
+    class _Cal:
+        def list_events(self, start, end):
+            return []
+
+    class _Attio:
+        def list_keep_warm(self):
+            return [
+                KeepWarmPerson(
+                    name="Sarah",
+                    record_id="r1",
+                    cadence_days=14,
+                    note="Lead Investor",
+                    last_interaction=None,
+                    days_since=5,
+                ),
+            ]
+
+        def get_keep_warm_overdue(self):
+            return []
+
+    class _AgentLoop:
+        def run(self, prompt, session_id):
+            raise NotImplementedError
+
+    job = MorningBriefingJob(
+        gmail=_Gmail(),
+        calendar=_Cal(),
+        agent_loop=_AgentLoop(),
+        personality="",
+        name_for_briefing="Tester",
+        attio=_Attio(),
+        db=None,
+        drive=None,
+    )
+    prefetched = job._prefetch()
+    assert "LEAKED" not in prefetched
 
 
 def test_keep_warm_section_skipped_when_attio_none() -> None:
