@@ -315,3 +315,66 @@ def test_keep_warm_set_no_warning_on_pure_status_note(tmp_path):
     handlers = _build_attio_handlers(_Attio(), memory=db)
     out = handlers["keep_warm_set"](person="Sarah", cadence_days=14, note="Lead Investor")
     assert "WARNING:" not in out
+
+
+# ---------------------------------------------------------------------------
+# keep_warm_review (Task 4.1)
+# ---------------------------------------------------------------------------
+
+
+def test_keep_warm_review_returns_flagged_rows(tmp_path):
+    from cosinabox.memory import Memory
+    from cosinabox.tools.attio import KeepWarmPerson
+    from cosinabox.tools.registry import _build_attio_handlers
+
+    class _Attio:
+        def list_keep_warm(self):
+            return [
+                KeepWarmPerson(
+                    name="Sarah",
+                    record_id="r1",
+                    cadence_days=14,
+                    note="Lead Investor",
+                    last_interaction=None,
+                    days_since=5,
+                ),
+                KeepWarmPerson(
+                    name="Daniel",
+                    record_id="r2",
+                    cadence_days=14,
+                    note="Send proposal by Friday",
+                    last_interaction=None,
+                    days_since=20,
+                ),
+            ]
+
+    db = Memory(db_path=tmp_path / "test.db")
+    handlers = _build_attio_handlers(_Attio(), memory=db)
+    out = handlers["keep_warm_review"]()
+    assert "Daniel" in out
+    assert "Sarah" not in out
+
+
+def test_keep_warm_review_empty_when_no_leaks(tmp_path):
+    from cosinabox.memory import Memory
+    from cosinabox.tools.attio import KeepWarmPerson
+    from cosinabox.tools.registry import _build_attio_handlers
+
+    class _Attio:
+        def list_keep_warm(self):
+            return [
+                KeepWarmPerson(
+                    name="Sarah",
+                    record_id="r1",
+                    cadence_days=14,
+                    note="Lead Investor",
+                    last_interaction=None,
+                    days_since=5,
+                ),
+            ]
+
+    db = Memory(db_path=tmp_path / "test.db")
+    handlers = _build_attio_handlers(_Attio(), memory=db)
+    out = handlers["keep_warm_review"]()
+    # Empty response should convey "nothing flagged" — exact wording flexible
+    assert "no" in out.lower() or "empty" in out.lower() or "clean" in out.lower()

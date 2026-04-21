@@ -15,7 +15,10 @@ from collections.abc import Callable
 from datetime import datetime
 from typing import Any
 
-from cosinabox.commitments.migrate_from_keep_warm import looks_like_commitment
+from cosinabox.commitments.migrate_from_keep_warm import (
+    list_flagged_keep_warm_notes,
+    looks_like_commitment,
+)
 from cosinabox.memory.keep_warm_history import archive_note
 
 logger = logging.getLogger(__name__)
@@ -297,6 +300,21 @@ ATTIO_TOOL_DEFINITIONS: list[dict[str, Any]] = [
                 },
             },
             "required": ["person", "cadence_days"],
+        },
+    },
+    {
+        "name": "keep_warm_review",
+        "description": (
+            "Scan all Keep Warm people for notes that look commitment-shaped "
+            "(deadline or action-verb phrases) and return them so the user "
+            "can decide whether to extract them into the commitments table. "
+            "Use when the user asks to clean up Keep Warm notes, or when "
+            "the morning briefing surfaces a KEEP WARM — LEAKED count."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {},
+            "required": [],
         },
     },
     {
@@ -632,6 +650,22 @@ def _build_attio_handlers(
                 )
         return "\n".join(lines)
 
+    def keep_warm_review() -> str:
+        flagged = list_flagged_keep_warm_notes(attio)
+        if not flagged:
+            return "No Keep Warm notes look commitment-shaped."
+        lines = [f"{len(flagged)} Keep Warm note(s) look commitment-shaped:"]
+        for row in flagged:
+            matches = ", ".join(row["regex_matches"])
+            lines.append(f'- {row["person"]} — note: "{row["note"]}" (matched: {matches})')
+        lines.append("")
+        lines.append(
+            "For each, propose extracting a commitment (commitment_create) "
+            "and rewriting the note to relationship context only (keep_warm_set "
+            "with the cleaned note). Ask the user to approve each before applying."
+        )
+        return "\n".join(lines)
+
     def keep_warm_unset(person: str, note: str | None = None) -> str:
         try:
             out = attio.unset_keep_warm(person=person, note=note)
@@ -657,6 +691,7 @@ def _build_attio_handlers(
         "crm_get_person": crm_get_person,
         "crm_list_people": crm_list_people,
         "keep_warm_set": keep_warm_set,
+        "keep_warm_review": keep_warm_review,
         "keep_warm_unset": keep_warm_unset,
         "keep_warm_list": keep_warm_list,
     }
