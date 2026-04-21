@@ -6,6 +6,11 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.1.3] — 2026-04-21
+
+### Changed
+- User-repo template `Dockerfile` now uses `FROM ghcr.io/rovikrobert/cosinabox-runtime:0.1` (the runtime base image published alongside the engine since 0.1.2). Scaffolded Docker builds drop from ~60–90s to ~7s because Python 3.11 + `cosinabox[google]` are preinstalled; extras (e.g. `[attio]`) layer on top. The template flip landed on main *after* 0.1.2 was tagged, so this release is needed to propagate the new template to PyPI consumers of `cosinabox init`.
+
 ## [0.1.2] — 2026-04-21
 
 ### Added
