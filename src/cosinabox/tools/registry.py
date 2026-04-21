@@ -23,6 +23,11 @@ from cosinabox.memory.keep_warm_history import archive_note, list_note_history
 
 logger = logging.getLogger(__name__)
 
+# Cap the per-call surface for keep_warm_review so the response fits
+# within typical chat-review budgets (~30 lines). The agent can re-invoke
+# the tool to see the next batch if needed.
+KEEP_WARM_REVIEW_MAX_ROWS = 20
+
 # ---------------------------------------------------------------------------
 # Gmail tool definitions
 # ---------------------------------------------------------------------------
@@ -678,10 +683,17 @@ def _build_attio_handlers(
         flagged = list_flagged_keep_warm_notes(attio)
         if not flagged:
             return "No Keep Warm notes look commitment-shaped."
-        lines = [f"{len(flagged)} Keep Warm note(s) look commitment-shaped:"]
-        for row in flagged:
+        total = len(flagged)
+        shown = flagged[:KEEP_WARM_REVIEW_MAX_ROWS]
+        header = f"{total} Keep Warm note(s) look commitment-shaped" + (
+            f" (showing first {len(shown)}):" if total > len(shown) else ":"
+        )
+        lines = [header]
+        for row in shown:
             matches = ", ".join(row["regex_matches"])
             lines.append(f'- {row["person"]} — note: "{row["note"]}" (matched: {matches})')
+        if total > len(shown):
+            lines.append(f"… and {total - len(shown)} more. Re-run after cleaning these.")
         lines.append("")
         lines.append(
             "For each, propose extracting a commitment (commitment_create) "

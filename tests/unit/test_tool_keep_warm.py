@@ -353,6 +353,7 @@ def test_keep_warm_review_returns_flagged_rows(tmp_path):
     out = handlers["keep_warm_review"]()
     assert "Daniel" in out
     assert "Sarah" not in out
+    assert "Friday" in out or "by" in out.lower()
 
 
 def test_keep_warm_review_empty_when_no_leaks(tmp_path):
@@ -491,3 +492,50 @@ def test_user_repo_jobs_doc_mentions_note_boundary():
     text = (root / "docs/agent/jobs.md").read_text()
     assert "keep warm" in text.lower()
     assert "relationship context" in text.lower() or "no deadlines" in text.lower()
+
+
+def test_keep_warm_history_memory_not_configured():
+    """When _build_attio_handlers has memory=None, keep_warm_history returns a graceful message."""
+    from cosinabox.tools.registry import _build_attio_handlers
+
+    class _Attio:
+        def get_person(self, name):  # should never be called in this path
+            raise AssertionError("attio.get_person should not be called when memory is None")
+
+    handlers = _build_attio_handlers(_Attio(), memory=None)
+    out = handlers["keep_warm_history"](person="Anyone")
+    assert "unavailable" in out.lower() or "not configured" in out.lower()
+
+
+def test_keep_warm_review_caps_output_when_many_flagged(tmp_path):
+    """Response caps at KEEP_WARM_REVIEW_MAX_ROWS; remainder surfaced as a count."""
+    from cosinabox.memory import Memory
+    from cosinabox.tools.attio import KeepWarmPerson
+    from cosinabox.tools.registry import (
+        KEEP_WARM_REVIEW_MAX_ROWS,
+        _build_attio_handlers,
+    )
+
+    class _Attio:
+        def list_keep_warm(self):
+            return [
+                KeepWarmPerson(
+                    name=f"P{i}",
+                    record_id=f"r{i}",
+                    cadence_days=14,
+                    note=f"Send proposal {i} by Friday",
+                    last_interaction=None,
+                    days_since=20,
+                )
+                for i in range(KEEP_WARM_REVIEW_MAX_ROWS + 5)
+            ]
+
+    db = Memory(db_path=tmp_path / "test.db")
+    handlers = _build_attio_handlers(_Attio(), memory=db)
+    out = handlers["keep_warm_review"]()
+    # Header indicates truncation
+    assert f"showing first {KEEP_WARM_REVIEW_MAX_ROWS}" in out
+    # "… and N more" footer present
+    assert "and 5 more" in out or "… and 5 more" in out
+    # The tool still surfaces the total count
+    assert str(KEEP_WARM_REVIEW_MAX_ROWS + 5) in out
