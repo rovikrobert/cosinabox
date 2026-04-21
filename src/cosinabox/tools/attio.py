@@ -28,7 +28,13 @@ class AttioError(Exception):
 
 @dataclass
 class KeepWarmPerson:
-    """Typed view for a Keep Warm-flagged person."""
+    """Typed view for a Keep Warm-flagged person.
+
+    The ``note`` field carries RELATIONSHIP CONTEXT only — who they are,
+    how you know them, what they care about, what makes this relationship
+    current. No future-tense actions, no deadlines, no items owed. Those
+    belong in the commitments table (see ``cosinabox.commitments``).
+    """
 
     name: str
     record_id: str

@@ -281,10 +281,14 @@ ATTIO_TOOL_DEFINITIONS: list[dict[str, Any]] = [
         "name": "keep_warm_set",
         "description": (
             "Flag a person as Keep Warm with a per-person cadence in days. "
-            "The morning briefing will surface them as overdue when "
-            "days-since-last-contact exceeds their cadence. Use when the user "
-            "asks to remember someone (e.g., 'remind me to stay in touch with "
-            "Sarah every two weeks'). Cadence is clamped to [1, 365]."
+            "NOTE FIELD = relationship context: who they are, how you know "
+            "them, what they care about, what makes this relationship current. "
+            "NO future-tense actions, NO deadlines, NO items you owe them — "
+            "if a line tells you what to DO or WHEN, it's a commitment; track "
+            "it via commitment_create instead. The morning briefing surfaces "
+            "overdue Keep Warm people. Use when the user asks to remember "
+            "someone (e.g., 'remind me to stay in touch with Sarah every two "
+            "weeks'). Cadence is clamped to [1, 365]."
         ),
         "input_schema": {
             "type": "object",
@@ -296,7 +300,12 @@ ATTIO_TOOL_DEFINITIONS: list[dict[str, Any]] = [
                 },
                 "note": {
                     "type": "string",
-                    "description": "Optional short note (e.g., 'Lead investor').",
+                    "description": (
+                        "Optional short relationship-context note (e.g., "
+                        "'Lead investor', 'triathlete, met at YC W22'). "
+                        "NO deadlines or action items — use commitment_create "
+                        "for those."
+                    ),
                 },
             },
             "required": ["person", "cadence_days"],

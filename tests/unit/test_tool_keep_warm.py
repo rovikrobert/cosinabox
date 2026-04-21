@@ -436,3 +436,31 @@ def test_keep_warm_history_person_not_found(tmp_path):
     handlers = _build_attio_handlers(_Attio(), memory=db)
     out = handlers["keep_warm_history"](person="Ghost")
     assert "not found" in out.lower() or "no person" in out.lower()
+
+
+# ---------------------------------------------------------------------------
+# semantic boundary (Task 4.3)
+# ---------------------------------------------------------------------------
+
+
+def test_keep_warm_set_tool_description_contains_semantic_boundary():
+    from cosinabox.tools.registry import ATTIO_TOOL_DEFINITIONS
+
+    defn = next(d for d in ATTIO_TOOL_DEFINITIONS if d["name"] == "keep_warm_set")
+    desc = defn["description"]
+    assert "relationship context" in desc.lower()
+    assert "commitment" in desc.lower()
+    # Note input-schema description also carries the rule
+    note_desc = defn["input_schema"]["properties"]["note"]["description"]
+    assert "no deadlines" in note_desc.lower() or "relationship" in note_desc.lower()
+
+
+def test_keep_warm_person_note_docstring_contains_semantic_boundary():
+    import inspect
+
+    from cosinabox.tools.attio import KeepWarmPerson
+
+    doc = inspect.getdoc(KeepWarmPerson) or ""
+    combined = doc + " " + (KeepWarmPerson.__doc__ or "")
+    assert "relationship context" in combined.lower()
+    assert "commitment" in combined.lower()
