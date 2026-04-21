@@ -2,10 +2,14 @@
 
 from __future__ import annotations
 
+import logging
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
+from cosinabox.commitments.migrate_from_keep_warm import looks_like_commitment
 from cosinabox.jobs.base import Job, JobContext
+
+logger = logging.getLogger(__name__)
 
 
 class MorningBriefingJob(Job):
@@ -110,12 +114,18 @@ class MorningBriefingJob(Job):
 
         # Keep Warm — Attio-curated overdue relationships. Grounded data
         # only; quiet when no one is overdue (don't announce "no overdue"
-        # and crowd the briefing).
+        # and crowd the briefing). One list_keep_warm() call services
+        # BOTH the overdue rendering and the leak-detector scan.
         if self.attio is not None:
             try:
                 from cosinabox.defaults import KEEP_WARM_MAX_BRIEFING_ROWS
 
-                overdue = self.attio.get_keep_warm_overdue()
+                all_kw = self.attio.list_keep_warm()
+
+                # Overdue: local filter — no extra Attio round-trip
+                overdue = [
+                    p for p in all_kw if p.days_since is not None and p.days_since > p.cadence_days
+                ]
                 if overdue:
                     lines = []
                     for p in overdue[:KEEP_WARM_MAX_BRIEFING_ROWS]:
@@ -125,18 +135,10 @@ class MorningBriefingJob(Job):
                             f"(cadence: {p.cadence_days}d){note_part}"
                         )
                     sections.append("KEEP WARM — OVERDUE:\n" + "\n".join(lines))
-            except Exception:
-                pass
 
-            # Leak detector: notes that look commitment-shaped. Catches
-            # Attio web-UI edits that bypass the write-time guardrail in
-            # keep_warm_set. Pure regex — no LLM cost; only emitted when > 0.
-            try:
-                from cosinabox.commitments.migrate_from_keep_warm import (
-                    looks_like_commitment,
-                )
-
-                all_kw = self.attio.list_keep_warm()
+                # Leak detector: notes that look commitment-shaped. Catches
+                # Attio web-UI edits that bypass the write-time guardrail in
+                # keep_warm_set. Pure regex — no LLM cost; only emitted when > 0.
                 leaked = sum(1 for p in all_kw if looks_like_commitment(p.note))
                 if leaked:
                     sections.append(
@@ -144,7 +146,7 @@ class MorningBriefingJob(Job):
                         "commitment-shaped. Ask me to review."
                     )
             except Exception:
-                pass
+                logger.debug("keep-warm prefetch failed", exc_info=True)
 
         # Stakeholder pulse
         if self.stakeholders:

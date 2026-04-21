@@ -143,7 +143,7 @@ def test_keep_warm_section_rendered_from_attio_overdue() -> None:
     cal.list_events.return_value = []
 
     attio = MagicMock()
-    attio.get_keep_warm_overdue.return_value = [
+    attio.list_keep_warm.return_value = [
         KeepWarmPerson(
             name="Sarah Chen",
             record_id="r1",
@@ -195,7 +195,7 @@ def test_keep_warm_omitted_when_no_overdue() -> None:
     cal.list_events.return_value = []
 
     attio = MagicMock()
-    attio.get_keep_warm_overdue.return_value = []
+    attio.list_keep_warm.return_value = []
 
     fake_loop = MagicMock()
     fake_loop.run.return_value.final_text = "ok"

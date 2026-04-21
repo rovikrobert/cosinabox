@@ -519,7 +519,7 @@ def test_morning_briefing_with_all_integrations_wired(db: Memory, tmp_path: Path
     calendar.list_events.return_value = []
 
     attio = MagicMock()
-    attio.get_keep_warm_overdue.return_value = [
+    attio.list_keep_warm.return_value = [
         KeepWarmPerson(
             name="Ada Lovelace",
             record_id="r1",
