@@ -6,14 +6,10 @@ Free functions operating on a ``Memory`` instance. Matches the
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
 from typing import Any
 
 from cosinabox.memory import Memory
-
-
-def _now_iso() -> str:
-    return datetime.now(UTC).isoformat()
+from cosinabox.memory._util import now_iso
 
 
 def archive_note(
@@ -35,7 +31,7 @@ def archive_note(
             "INSERT INTO keep_warm_note_history "
             "(person_record_id, person_name, note, archived_at, reason) "
             "VALUES (?, ?, ?, ?, ?)",
-            (person_record_id, person_name, note, _now_iso(), reason),
+            (person_record_id, person_name, note, now_iso(), reason),
         )
         db._conn.commit()
 

@@ -6,7 +6,6 @@ briefing prompts without extra serialization.
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
 from typing import Any
 
 from cosinabox.commitments.models import (
@@ -19,10 +18,7 @@ from cosinabox.commitments.models import (
     CommitmentStatus,
 )
 from cosinabox.memory import Memory
-
-
-def _now_iso() -> str:
-    return datetime.now(UTC).isoformat()
+from cosinabox.memory._util import now_iso
 
 
 def _row_to_dict(row: Any) -> dict[str, Any]:
@@ -47,7 +43,7 @@ def create_commitment(
     clamped_priority = max(1, min(5, priority))
     safe_source = source if source in VALID_SOURCES else "manual"
 
-    ts = _now_iso()
+    ts = now_iso()
     # Serialize against other threads on the same SQLite connection.
     # Without this, concurrent APScheduler + Telegram + SubAgent writes
     # can corrupt cursor state → sqlite3.InterfaceError.
@@ -134,7 +130,7 @@ def update_commitment(
         if "priority" in changes and changes["priority"] is not None:
             changes["priority"] = max(1, min(5, int(changes["priority"])))
         set_clause = ", ".join(f"{k} = ?" for k in changes)
-        values = [*changes.values(), _now_iso(), commitment_id]
+        values = [*changes.values(), now_iso(), commitment_id]
         with db.lock:
             db._conn.execute(
                 f"UPDATE commitments SET {set_clause}, updated_at = ? WHERE id = ?",
@@ -160,7 +156,7 @@ def close_commitment(
     if current["status"] in TERMINAL_STATUSES:
         raise CommitmentAlreadyClosed(f"#{commitment_id} already {current['status']}")
 
-    ts = _now_iso()
+    ts = now_iso()
     with db.lock:
         db._conn.execute(
             "UPDATE commitments SET status = ?, updated_at = ? WHERE id = ?",
@@ -188,7 +184,7 @@ def dismiss_commitment(
     if current["status"] in TERMINAL_STATUSES:
         raise CommitmentAlreadyClosed(f"#{commitment_id} already {current['status']}")
 
-    ts = _now_iso()
+    ts = now_iso()
     with db.lock:
         db._conn.execute(
             "UPDATE commitments SET status = ?, updated_at = ? WHERE id = ?",
@@ -215,7 +211,7 @@ def reopen_commitment(
     with db.lock:
         db._conn.execute(
             "UPDATE commitments SET status = ?, updated_at = ? WHERE id = ?",
-            (CommitmentStatus.OPEN.value, _now_iso(), commitment_id),
+            (CommitmentStatus.OPEN.value, now_iso(), commitment_id),
         )
         db._conn.commit()
     return get_commitment(db, commitment_id)
