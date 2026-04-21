@@ -6,6 +6,11 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.1.1] — 2026-04-20
+
+### Fixed
+- Google OAuth refresh no longer over-requests scopes. `build_credentials` and `build_all_credentials` stopped passing `scopes=` on `Credentials()`, which was causing `invalid_scope: Bad Request` on refresh for tokens minted before `drive.readonly` was added to `GOOGLE_DEFAULT_SCOPES`. Gmail + Calendar reads now keep working on pre-Drive refresh tokens; Drive API calls 403 for those tokens (DriveTool catches it) until the user re-mints via `cosinabox auth google`.
+
 ## [0.1.0] — 2026-04-21
 
 Initial public release.
