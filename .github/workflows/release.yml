@@ -88,18 +88,26 @@ jobs:
           echo "full=$v" >> "$GITHUB_OUTPUT"
           echo "minor=$major_minor" >> "$GITHUB_OUTPUT"
       - name: Wait for PyPI to expose the new release
-        # Trusted Publishing returns 200 before the CDN has the file.
-        # Poll /simple/ until the exact version appears, max ~2 min.
+        # Trusted Publishing returns 200 before every CDN edge has the
+        # file. Scraping /simple/ hits a different edge than pip inside
+        # docker buildx — scraping can succeed while pip still sees
+        # stale data (this bit us on 0.1.3). Use `pip install --dry-run`
+        # against a pinned version: that's the exact resolver path the
+        # subsequent build will take, so consistency is guaranteed.
+        # --no-deps skips the transitive fetch so this is fast.
         run: |
-          for i in $(seq 1 24); do
-            if curl -sS https://pypi.org/simple/cosinabox/ | grep -q "cosinabox-${{ needs.build.outputs.version }}\.tar\.gz"; then
-              echo "cosinabox ${{ needs.build.outputs.version }} visible on PyPI"
+          python -m pip install --upgrade pip
+          for i in $(seq 1 36); do
+            if pip install --dry-run --no-deps \
+                "cosinabox==${{ needs.build.outputs.version }}" \
+                >/dev/null 2>&1; then
+              echo "pip can resolve cosinabox ${{ needs.build.outputs.version }}"
               exit 0
             fi
-            echo "waiting for PyPI to expose ${{ needs.build.outputs.version }} ($i/24)..."
+            echo "waiting for pip resolver to see ${{ needs.build.outputs.version }} ($i/36)..."
             sleep 5
           done
-          echo "timeout waiting for PyPI — build may fail to pip install"
+          echo "timeout waiting for PyPI resolver — build would fail"
           exit 1
       - uses: docker/setup-qemu-action@v3
       - uses: docker/setup-buildx-action@v3

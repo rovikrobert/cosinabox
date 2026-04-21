@@ -6,6 +6,14 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.1.4] — 2026-04-21
+
+### Fixed
+- Release workflow's "Wait for PyPI" step no longer races the CDN. The previous version curled the `/simple/` index from the GitHub Actions runner, which could succeed at the same moment pip (inside docker buildx, different network path) still saw stale data. 0.1.3's runtime image build failed with `No matching distribution found for cosinabox==0.1.3` for this reason. Replaced with `pip install --dry-run --no-deps` against the exact version — uses the same resolver path docker build will, so there's no consistency window. Polls up to 3 min.
+
+### Note
+- 0.1.3's runtime image does not exist on GHCR (build failed before pushing). Users should reference `ghcr.io/rovikrobert/cosinabox-runtime:0.1` (floating tag → 0.1.4) or `:0.1.4`/`:0.1.2` explicitly. `:0.1.3` is unavailable.
+
 ## [0.1.3] — 2026-04-21
 
 ### Changed
