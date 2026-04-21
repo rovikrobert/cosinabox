@@ -1,6 +1,6 @@
 """cosinabox — open-source Chief of Staff in a box."""
 
-__version__ = "0.1.1"
+__version__ = "0.1.2"
 
 from cosinabox.app import App
 

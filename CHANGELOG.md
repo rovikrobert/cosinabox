@@ -6,6 +6,13 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.1.2] — 2026-04-21
+
+### Added
+- `cosinabox init` now writes `.cosinabox-version` containing the scaffolding engine version — future `doctor`/`describe`/`migrate` commands can surface drift between scaffold and current install.
+- `cosinabox init` rewrites the scaffolded `pyproject.toml` dep pin to match the scaffolding engine's major.minor range (e.g. engine 0.2.x → `cosinabox[google]>=0.2,<0.3`). Kills the footgun where the template's hardcoded `>=0.1,<0.2` broke scaffolding after a minor bump.
+- Release workflow now builds a multi-arch (amd64 + arm64) runtime image and pushes it to `ghcr.io/rovikrobert/cosinabox-runtime:{version,major.minor,latest}` on every non-prerelease tag. User-repos can opt into `FROM ghcr.io/rovikrobert/cosinabox-runtime:0.1` for faster builds.
+
 ## [0.1.1] — 2026-04-20
 
 ### Fixed
