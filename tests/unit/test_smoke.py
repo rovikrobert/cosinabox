@@ -1,7 +1,11 @@
 def test_package_imports() -> None:
+    import re
+
     import cosinabox
 
-    assert cosinabox.__version__ == "0.1.0"
+    # Version-agnostic — asserts shape rather than a specific string so
+    # the next bump doesn't break CI (0.1.0 → 0.1.1 already did that once).
+    assert re.match(r"^\d+\.\d+\.\d+", cosinabox.__version__)
 
 
 def test_cli_imports() -> None:
