@@ -28,12 +28,17 @@ _ACTION = (
     r"ping|sign)"
 )
 
-_PATTERNS = [
+_COMMITMENT_PATTERNS = [
     # "by <weekday>", "before <weekday>", "on <weekday>"
+    # Known FP: bare "on <weekday>" fires on biographical/past-tense mentions
+    # ("met on Friday", "born on Tuesday"). Accepted under soft-warn semantics —
+    # cost is a dismissable warning, not a blocked write.
     rf"\b(?:by|before|on|this|next)\s+{_WEEKDAY}\b",
     # "by EOD", "before EOW", "by EOM"
     r"\b(?:by|before)\s+(?:EO[DWM])\b",
     # "this week", "next week", "this month", "next month"
+    # Known FP: "she leads next quarter's fundraise" would fire on "next quarter".
+    # Acceptable under soft-warn.
     r"\b(?:this|next)\s+(?:week|month|quarter)\b",
     # "in 3 days", "in 2 weeks", "in a month"
     r"\bin\s+(?:\d+|a|an|one|two|three|four|five)\s+(?:day|week|month)s?\b",
@@ -48,7 +53,7 @@ _PATTERNS = [
     rf"\b{_ACTION}\b[^.!?\n]{{0,40}}?\b(?:on|this|next|by|before)?\s*{_WEEKDAY}\b",
 ]
 
-_COMBINED = re.compile("|".join(_PATTERNS), re.IGNORECASE)
+_COMBINED = re.compile("|".join(_COMMITMENT_PATTERNS), re.IGNORECASE)
 
 
 def looks_like_commitment(text: str | None) -> str | None:
@@ -79,15 +84,15 @@ def list_flagged_keep_warm_notes(attio: Any) -> list[dict[str, Any]]:
     flagged: list[dict[str, Any]] = []
     for p in people:
         note = getattr(p, "note", None)
-        matched = looks_like_commitment(note)
-        if matched is None:
+        matches = _COMBINED.findall(note) if note else []
+        if not matches:
             continue
         flagged.append(
             {
                 "person": getattr(p, "name", ""),
                 "record_id": getattr(p, "record_id", ""),
                 "note": note,
-                "regex_matches": [matched],
+                "regex_matches": matches,
                 "days_since": getattr(p, "days_since", None),
                 "cadence_days": getattr(p, "cadence_days", None),
             }

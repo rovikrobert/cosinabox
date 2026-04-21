@@ -121,6 +121,23 @@ def test_list_flagged_keep_warm_notes_row_shape() -> None:
     assert row["cadence_days"] == 14
 
 
+def test_list_flagged_keep_warm_notes_returns_all_matches_in_a_note() -> None:
+    from cosinabox.commitments.migrate_from_keep_warm import list_flagged_keep_warm_notes
+
+    attio = _StubAttio(
+        [
+            _kw_person(
+                name="Multi",
+                record_id="r_multi",
+                note="Send proposal by Friday. Also reply before EOW.",
+            )
+        ]
+    )
+    [row] = list_flagged_keep_warm_notes(attio)
+    # Regex finds at least two distinct commitment phrases
+    assert len(row["regex_matches"]) >= 2
+
+
 def test_list_flagged_keep_warm_notes_handles_attio_error() -> None:
     from cosinabox.commitments.migrate_from_keep_warm import list_flagged_keep_warm_notes
 
