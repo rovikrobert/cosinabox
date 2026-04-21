@@ -326,7 +326,7 @@ Goal: upload once to TestPyPI via a disposable tag, install from TestPyPI into a
 - [ ] **Step 1: Register `cosinabox` on TestPyPI as a pending project**
 
 1. Log into `https://test.pypi.org/` (create an account if needed).
-2. Go to `Your projects` → `Publishing` → `Add a new pending publisher`.
+2. Go to your **Account Settings** (avatar menu top-right) → **Publishing** → direct URL: `https://test.pypi.org/manage/account/publishing/`. Find **"Add a new pending publisher"**. (The `Your projects → Publishing` path only works for projects that already exist on the registry — pending publishers for not-yet-registered projects live under Account Settings.)
 3. Fill in:
    - PyPI Project Name: `cosinabox`
    - Owner: `rovikrobert`
