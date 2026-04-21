@@ -123,6 +123,8 @@ class TestBuildToolRegistry:
             "crm_get_person",
             "crm_list_people",
             "keep_warm_set",
+            "keep_warm_review",
+            "keep_warm_history",
             "keep_warm_unset",
             "keep_warm_list",
         }
