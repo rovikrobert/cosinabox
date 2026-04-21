@@ -378,3 +378,61 @@ def test_keep_warm_review_empty_when_no_leaks(tmp_path):
     out = handlers["keep_warm_review"]()
     # Empty response should convey "nothing flagged" — exact wording flexible
     assert "no" in out.lower() or "empty" in out.lower() or "clean" in out.lower()
+
+
+# ---------------------------------------------------------------------------
+# keep_warm_history (Task 4.2)
+# ---------------------------------------------------------------------------
+
+
+def test_keep_warm_history_returns_archived_notes(tmp_path):
+    from cosinabox.memory import Memory
+    from cosinabox.memory.keep_warm_history import archive_note
+    from cosinabox.tools.registry import _build_attio_handlers
+
+    class _Attio:
+        def get_person(self, name):
+            return {"id": "rec_1", "name": name, "keep_warm_note": None}
+
+    db = Memory(db_path=tmp_path / "test.db")
+    for text in ["oldest", "middle", "newest"]:
+        archive_note(
+            db,
+            person_record_id="rec_1",
+            person_name="Sarah",
+            note=text,
+            reason=None,
+        )
+
+    handlers = _build_attio_handlers(_Attio(), memory=db)
+    out = handlers["keep_warm_history"](person="Sarah")
+    # Newest appears first — assert relative order
+    assert out.index("newest") < out.index("middle") < out.index("oldest")
+
+
+def test_keep_warm_history_empty_when_no_records(tmp_path):
+    from cosinabox.memory import Memory
+    from cosinabox.tools.registry import _build_attio_handlers
+
+    class _Attio:
+        def get_person(self, name):
+            return {"id": "rec_1", "name": name, "keep_warm_note": None}
+
+    db = Memory(db_path=tmp_path / "test.db")
+    handlers = _build_attio_handlers(_Attio(), memory=db)
+    out = handlers["keep_warm_history"](person="Sarah")
+    assert "no" in out.lower() or "history" in out.lower() or "empty" in out.lower()
+
+
+def test_keep_warm_history_person_not_found(tmp_path):
+    from cosinabox.memory import Memory
+    from cosinabox.tools.registry import _build_attio_handlers
+
+    class _Attio:
+        def get_person(self, name):
+            return None
+
+    db = Memory(db_path=tmp_path / "test.db")
+    handlers = _build_attio_handlers(_Attio(), memory=db)
+    out = handlers["keep_warm_history"](person="Ghost")
+    assert "not found" in out.lower() or "no person" in out.lower()

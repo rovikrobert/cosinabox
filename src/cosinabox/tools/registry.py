@@ -19,7 +19,7 @@ from cosinabox.commitments.migrate_from_keep_warm import (
     list_flagged_keep_warm_notes,
     looks_like_commitment,
 )
-from cosinabox.memory.keep_warm_history import archive_note
+from cosinabox.memory.keep_warm_history import archive_note, list_note_history
 
 logger = logging.getLogger(__name__)
 
@@ -315,6 +315,21 @@ ATTIO_TOOL_DEFINITIONS: list[dict[str, Any]] = [
             "type": "object",
             "properties": {},
             "required": [],
+        },
+    },
+    {
+        "name": "keep_warm_history",
+        "description": (
+            "Return archived keep-warm notes for a person, newest-first. "
+            "Use when the user asks what the note for someone USED to say, "
+            "or to confirm a prior cleanup was intentional."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "person": {"type": "string", "description": "Person's name."},
+            },
+            "required": ["person"],
         },
     },
     {
@@ -666,6 +681,27 @@ def _build_attio_handlers(
         )
         return "\n".join(lines)
 
+    def keep_warm_history(person: str) -> str:
+        if memory is None:
+            return "keep_warm_history unavailable: memory/db not configured."
+        try:
+            profile = attio.get_person(person)
+        except Exception as exc:
+            return f"keep_warm_history failed: {exc}"
+        if not profile:
+            return f"No person found matching '{person}'."
+        record_id = str(profile.get("id") or "")
+        if not record_id:
+            return f"No record id for '{person}'."
+
+        rows = list_note_history(memory, person_record_id=record_id)
+        if not rows:
+            return f"No archived note history for {person}."
+        lines = [f"{len(rows)} archived note(s) for {person} (newest first):"]
+        for r in rows:
+            lines.append(f"- [{r['archived_at']}] {r['note']}")
+        return "\n".join(lines)
+
     def keep_warm_unset(person: str, note: str | None = None) -> str:
         try:
             out = attio.unset_keep_warm(person=person, note=note)
@@ -692,6 +728,7 @@ def _build_attio_handlers(
         "crm_list_people": crm_list_people,
         "keep_warm_set": keep_warm_set,
         "keep_warm_review": keep_warm_review,
+        "keep_warm_history": keep_warm_history,
         "keep_warm_unset": keep_warm_unset,
         "keep_warm_list": keep_warm_list,
     }
