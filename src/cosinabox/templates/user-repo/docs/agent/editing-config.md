@@ -72,6 +72,14 @@ After enabling Attio, add three custom fields to the People object in Attio's UI
 
 Without these fields, the Attio integration still works but Keep Warm tools + the morning briefing's KEEP WARM section stay quiet.
 
+### Keep Warm notes — what belongs there
+
+The `note` field on a Keep Warm person is **relationship context**: who they are, how you know them, what they care about, what makes this relationship current. Examples that belong: `"Lead investor, introduced by Sarah"`, `"triathlete, son Oliver just started college"`, `"SVP at Acme, owns Series B decision"`.
+
+**What does NOT belong**: future-tense actions, deadlines, or items you owe them. If a line tells the engine what to DO or WHEN, it's a commitment. Ask Claude to `commitment_create` instead, and keep the note as pure context.
+
+If you write commitment-shaped text into a note, `keep_warm_set` will surface a `WARNING:` line and the next morning briefing will flag a `KEEP WARM — LEAKED` count. Run `keep_warm_review` to walk through and clean up.
+
 ## Setup & maintenance commands
 
 | Command | When to use |

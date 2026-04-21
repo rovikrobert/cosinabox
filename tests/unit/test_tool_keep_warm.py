@@ -464,3 +464,30 @@ def test_keep_warm_person_note_docstring_contains_semantic_boundary():
     combined = doc + " " + (KeepWarmPerson.__doc__ or "")
     assert "relationship context" in combined.lower()
     assert "commitment" in combined.lower()
+
+
+# ---------------------------------------------------------------------------
+# user-repo template docs (Task 4.4)
+# ---------------------------------------------------------------------------
+
+
+def test_user_repo_editing_config_mentions_note_boundary():
+    from pathlib import Path
+
+    from cosinabox import templates
+
+    root = Path(list(templates.__path__)[0]) / "user-repo"
+    text = (root / "docs/agent/editing-config.md").read_text()
+    assert "relationship context" in text.lower()
+    assert "commitment" in text.lower()
+
+
+def test_user_repo_jobs_doc_mentions_note_boundary():
+    from pathlib import Path
+
+    from cosinabox import templates
+
+    root = Path(list(templates.__path__)[0]) / "user-repo"
+    text = (root / "docs/agent/jobs.md").read_text()
+    assert "keep warm" in text.lower()
+    assert "relationship context" in text.lower() or "no deadlines" in text.lower()
