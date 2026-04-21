@@ -51,3 +51,12 @@ def test_system_prompt_includes_commitment_capture_rules() -> None:
     assert "queries, not commitments" in out
     # Must prefer capture over omission per the spec.
     assert "prefer capture over omission" in out
+
+
+def test_system_prompt_includes_tool_warnings_rule():
+    from cosinabox.prompts.core import render_system_prompt
+
+    rendered = render_system_prompt(personality="(test)", name="Sam", timezone="UTC")
+    assert "WARNING:" in rendered
+    # Instruction must cover surfacing
+    assert "surface" in rendered.lower() or "show" in rendered.lower()
