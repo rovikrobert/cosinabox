@@ -205,6 +205,21 @@ CREATE INDEX IF NOT EXISTS idx_manual_closures_commitment
     ON manual_closures(commitment_id);
 CREATE INDEX IF NOT EXISTS idx_manual_closures_closed_at
     ON manual_closures(closed_at);
+
+-- Keep Warm note history: snapshot on every note change through
+-- set_keep_warm (via registry handler). Reason is nullable; left as a
+-- forward-looking hook for distinguishing sources if ever needed. History
+-- rows are small; no pruning in v1.
+CREATE TABLE IF NOT EXISTS keep_warm_note_history (
+    id                INTEGER PRIMARY KEY AUTOINCREMENT,
+    person_record_id  TEXT    NOT NULL,
+    person_name       TEXT,
+    note              TEXT    NOT NULL,
+    archived_at       TEXT    NOT NULL,
+    reason            TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_kwh_person_time
+    ON keep_warm_note_history (person_record_id, archived_at DESC);
 """
 
 
