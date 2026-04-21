@@ -59,4 +59,4 @@ def test_system_prompt_includes_tool_warnings_rule():
     rendered = render_system_prompt(personality="(test)", name="Sam", timezone="UTC")
     assert "WARNING:" in rendered
     # Instruction must cover surfacing
-    assert "surface" in rendered.lower() or "show" in rendered.lower()
+    assert "surface" in rendered.lower()

@@ -150,14 +150,10 @@ def test_keep_warm_set_snapshots_old_note_when_changed(tmp_path):
     from cosinabox.tools.registry import _build_attio_handlers
 
     class _Attio:
-        def __init__(self):
-            self.patched = None
-
         def get_person(self, name):
             return {"id": "rec_1", "name": name, "keep_warm_note": "old note"}
 
         def set_keep_warm(self, *, person, cadence_days, note=None):
-            self.patched = {"person": person, "cadence": cadence_days, "note": note}
             return {
                 "status": "ok",
                 "record_id": "rec_1",
@@ -293,8 +289,10 @@ def test_keep_warm_set_appends_warning_line_when_note_is_commitment_shaped(tmp_p
     )
     assert "Daniel" in out
     assert "WARNING:" in out
-    # The matched substring should be quoted in the warning
-    assert "Friday" in out or "by" in out.lower()
+    # The matched substring should be quoted in the warning.
+    # looks_like_commitment("Send proposal by Friday") returns "Send proposal by"
+    # (deadline-phrase pattern) — that text must appear in the warning.
+    assert "Send proposal by" in out
 
 
 def test_keep_warm_set_no_warning_on_pure_status_note(tmp_path):

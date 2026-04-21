@@ -15,6 +15,9 @@ from collections.abc import Callable
 from datetime import datetime
 from typing import Any
 
+from cosinabox.commitments.migrate_from_keep_warm import looks_like_commitment
+from cosinabox.memory.keep_warm_history import archive_note
+
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
@@ -583,7 +586,8 @@ def _build_attio_handlers(
                     current_record_id = str(profile.get("id") or "") or None
             except Exception:
                 logger.warning(
-                    "keep_warm_set: pre-fetch for history snapshot failed",
+                    "keep_warm_set: pre-fetch for history snapshot failed (person=%r)",
+                    person,
                     exc_info=True,
                 )
 
@@ -603,8 +607,6 @@ def _build_attio_handlers(
             and (current_record_id or out.get("record_id"))
         ):
             try:
-                from cosinabox.memory.keep_warm_history import archive_note
-
                 archive_note(
                     memory,
                     person_record_id=current_record_id or str(out.get("record_id", "")),
@@ -613,12 +615,14 @@ def _build_attio_handlers(
                     reason=None,
                 )
             except Exception:
-                logger.warning("keep_warm_set: history archive failed", exc_info=True)
+                logger.warning(
+                    "keep_warm_set: history archive failed (person=%r)",
+                    person,
+                    exc_info=True,
+                )
 
         lines = [f"Flagged {out['person']} as Keep Warm (cadence: {out['cadence_days']}d)."]
         if note:
-            from cosinabox.commitments.migrate_from_keep_warm import looks_like_commitment
-
             matched = looks_like_commitment(note)
             if matched:
                 lines.append(
