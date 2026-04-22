@@ -272,6 +272,10 @@ class AttioClient:
         """Mark a person Keep Warm with a per-person cadence.
 
         Cadence is clamped to [1, 365] to prevent obvious typos.
+
+        The returned dict includes ``prior_note`` — the ``keep_warm_note``
+        value that was on the record before the PATCH landed — so callers
+        can snapshot-on-write without issuing a second GET.
         """
         profile = self.get_person(person)
         if not profile:
@@ -279,6 +283,7 @@ class AttioClient:
         record_id = str(profile.get("id") or "")
         if not record_id:
             return {"status": "error", "message": f"Person '{person}' has no record id."}
+        prior_note = profile.get("keep_warm_note")
 
         clamped = max(1, min(365, int(cadence_days)))
         fields: dict[str, Any] = {
@@ -300,6 +305,7 @@ class AttioClient:
             "record_id": record_id,
             "person": person,
             "cadence_days": clamped,
+            "prior_note": prior_note,
         }
 
     def unset_keep_warm(

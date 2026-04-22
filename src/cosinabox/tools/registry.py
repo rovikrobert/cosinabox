@@ -618,22 +618,6 @@ def _build_attio_handlers(
         return f"- {p.name} — {days} (cadence: {p.cadence_days}d){note_part}"
 
     def keep_warm_set(person: str, cadence_days: int, note: str | None = None) -> str:
-        # Read current note BEFORE delegating so we can snapshot a change
-        current_note: str | None = None
-        current_record_id: str | None = None
-        if memory is not None and note is not None:
-            try:
-                profile = attio.get_person(person)
-                if profile:
-                    current_note = profile.get("keep_warm_note")
-                    current_record_id = str(profile.get("id") or "") or None
-            except Exception:
-                logger.warning(
-                    "keep_warm_set: pre-fetch for history snapshot failed (person=%r)",
-                    person,
-                    exc_info=True,
-                )
-
         try:
             out = attio.set_keep_warm(person=person, cadence_days=cadence_days, note=note)
         except Exception as exc:
@@ -641,20 +625,25 @@ def _build_attio_handlers(
         if out.get("status") != "ok":
             return f"keep_warm_set failed: {out.get('message', 'unknown')}"
 
-        # Snapshot old note if it existed AND the incoming value differs
+        # Snapshot old note if one existed AND the incoming value differs.
+        # attio.set_keep_warm returns the prior note in its result dict so we
+        # don't issue a second GET — the client already had the data from
+        # its internal record-lookup.
+        prior_note = out.get("prior_note")
+        record_id = str(out.get("record_id", ""))
         if (
             memory is not None
             and note is not None
-            and current_note
-            and current_note != note
-            and (current_record_id or out.get("record_id"))
+            and prior_note
+            and prior_note != note
+            and record_id
         ):
             try:
                 archive_note(
                     memory,
-                    person_record_id=current_record_id or str(out.get("record_id", "")),
+                    person_record_id=record_id,
                     person_name=person,
-                    note=current_note,
+                    note=prior_note,
                 )
             except Exception:
                 logger.warning(
