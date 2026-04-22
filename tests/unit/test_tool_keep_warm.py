@@ -353,7 +353,10 @@ def test_keep_warm_review_returns_flagged_rows(tmp_path):
     out = handlers["keep_warm_review"]()
     assert "Daniel" in out
     assert "Sarah" not in out
-    assert "Friday" in out or "by" in out.lower()
+    # Matched phrase appears in the (matched: ...) clause; "by" alone used
+    # to satisfy this (trivially true in any English output), so pin it to
+    # the exact substring the detector returns for "Send proposal by Friday".
+    assert "matched: Send proposal by" in out
 
 
 def test_keep_warm_review_empty_when_no_leaks(tmp_path):
