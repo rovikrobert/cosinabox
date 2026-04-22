@@ -405,7 +405,6 @@ def test_keep_warm_history_returns_archived_notes(tmp_path):
             person_record_id="rec_1",
             person_name="Sarah",
             note=text,
-            reason=None,
         )
 
     handlers = _build_attio_handlers(_Attio(), memory=db)

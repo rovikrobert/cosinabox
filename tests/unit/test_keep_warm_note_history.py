@@ -38,7 +38,6 @@ def test_keep_warm_note_history_schema(db: Memory) -> None:
         "person_name": "TEXT",
         "note": "TEXT",
         "archived_at": "TEXT",
-        "reason": "TEXT",
     }
 
 
@@ -58,7 +57,6 @@ def test_archive_note_inserts_row(db: Memory) -> None:
         person_record_id="rec_123",
         person_name="Sarah Chen",
         note="Send proposal by Friday",
-        reason="user_update",
     )
     with db.lock:
         cur = db._conn.execute("SELECT * FROM keep_warm_note_history")
@@ -67,23 +65,20 @@ def test_archive_note_inserts_row(db: Memory) -> None:
     assert rows[0]["person_record_id"] == "rec_123"
     assert rows[0]["person_name"] == "Sarah Chen"
     assert rows[0]["note"] == "Send proposal by Friday"
-    assert rows[0]["reason"] == "user_update"
     # archived_at is a valid ISO-8601 UTC timestamp
     datetime.fromisoformat(rows[0]["archived_at"])
 
 
-def test_archive_note_accepts_null_reason(db: Memory) -> None:
+def test_archive_note_accepts_null_person_name(db: Memory) -> None:
     archive_note(
         db,
         person_record_id="rec_1",
         person_name=None,
         note="old note",
-        reason=None,
     )
     with db.lock:
-        cur = db._conn.execute("SELECT reason, person_name FROM keep_warm_note_history")
+        cur = db._conn.execute("SELECT person_name FROM keep_warm_note_history")
         row = cur.fetchone()
-    assert row["reason"] is None
     assert row["person_name"] is None
 
 
@@ -95,7 +90,6 @@ def test_archive_note_multiple_rows_for_same_person(db: Memory) -> None:
             person_record_id="rec_x",
             person_name="X",
             note=text,
-            reason=None,
         )
     with db.lock:
         cur = db._conn.execute(
@@ -116,15 +110,14 @@ def test_list_note_history_returns_newest_first(db: Memory) -> None:
             person_record_id="rec_abc",
             person_name="A",
             note=text,
-            reason=None,
         )
     rows = list_note_history(db, person_record_id="rec_abc")
     assert [r["note"] for r in rows] == ["newest", "middle", "oldest"]
 
 
 def test_list_note_history_filters_by_person(db: Memory) -> None:
-    archive_note(db, person_record_id="rec_a", person_name="A", note="a1", reason=None)
-    archive_note(db, person_record_id="rec_b", person_name="B", note="b1", reason=None)
+    archive_note(db, person_record_id="rec_a", person_name="A", note="a1")
+    archive_note(db, person_record_id="rec_b", person_name="B", note="b1")
     rows = list_note_history(db, person_record_id="rec_a")
     assert len(rows) == 1
     assert rows[0]["note"] == "a1"
@@ -136,5 +129,5 @@ def test_list_note_history_empty_when_no_rows(db: Memory) -> None:
 
 def test_list_note_history_limit(db: Memory) -> None:
     for i in range(10):
-        archive_note(db, person_record_id="rec_l", person_name="L", note=f"n{i}", reason=None)
+        archive_note(db, person_record_id="rec_l", person_name="L", note=f"n{i}")
     assert len(list_note_history(db, person_record_id="rec_l", limit=3)) == 3

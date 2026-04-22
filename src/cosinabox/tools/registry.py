@@ -655,7 +655,6 @@ def _build_attio_handlers(
                     person_record_id=current_record_id or str(out.get("record_id", "")),
                     person_name=person,
                     note=current_note,
-                    reason=None,
                 )
             except Exception:
                 logger.warning(
