@@ -509,12 +509,10 @@ def test_keep_warm_history_memory_not_configured():
 
 def test_keep_warm_review_caps_output_when_many_flagged(tmp_path):
     """Response caps at KEEP_WARM_REVIEW_MAX_ROWS; remainder surfaced as a count."""
+    from cosinabox.defaults import KEEP_WARM_REVIEW_MAX_ROWS
     from cosinabox.memory import Memory
     from cosinabox.tools.attio import KeepWarmPerson
-    from cosinabox.tools.registry import (
-        KEEP_WARM_REVIEW_MAX_ROWS,
-        _build_attio_handlers,
-    )
+    from cosinabox.tools.registry import _build_attio_handlers
 
     class _Attio:
         def list_keep_warm(self):

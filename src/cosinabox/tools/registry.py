@@ -19,14 +19,10 @@ from cosinabox.commitments.migrate_from_keep_warm import (
     list_flagged_keep_warm_notes,
     looks_like_commitment,
 )
+from cosinabox.defaults import KEEP_WARM_REVIEW_MAX_ROWS
 from cosinabox.memory.keep_warm_history import archive_note, list_note_history
 
 logger = logging.getLogger(__name__)
-
-# Cap the per-call surface for keep_warm_review so the response fits
-# within typical chat-review budgets (~30 lines). The agent can re-invoke
-# the tool to see the next batch if needed.
-KEEP_WARM_REVIEW_MAX_ROWS = 20
 
 # ---------------------------------------------------------------------------
 # Gmail tool definitions

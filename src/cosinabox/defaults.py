@@ -115,6 +115,12 @@ KEEP_WARM_DEFAULT_CADENCE_DAYS: int = 14
 # Briefings cap at 10 overdue rows so a quiet week doesn't crowd out
 # other signals when something slipped a month ago.
 KEEP_WARM_MAX_BRIEFING_ROWS: int = 10
+# keep_warm_review output cap. 20 rows fits a typical chat-review budget
+# (~30 rendered lines including header/footer); overflow is surfaced as
+# "... and N more. Re-run after cleaning these." so the agent can iterate.
+# (2026-04-22 — moved from tools/registry.py after post-PR review flagged
+# it as a magic number in business logic, per CLAUDE.md rule 3.)
+KEEP_WARM_REVIEW_MAX_ROWS: int = 20
 
 # Fireflies transcripts and calendar events drift by ~minutes due to clock
 # skew and meeting-end vs transcript-creation timing. +/-30min covers most
