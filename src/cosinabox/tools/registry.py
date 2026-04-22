@@ -347,7 +347,9 @@ ATTIO_TOOL_DEFINITIONS: list[dict[str, Any]] = [
         "description": (
             "Remove a person from Keep Warm. Use when a relationship is "
             "paused, deprioritized, or the person moved on. Optional note "
-            "captures why (e.g., 'deprioritized 2026-05-12')."
+            "captures why (e.g., 'deprioritized 2026-05-12'). When you pass "
+            "a note here, the prior keep_warm_note is archived to history "
+            "first — recoverable via keep_warm_history."
         ),
         "input_schema": {
             "type": "object",
@@ -714,6 +716,32 @@ def _build_attio_handlers(
             return f"keep_warm_unset failed: {exc}"
         if out.get("status") != "ok":
             return f"keep_warm_unset failed: {out.get('message', 'unknown')}"
+
+        # Snapshot the prior note when unset is overwriting a rich relationship
+        # note with a cleanup string (e.g. "deprioritized 2026-05-12"). If note
+        # is None the prior value is untouched in Attio, so nothing to archive.
+        prior_note = out.get("prior_note")
+        record_id = str(out.get("record_id", ""))
+        if (
+            memory is not None
+            and note is not None
+            and prior_note
+            and prior_note != note
+            and record_id
+        ):
+            try:
+                archive_note(
+                    memory,
+                    person_record_id=record_id,
+                    person_name=person,
+                    note=prior_note,
+                )
+            except Exception:
+                logger.warning(
+                    "keep_warm_unset: history archive failed (person=%r)",
+                    person,
+                    exc_info=True,
+                )
         return f"Removed {out['person']} from Keep Warm."
 
     def keep_warm_list() -> str:

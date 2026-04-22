@@ -314,13 +314,19 @@ class AttioClient:
         person: str,
         note: str | None = None,
     ) -> dict[str, Any]:
-        """Remove a person from Keep Warm. Clears cadence; note is optional."""
+        """Remove a person from Keep Warm. Clears cadence; note is optional.
+
+        Returns ``prior_note`` in the result so callers can snapshot-on-write
+        when an incoming ``note`` argument would overwrite a rich prior value
+        — mirrors the ``set_keep_warm`` contract.
+        """
         profile = self.get_person(person)
         if not profile:
             return {"status": "error", "message": f"Person '{person}' not found in Attio."}
         record_id = str(profile.get("id") or "")
         if not record_id:
             return {"status": "error", "message": f"Person '{person}' has no record id."}
+        prior_note = profile.get("keep_warm_note")
 
         fields: dict[str, Any] = {
             "keep_warm": [{"value": False}],
@@ -336,4 +342,9 @@ class AttioClient:
             return {"status": "error", "message": f"Attio update failed: {exc}"}
 
         logger.info("keep_warm unset: person=%s", person)
-        return {"status": "ok", "record_id": record_id, "person": person}
+        return {
+            "status": "ok",
+            "record_id": record_id,
+            "person": person,
+            "prior_note": prior_note,
+        }

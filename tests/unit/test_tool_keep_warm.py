@@ -86,6 +86,53 @@ def test_keep_warm_unset_person_not_found() -> None:
     assert "failed" in out
 
 
+def test_keep_warm_unset_snapshots_prior_note_when_overwritten(tmp_path):
+    """unset_keep_warm(person=..., note='deprioritized') preserves the
+    prior rich relationship note in keep_warm_note_history — matches the
+    set_keep_warm invariant so users don't silently lose context."""
+    from cosinabox.memory import Memory
+    from cosinabox.memory.keep_warm_history import list_note_history
+    from cosinabox.tools.registry import _build_attio_handlers
+
+    class _Attio:
+        def unset_keep_warm(self, *, person, note=None):
+            return {
+                "status": "ok",
+                "record_id": "rec_1",
+                "person": person,
+                "prior_note": "triathlete, son Oliver just started college",
+            }
+
+    db = Memory(db_path=tmp_path / "test.db")
+    handlers = _build_attio_handlers(_Attio(), memory=db)
+    handlers["keep_warm_unset"](person="Daniel", note="deprioritized 2026-05-12")
+    history = list_note_history(db, person_record_id="rec_1")
+    assert len(history) == 1
+    assert history[0]["note"] == "triathlete, son Oliver just started college"
+
+
+def test_keep_warm_unset_no_snapshot_when_note_arg_omitted(tmp_path):
+    """unset without a note arg doesn't touch keep_warm_note in Attio
+    (prior note preserved), so no archive row should be created."""
+    from cosinabox.memory import Memory
+    from cosinabox.memory.keep_warm_history import list_note_history
+    from cosinabox.tools.registry import _build_attio_handlers
+
+    class _Attio:
+        def unset_keep_warm(self, *, person, note=None):
+            return {
+                "status": "ok",
+                "record_id": "rec_1",
+                "person": person,
+                "prior_note": "something rich",
+            }
+
+    db = Memory(db_path=tmp_path / "test.db")
+    handlers = _build_attio_handlers(_Attio(), memory=db)
+    handlers["keep_warm_unset"](person="Daniel")
+    assert list_note_history(db, person_record_id="rec_1") == []
+
+
 # ---------------------------------------------------------------------------
 # list
 # ---------------------------------------------------------------------------
