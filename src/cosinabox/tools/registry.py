@@ -19,14 +19,10 @@ from cosinabox.commitments.migrate_from_keep_warm import (
     list_flagged_keep_warm_notes,
     looks_like_commitment,
 )
+from cosinabox.defaults import KEEP_WARM_REVIEW_MAX_ROWS
 from cosinabox.memory.keep_warm_history import archive_note, list_note_history
 
 logger = logging.getLogger(__name__)
-
-# Cap the per-call surface for keep_warm_review so the response fits
-# within typical chat-review budgets (~30 lines). The agent can re-invoke
-# the tool to see the next batch if needed.
-KEEP_WARM_REVIEW_MAX_ROWS = 20
 
 # ---------------------------------------------------------------------------
 # Gmail tool definitions
@@ -351,7 +347,9 @@ ATTIO_TOOL_DEFINITIONS: list[dict[str, Any]] = [
         "description": (
             "Remove a person from Keep Warm. Use when a relationship is "
             "paused, deprioritized, or the person moved on. Optional note "
-            "captures why (e.g., 'deprioritized 2026-05-12')."
+            "captures why (e.g., 'deprioritized 2026-05-12'). When you pass "
+            "a note here, the prior keep_warm_note is archived to history "
+            "first — recoverable via keep_warm_history."
         ),
         "input_schema": {
             "type": "object",
@@ -622,22 +620,6 @@ def _build_attio_handlers(
         return f"- {p.name} — {days} (cadence: {p.cadence_days}d){note_part}"
 
     def keep_warm_set(person: str, cadence_days: int, note: str | None = None) -> str:
-        # Read current note BEFORE delegating so we can snapshot a change
-        current_note: str | None = None
-        current_record_id: str | None = None
-        if memory is not None and note is not None:
-            try:
-                profile = attio.get_person(person)
-                if profile:
-                    current_note = profile.get("keep_warm_note")
-                    current_record_id = str(profile.get("id") or "") or None
-            except Exception:
-                logger.warning(
-                    "keep_warm_set: pre-fetch for history snapshot failed (person=%r)",
-                    person,
-                    exc_info=True,
-                )
-
         try:
             out = attio.set_keep_warm(person=person, cadence_days=cadence_days, note=note)
         except Exception as exc:
@@ -645,21 +627,25 @@ def _build_attio_handlers(
         if out.get("status") != "ok":
             return f"keep_warm_set failed: {out.get('message', 'unknown')}"
 
-        # Snapshot old note if it existed AND the incoming value differs
+        # Snapshot old note if one existed AND the incoming value differs.
+        # attio.set_keep_warm returns the prior note in its result dict so we
+        # don't issue a second GET — the client already had the data from
+        # its internal record-lookup.
+        prior_note = out.get("prior_note")
+        record_id = str(out.get("record_id", ""))
         if (
             memory is not None
             and note is not None
-            and current_note
-            and current_note != note
-            and (current_record_id or out.get("record_id"))
+            and prior_note
+            and prior_note != note
+            and record_id
         ):
             try:
                 archive_note(
                     memory,
-                    person_record_id=current_record_id or str(out.get("record_id", "")),
+                    person_record_id=record_id,
                     person_name=person,
-                    note=current_note,
-                    reason=None,
+                    note=prior_note,
                 )
             except Exception:
                 logger.warning(
@@ -730,6 +716,32 @@ def _build_attio_handlers(
             return f"keep_warm_unset failed: {exc}"
         if out.get("status") != "ok":
             return f"keep_warm_unset failed: {out.get('message', 'unknown')}"
+
+        # Snapshot the prior note when unset is overwriting a rich relationship
+        # note with a cleanup string (e.g. "deprioritized 2026-05-12"). If note
+        # is None the prior value is untouched in Attio, so nothing to archive.
+        prior_note = out.get("prior_note")
+        record_id = str(out.get("record_id", ""))
+        if (
+            memory is not None
+            and note is not None
+            and prior_note
+            and prior_note != note
+            and record_id
+        ):
+            try:
+                archive_note(
+                    memory,
+                    person_record_id=record_id,
+                    person_name=person,
+                    note=prior_note,
+                )
+            except Exception:
+                logger.warning(
+                    "keep_warm_unset: history archive failed (person=%r)",
+                    person,
+                    exc_info=True,
+                )
         return f"Removed {out['person']} from Keep Warm."
 
     def keep_warm_list() -> str:

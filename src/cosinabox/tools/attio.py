@@ -272,6 +272,10 @@ class AttioClient:
         """Mark a person Keep Warm with a per-person cadence.
 
         Cadence is clamped to [1, 365] to prevent obvious typos.
+
+        The returned dict includes ``prior_note`` — the ``keep_warm_note``
+        value that was on the record before the PATCH landed — so callers
+        can snapshot-on-write without issuing a second GET.
         """
         profile = self.get_person(person)
         if not profile:
@@ -279,6 +283,7 @@ class AttioClient:
         record_id = str(profile.get("id") or "")
         if not record_id:
             return {"status": "error", "message": f"Person '{person}' has no record id."}
+        prior_note = profile.get("keep_warm_note")
 
         clamped = max(1, min(365, int(cadence_days)))
         fields: dict[str, Any] = {
@@ -300,6 +305,7 @@ class AttioClient:
             "record_id": record_id,
             "person": person,
             "cadence_days": clamped,
+            "prior_note": prior_note,
         }
 
     def unset_keep_warm(
@@ -308,13 +314,19 @@ class AttioClient:
         person: str,
         note: str | None = None,
     ) -> dict[str, Any]:
-        """Remove a person from Keep Warm. Clears cadence; note is optional."""
+        """Remove a person from Keep Warm. Clears cadence; note is optional.
+
+        Returns ``prior_note`` in the result so callers can snapshot-on-write
+        when an incoming ``note`` argument would overwrite a rich prior value
+        — mirrors the ``set_keep_warm`` contract.
+        """
         profile = self.get_person(person)
         if not profile:
             return {"status": "error", "message": f"Person '{person}' not found in Attio."}
         record_id = str(profile.get("id") or "")
         if not record_id:
             return {"status": "error", "message": f"Person '{person}' has no record id."}
+        prior_note = profile.get("keep_warm_note")
 
         fields: dict[str, Any] = {
             "keep_warm": [{"value": False}],
@@ -330,4 +342,9 @@ class AttioClient:
             return {"status": "error", "message": f"Attio update failed: {exc}"}
 
         logger.info("keep_warm unset: person=%s", person)
-        return {"status": "ok", "record_id": record_id, "person": person}
+        return {
+            "status": "ok",
+            "record_id": record_id,
+            "person": person,
+            "prior_note": prior_note,
+        }

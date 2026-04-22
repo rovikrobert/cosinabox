@@ -207,16 +207,14 @@ CREATE INDEX IF NOT EXISTS idx_manual_closures_closed_at
     ON manual_closures(closed_at);
 
 -- Keep Warm note history: snapshot on every note change through
--- set_keep_warm (via registry handler). Reason is nullable; left as a
--- forward-looking hook for distinguishing sources if ever needed. History
--- rows are small; no pruning in v1.
+-- set_keep_warm / unset_keep_warm (via registry handlers). History rows
+-- are small; no pruning in v1.
 CREATE TABLE IF NOT EXISTS keep_warm_note_history (
     id                INTEGER PRIMARY KEY AUTOINCREMENT,
     person_record_id  TEXT    NOT NULL,
     person_name       TEXT,
     note              TEXT    NOT NULL,
-    archived_at       TEXT    NOT NULL,
-    reason            TEXT
+    archived_at       TEXT    NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_kwh_person_time
     ON keep_warm_note_history (person_record_id, archived_at DESC);
@@ -270,6 +268,16 @@ class Memory:
             self._conn.commit()
         except sqlite3.OperationalError:
             pass  # Column already exists
+
+        # M7 (2026-04-22): drop unused `reason` column from
+        # keep_warm_note_history. Added speculatively in PR #83 but never
+        # populated — post-review cleanup decided to drop rather than wire
+        # through. Requires SQLite 3.35+ (2021); Python 3.11+ ships with 3.40+.
+        try:
+            self._conn.execute("ALTER TABLE keep_warm_note_history DROP COLUMN reason")
+            self._conn.commit()
+        except sqlite3.OperationalError:
+            pass  # Column already absent (fresh DB or re-run)
 
     def store_message(
         self,
