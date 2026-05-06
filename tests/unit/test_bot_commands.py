@@ -85,6 +85,82 @@ async def test_cmd_status_empty_config() -> None:
     assert "none" in reply.lower()  # no tools or jobs
 
 
+@pytest.mark.asyncio
+async def test_cmd_status_renders_oauth_line_when_rows_exist(tmp_path) -> None:
+    """When auth_health has persisted rows, /status appends an OAuth line
+    showing per-account status with ✓/✗ markers and email labels.
+    """
+    from cosinabox.jobs.auth_health_persist import record_auth_health
+
+    db = tmp_path / "memory.db"
+    record_auth_health(db, account_index=1, email="rovik@majiq.agency", ok=True)
+    record_auth_health(db, account_index=2, email="rovik@cantina.ai", ok=False)
+
+    handler = build_status_handler(
+        name="Rovik",
+        timezone="Asia/Singapore",
+        tool_definitions=[],
+        jobs_config={},
+        stakeholder_count=0,
+        db_path=db,
+    )
+    update = _fake_update()
+    await handler(update, None)
+    reply = update.message.reply_text.call_args[0][0]
+
+    assert "OAuth:" in reply
+    assert "rovik@majiq.agency" in reply
+    assert "rovik@cantina.ai" in reply
+    assert "✓" in reply
+    assert "✗" in reply
+
+
+@pytest.mark.asyncio
+async def test_cmd_status_omits_oauth_line_when_empty(tmp_path) -> None:
+    """No persisted rows → no OAuth line. Don't show '(unknown)' noise on
+    fresh deploys before the first auth_health tick.
+    """
+    db = tmp_path / "memory.db"  # File doesn't exist; persisted state empty.
+
+    handler = build_status_handler(
+        name="x",
+        timezone="UTC",
+        tool_definitions=[],
+        jobs_config={},
+        stakeholder_count=0,
+        db_path=db,
+    )
+    update = _fake_update()
+    await handler(update, None)
+    reply = update.message.reply_text.call_args[0][0]
+    assert "OAuth:" not in reply
+
+
+@pytest.mark.asyncio
+async def test_cmd_status_renders_oauth_line_for_single_account(tmp_path) -> None:
+    """Single-account users see the OAuth line too — uniformity beats
+    hiding the row (spec open question #2).
+    """
+    from cosinabox.jobs.auth_health_persist import record_auth_health
+
+    db = tmp_path / "memory.db"
+    record_auth_health(db, account_index=1, email="solo@example.com", ok=True)
+
+    handler = build_status_handler(
+        name="x",
+        timezone="UTC",
+        tool_definitions=[],
+        jobs_config={},
+        stakeholder_count=0,
+        db_path=db,
+    )
+    update = _fake_update()
+    await handler(update, None)
+    reply = update.message.reply_text.call_args[0][0]
+    assert "OAuth:" in reply
+    assert "solo@example.com" in reply
+
+
 # ---------------------------------------------------------------------------
 # /cost
 # ---------------------------------------------------------------------------

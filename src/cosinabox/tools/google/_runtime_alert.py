@@ -69,7 +69,7 @@ def runtime_oauth_alert(exc: Exception, *, account_index: int | None = None) -> 
         else:
             label = f" for account {account_index}"
 
-    msg = f"[auth] Google OAuth token expired{label}. Run: cosinabox auth google\n\nError: {exc}"
+    msg = f"[auth] Google OAuth token expired{label}. Run: cosinabox auth refresh\n\nError: {exc}"
     if _send_telegram_fn is not None:
         try:
             _send_telegram_fn(msg)

@@ -53,8 +53,10 @@ def test_single_broken_cred_emits_failure_text():
     job = AuthHealthJob(credentials_factory=_factory([_broken_cred()]))
     out = job.run(JobContext())
     assert "Google auth failed for account #1" in out
-    assert "cosinabox auth google" in out
-    assert "GOOGLE_OAUTH_REFRESH_TOKEN_1" in out
+    # Initiative A's `cosinabox auth refresh` collapses the legacy
+    # three-step (auth google + update env var on Railway + redeploy)
+    # into one command. The watcher's alert text now points there.
+    assert "cosinabox auth refresh" in out
     assert job._health == {1: False}
 
 
@@ -133,11 +135,67 @@ def test_restart_re_alerts_still_broken():
 
 
 def test_return_includes_fix_instructions():
+    """The alert message users see must point at `cosinabox auth refresh`,
+    NOT the legacy 'auth google + update env var + redeploy' three-step.
+    """
     job = AuthHealthJob(credentials_factory=_factory([_broken_cred()]))
     out = job.run(JobContext())
-    assert "Fix:" in out
-    assert "cosinabox auth google" in out
-    assert "Railway" in out
+    assert "cosinabox auth refresh" in out
+    # Old multi-step phrasing must be gone.
+    assert "update GOOGLE_OAUTH_REFRESH_TOKEN" not in out
+    assert "Railway" not in out
+
+
+def test_run_persists_per_account_status(tmp_path):
+    """When db_path is provided, run() writes one row per credential per tick."""
+    from cosinabox.jobs.auth_health_persist import read_auth_health
+
+    db = tmp_path / "memory.db"
+    job = AuthHealthJob(
+        credentials_factory=_factory([_healthy_cred(), _broken_cred()]),
+        db_path=db,
+        account_emails=["ok@example.com", "dead@example.com"],
+    )
+    job.run(JobContext())
+
+    rows = read_auth_health(db)
+    assert len(rows) == 2
+    by_idx = {r["account_index"]: r for r in rows}
+    assert by_idx[1]["last_status"] == "ok"
+    assert by_idx[1]["email"] == "ok@example.com"
+    assert by_idx[2]["last_status"] == "failed"
+    assert by_idx[2]["email"] == "dead@example.com"
+
+
+def test_run_does_not_persist_on_transient_error(tmp_path):
+    """Transient errors (TransportError) must NOT overwrite the prior row.
+    The whole point of the in-memory _health-skip-on-transient logic is
+    not panicking when the network blips. Persistence mirrors that.
+    """
+    from cosinabox.jobs.auth_health_persist import read_auth_health, record_auth_health
+
+    db = tmp_path / "memory.db"
+    record_auth_health(db, account_index=1, email="rovik@example.com", ok=True)
+
+    job = AuthHealthJob(
+        credentials_factory=_factory([_transient_cred()]),
+        db_path=db,
+        account_emails=["rovik@example.com"],
+    )
+    job.run(JobContext())
+
+    rows = read_auth_health(db)
+    assert len(rows) == 1
+    # Status preserved as "ok" — transient error didn't flip it.
+    assert rows[0]["last_status"] == "ok"
+
+
+def test_run_without_db_path_does_not_crash():
+    """Backwards compat: existing callers that don't pass db_path must
+    still work (just no persistence)."""
+    job = AuthHealthJob(credentials_factory=_factory([_healthy_cred()]))
+    # Just shouldn't raise.
+    job.run(JobContext())
 
 
 @pytest.mark.parametrize(

@@ -40,8 +40,15 @@ def build_status_handler(
     tool_definitions: list[dict[str, Any]],
     jobs_config: dict[str, Any],
     stakeholder_count: int,
+    db_path: Path | None = None,
 ) -> Any:
-    """Build a /status handler with baked-in config context."""
+    """Build a /status handler with baked-in config context.
+
+    When ``db_path`` is provided and the auth_health watcher has written
+    rows, the response includes an extra ``OAuth:`` line summarising
+    per-account refresh-token status. Hidden when no rows exist (fresh
+    deploy before the watcher's first tick).
+    """
 
     async def cmd_status(update: Update, _ctx: Any) -> None:
         enabled_jobs = [k for k, v in jobs_config.items() if v.get("enabled")]
@@ -54,6 +61,15 @@ def build_status_handler(
             f"Jobs: {', '.join(enabled_jobs) or 'none'}",
             f"Stakeholders: {stakeholder_count}",
         ]
+
+        if db_path is not None:
+            from cosinabox.jobs.auth_health_persist import read_auth_health
+
+            rows = read_auth_health(db_path)
+            if rows:
+                parts = [f"{'✓' if r['last_status'] == 'ok' else '✗'} {r['email']}" for r in rows]
+                lines.append(f"OAuth: {' | '.join(parts)}")
+
         if update.message:
             await update.message.reply_text("\n".join(lines))
 

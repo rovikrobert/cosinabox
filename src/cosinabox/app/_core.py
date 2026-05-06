@@ -87,6 +87,8 @@ class App:
         memory: Any | None = None,
         attio: Any | None = None,
         drive: Any | None = None,
+        auth_health_db_path: Path | None = None,
+        auth_health_account_emails: list[str] | None = None,
     ) -> None:
         from cosinabox.app.jobs import register_core_jobs
 
@@ -103,6 +105,8 @@ class App:
             memory=memory,
             attio=attio,
             drive=drive,
+            auth_health_db_path=auth_health_db_path,
+            auth_health_account_emails=auth_health_account_emails,
         )
 
     # ------------------------------------------------------------------
@@ -305,6 +309,14 @@ class App:
         gmail = tool_instances.get("gmail")
         calendar = tool_instances.get("calendar")
 
+        memory_db_path = self.config_dir / ".cosinabox" / "memory.db"
+        google_accounts_for_health = integrations.get("google", {}).get("accounts", []) or []
+        auth_health_emails = [
+            str(a["email"])
+            for a in google_accounts_for_health
+            if isinstance(a, dict) and a.get("email")
+        ]
+
         self._register_jobs(
             scheduler,
             jobs_config,
@@ -318,6 +330,8 @@ class App:
             memory=memory,
             attio=tool_instances.get("attio"),
             drive=tool_instances.get("drive"),
+            auth_health_db_path=memory_db_path,
+            auth_health_account_emails=auth_health_emails,
         )
 
         # --- Telegram ---
@@ -423,6 +437,7 @@ class App:
                     tool_definitions=tool_definitions,
                     jobs_config=jobs_config,
                     stakeholder_count=len(stakeholders),
+                    db_path=memory_db_path,
                 ),
             )
         )
