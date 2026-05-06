@@ -45,7 +45,7 @@
 ## What didn't — change next time
 
 - **Pre-commit hook bug ate ~30 min of unplanned debugging.** The hook had two latent issues (self-matching `checks.py`; macOS `xargs` no-run-if-empty). Surface this proactively in future plans that touch `doctor/checks.py` or any file where the secret-scan literals appear in source. Zero-effort signal: if the file contains any of the four sentinel token-format prefixes the hook regex matches, expect the hook to fire on commit.
-- **M5b is still pending.** PR #88 has not been merged because the maintainer hasn't run the real-Google API smoke against `rovik-keevs` yet. This is the same pattern PR #86 fell into — PR open, smoke unverified. Difference this time: I held off on auto-merge instead of enabling it. If the maintainer signs off without finding issues, the discipline is validated. If they find a bug, we'll have evidence the M5b gate matters.
+- **M5b passed cleanly.** Maintainer ran `railway run .../cosinabox doctor --json | jq '.[] | select(.name == "oauth_refresh_live")'` against the live `rovik-keevs` deploy: `{"status": "pass", "message": "All 2 Google account(s) refreshed cleanly."}`. Both accounts (`rovik@majiq.agency` and `rovik@cantina.ai`) refreshed successfully against Google's OAuth endpoint. PR #88 merged after sign-off — discipline validated, no follow-up bugs surfaced.
 
 ## Estimate calibration update
 
