@@ -15,6 +15,19 @@ import yaml
 from cosinabox import defaults
 from cosinabox.stakeholders import get_stakeholders
 
+# build_all_credentials lives in the optional [google] extras. Import at
+# module top so test patches (e.g. patch("cosinabox.doctor.checks.build_all_credentials"))
+# can resolve the symbol; fall back to None when [google] isn't installed
+# so the rest of doctor still loads.
+try:
+    from cosinabox.tools.google.auth import (
+        GoogleAuthError,
+        build_all_credentials,
+    )
+except ImportError:  # [google] extras not installed
+    GoogleAuthError = None  # type: ignore[assignment,misc]
+    build_all_credentials = None  # type: ignore[assignment]
+
 
 @dataclass
 class CheckResult:
@@ -26,6 +39,10 @@ class CheckResult:
 class Check(ABC):
     name: str
     severity: str = "warn"
+    # Whether this check requires network access. The CLI's --offline flag
+    # filters these out so doctor can run in CI / on planes without
+    # spurious failures.
+    network: bool = False
 
     @abstractmethod
     def run(self, *, config_dir: Path, history: dict[str, Any]) -> CheckResult: ...
@@ -223,6 +240,96 @@ class OAuthExpiringCheck(Check):
                 f"OAuth token expires in {days_until} days; re-run `cosinabox auth google`",
             )
         return CheckResult(self.name, "pass", f"{days_until} days")
+
+
+class OAuthRefreshLiveCheck(Check):
+    """Mint a fresh access token for each configured Google account.
+
+    Catches dead refresh tokens proactively instead of waiting for the
+    next morning_briefing to render an empty calendar. Live network
+    check — gated behind --offline.
+    """
+
+    name = "oauth_refresh_live"
+    severity = "fail"
+    network = True
+
+    def run(self, *, config_dir: Path, history: dict[str, Any]) -> CheckResult:
+        # Doctor doesn't start the App, so we read integrations.yaml
+        # directly to recover per-account email labels for the message.
+        integrations_path = config_dir / "integrations.yaml"
+        emails: list[str] = []
+        google_enabled = False
+        if integrations_path.exists():
+            raw = yaml.safe_load(integrations_path.read_text()) or {}
+            integrations = raw.get("integrations", {}) if isinstance(raw, dict) else {}
+            google = integrations.get("google", {}) if isinstance(integrations, dict) else {}
+            if isinstance(google, dict):
+                google_enabled = bool(google.get("enabled"))
+                accounts = google.get("accounts") or []
+                if isinstance(accounts, list):
+                    emails = [
+                        str(a["email"])
+                        for a in accounts
+                        if isinstance(a, dict) and isinstance(a.get("email"), str)
+                    ]
+
+        if not google_enabled:
+            return CheckResult(
+                self.name,
+                "warn",
+                "Google integration not enabled in integrations.yaml; nothing to probe.",
+            )
+
+        if build_all_credentials is None or GoogleAuthError is None:
+            return CheckResult(
+                self.name,
+                "warn",
+                "[google] extras not installed; install `cosinabox[google]` to enable this check.",
+            )
+
+        try:
+            creds = list(build_all_credentials())
+        except GoogleAuthError as e:
+            return CheckResult(self.name, "warn", f"Could not build credentials: {e}")
+
+        if not creds:
+            return CheckResult(self.name, "warn", "No Google credentials configured.")
+
+        from google.auth.exceptions import RefreshError, TransportError
+        from google.auth.transport.requests import Request
+
+        request = Request()
+        failed: list[str] = []
+        transient: list[str] = []
+        for i, cred in enumerate(creds, start=1):
+            label = emails[i - 1] if 0 < i <= len(emails) else f"#{i}"
+            try:
+                cred.refresh(request)  # type: ignore[no-untyped-call]
+            except RefreshError:
+                failed.append(label)
+            except TransportError:
+                transient.append(label)
+            except Exception:  # noqa: BLE001 — preserve healthy creds' status
+                transient.append(label)
+
+        if failed:
+            return CheckResult(
+                self.name,
+                "fail",
+                f"Refresh failed for: {', '.join(failed)}. Run: cosinabox auth refresh",
+            )
+        if transient:
+            return CheckResult(
+                self.name,
+                "warn",
+                f"Transient network error refreshing: {', '.join(transient)}. Retry in a moment.",
+            )
+        return CheckResult(
+            self.name,
+            "pass",
+            f"All {len(creds)} Google account(s) refreshed cleanly.",
+        )
 
 
 class SchemaOutdatedCheck(Check):
