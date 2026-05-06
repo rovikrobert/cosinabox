@@ -10,6 +10,7 @@ from cosinabox.bot.commands import (
     build_brief_handler,
     build_cost_handler,
     build_status_handler,
+    build_timezone_handler,
     cmd_help,
 )
 
@@ -158,3 +159,95 @@ async def test_cmd_brief_handles_error() -> None:
     assert update.message.reply_text.call_count == 2
     final_reply = update.message.reply_text.call_args_list[1][0][0]
     assert "error" in final_reply.lower()
+
+
+# ---------------------------------------------------------------------------
+# /timezone — runtime tz change without redeploy
+# ---------------------------------------------------------------------------
+
+
+def _fake_context(args: list[str] | None = None) -> MagicMock:
+    ctx = MagicMock()
+    ctx.args = args or []
+    return ctx
+
+
+@pytest.mark.asyncio
+async def test_cmd_timezone_no_args_shows_current(monkeypatch) -> None:
+    """`/timezone` with no args shows the current TZ + local time."""
+    from cosinabox import timezone as tz_mod
+
+    monkeypatch.setattr(tz_mod, "_timezone", "Asia/Singapore")
+    handler = build_timezone_handler(scheduler=MagicMock(), db_path=None)
+
+    update = _fake_update()
+    await handler(update, _fake_context([]))
+
+    reply = update.message.reply_text.call_args[0][0]
+    assert "Asia/Singapore" in reply
+    assert "/timezone" in reply  # usage hint
+
+
+@pytest.mark.asyncio
+async def test_cmd_timezone_change_reschedules_jobs(monkeypatch, tmp_path) -> None:
+    """`/timezone Asia/Tokyo` updates state, persists, and reschedules jobs."""
+    from cosinabox import timezone as tz_mod
+
+    monkeypatch.setattr(tz_mod, "_timezone", "Asia/Singapore")
+    scheduler = MagicMock()
+    scheduler.reschedule_all.return_value = 5
+    db_path = tmp_path / "memory.db"
+    handler = build_timezone_handler(scheduler=scheduler, db_path=db_path)
+
+    update = _fake_update()
+    await handler(update, _fake_context(["Asia/Tokyo"]))
+
+    # Reschedule was called with the new TZ.
+    scheduler.reschedule_all.assert_called_once_with("Asia/Tokyo")
+    # In-memory state was updated.
+    assert tz_mod.get_timezone() == "Asia/Tokyo"
+    # Reply confirms the change.
+    reply = update.message.reply_text.call_args[0][0]
+    assert "Asia/Singapore" in reply  # old
+    assert "Asia/Tokyo" in reply  # new
+    assert "5" in reply  # rescheduled count
+    # Persisted to disk.
+    assert db_path.exists()
+
+
+@pytest.mark.asyncio
+async def test_cmd_timezone_invalid_does_not_change_state(monkeypatch) -> None:
+    """`/timezone Fake/Zone` shows an error and leaves state untouched."""
+    from cosinabox import timezone as tz_mod
+
+    monkeypatch.setattr(tz_mod, "_timezone", "Asia/Singapore")
+    scheduler = MagicMock()
+    handler = build_timezone_handler(scheduler=scheduler, db_path=None)
+
+    update = _fake_update()
+    await handler(update, _fake_context(["Fake/Zone"]))
+
+    # Scheduler not touched.
+    scheduler.reschedule_all.assert_not_called()
+    # State unchanged.
+    assert tz_mod.get_timezone() == "Asia/Singapore"
+    # Error reply.
+    reply = update.message.reply_text.call_args[0][0]
+    assert "Unknown" in reply or "Invalid" in reply or "unknown" in reply.lower()
+
+
+@pytest.mark.asyncio
+async def test_cmd_timezone_resolves_city_name(monkeypatch, tmp_path) -> None:
+    """`/timezone Tokyo` resolves to Asia/Tokyo via the fuzzy matcher."""
+    from cosinabox import timezone as tz_mod
+
+    monkeypatch.setattr(tz_mod, "_timezone", "UTC")
+    scheduler = MagicMock()
+    scheduler.reschedule_all.return_value = 1
+    handler = build_timezone_handler(scheduler=scheduler, db_path=tmp_path / "m.db")
+
+    update = _fake_update()
+    await handler(update, _fake_context(["Tokyo"]))
+
+    scheduler.reschedule_all.assert_called_once_with("Asia/Tokyo")
+    assert tz_mod.get_timezone() == "Asia/Tokyo"

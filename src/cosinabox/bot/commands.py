@@ -1,4 +1,4 @@
-"""Telegram bot commands: /help, /status, /cost, /brief.
+"""Telegram bot commands: /help, /status, /cost, /brief, /timezone.
 
 Each command is a standalone async handler that receives the Telegram
 Update + context. They are registered in App.run() (app/_core.py) alongside the DM
@@ -9,7 +9,9 @@ from __future__ import annotations
 
 import logging
 from datetime import UTC, date, datetime
+from pathlib import Path
 from typing import Any
+from zoneinfo import ZoneInfo
 
 from telegram import Update
 
@@ -24,7 +26,8 @@ async def cmd_help(update: Update, _ctx: Any) -> None:
         "/status — Enabled integrations, jobs, and stakeholder count\n"
         "/cost — Today's API spend vs. daily cap\n"
         "/brief — On-demand briefing (runs the morning briefing prompt)\n"
-        "/analytics — Operational metrics (cost, tools, job health)"
+        "/analytics — Operational metrics (cost, tools, job health)\n"
+        "/timezone [tz] — View or change the operating timezone"
     )
     if update.message:
         await update.message.reply_text(text)
@@ -161,3 +164,80 @@ def build_analytics_handler(*, db: Any) -> Any:
             await update.message.reply_text("\n".join(lines))
 
     return cmd_analytics
+
+
+def build_timezone_handler(*, scheduler: Any, db_path: Path | None) -> Any:
+    """Build a /timezone handler.
+
+    No args → show current TZ + local time.
+    With arg → resolve, update in-memory state, persist to SQLite, and
+    reschedule every cron-trigger job to the new TZ. Ported from cos-agent
+    (src/bot_commands.py:cmd_timezone).
+    """
+
+    async def cmd_timezone(update: Update, ctx: Any) -> None:
+        from cosinabox.timezone import (
+            get_timezone,
+            persist_timezone,
+            resolve_timezone,
+            set_timezone,
+        )
+
+        args = list(getattr(ctx, "args", None) or [])
+
+        if not args:
+            tz = get_timezone()
+            now = datetime.now(ZoneInfo(tz))
+            if update.message:
+                await update.message.reply_text(
+                    f"Current timezone: {tz}\n"
+                    f"Local time: {now.strftime('%I:%M %p, %A %b %d')}\n\n"
+                    "To change: /timezone Asia/Singapore"
+                )
+            return
+
+        raw = " ".join(args)
+        new_tz = resolve_timezone(raw)
+        if new_tz is None:
+            if update.message:
+                await update.message.reply_text(
+                    f"Unknown timezone: {raw}\n\n"
+                    "Use IANA format, e.g.:\n"
+                    "  America/New_York\n"
+                    "  Europe/London\n"
+                    "  Asia/Singapore\n\n"
+                    "Or try a city name: /timezone Singapore"
+                )
+            return
+
+        old_tz = get_timezone()
+        try:
+            set_timezone(new_tz)
+        except KeyError:
+            if update.message:
+                await update.message.reply_text(f"Invalid timezone: {new_tz}")
+            return
+
+        # Persist so it survives restarts.
+        try:
+            persist_timezone(new_tz, db_path=db_path)
+        except Exception:
+            logger.warning("Failed to persist timezone override", exc_info=True)
+
+        # Reschedule every CronTrigger job in place.
+        try:
+            count = scheduler.reschedule_all(new_tz)
+        except Exception:
+            logger.exception("reschedule_all failed")
+            count = 0
+
+        now = datetime.now(ZoneInfo(new_tz))
+        if update.message:
+            await update.message.reply_text(
+                f"Timezone changed: {old_tz} → {new_tz}\n"
+                f"Local time: {now.strftime('%I:%M %p, %A %b %d')}\n"
+                f"Rescheduled {count} jobs.\n\n"
+                f"Briefings will now fire at their usual times in {new_tz}."
+            )
+
+    return cmd_timezone

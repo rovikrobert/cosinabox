@@ -145,10 +145,19 @@ class App:
         }
 
         # Set runtime timezone from personality.md — scheduler uses this
-        from cosinabox.timezone import set_timezone
+        from cosinabox.timezone import load_timezone_override, set_timezone
 
         set_timezone(timezone)
-        logger.info("Timezone set to %s", timezone)
+        # If the user previously ran `/timezone` to override at runtime, that
+        # override is persisted in SQLite and takes precedence over
+        # personality.md until they explicitly change it. Without this load,
+        # `/timezone` would only work until the next deploy/restart.
+        override = load_timezone_override(self.config_dir / ".cosinabox" / "memory.db")
+        if override:
+            timezone = override
+            logger.info("Timezone overridden from SQLite: %s", timezone)
+        else:
+            logger.info("Timezone set to %s", timezone)
 
         bot_token = os.environ.get("TELEGRAM_BOT_TOKEN")
         chat_id = os.environ.get("TELEGRAM_CHAT_ID")
@@ -399,6 +408,7 @@ class App:
             build_brief_handler,
             build_cost_handler,
             build_status_handler,
+            build_timezone_handler,
             cmd_help,
         )
 
@@ -438,6 +448,15 @@ class App:
                 "analytics",
                 build_analytics_handler(
                     db=memory,
+                ),
+            )
+        )
+        tg_app.add_handler(
+            CommandHandler(
+                "timezone",
+                build_timezone_handler(
+                    scheduler=scheduler,
+                    db_path=self.config_dir / ".cosinabox" / "memory.db",
                 ),
             )
         )
