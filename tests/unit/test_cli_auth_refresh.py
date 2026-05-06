@@ -3,6 +3,12 @@
 All Railway CLI calls and the OAuth consent flow are mocked. These
 tests verify orchestration logic, not the real Railway CLI or Google
 OAuth (those are tested independently in their own modules).
+
+Status payloads in this file follow the real ``railway status --json``
+schema verified against railway 4.30.2 on 2026-05-06: top-level
+``name`` for the project, ``services.edges[].node.name`` for services.
+There is no ``latestDeployment`` / ``projectName`` / ``serviceName``
+key anywhere in real output.
 """
 
 from __future__ import annotations
@@ -16,6 +22,16 @@ from click.testing import CliRunner
 
 from cosinabox.cli.main import cli
 
+# Real ``railway status --json`` shape from railway 4.30.2.
+_REAL_STATUS = {
+    "id": "p-uuid",
+    "name": "rovik-keevs",
+    "deletedAt": None,
+    "workspace": {"id": "w-uuid", "name": "Personal"},
+    "environments": {"edges": [{"node": {"id": "e-uuid", "name": "production"}}]},
+    "services": {"edges": [{"node": {"id": "s-uuid", "name": "bot"}}]},
+}
+
 
 def _write_integrations(tmp_path: Path, accounts: list[dict[str, str]]) -> Path:
     cfg = {
@@ -27,7 +43,7 @@ def _write_integrations(tmp_path: Path, accounts: list[dict[str, str]]) -> Path:
 
 
 def test_auth_refresh_happy_path_single_account(tmp_path: Path) -> None:
-    """Single-account user → no picker → mint → set _1 → redeploy → SUCCESS."""
+    """Single-account user → no picker → mint → set _1 → redeploy → exit OK."""
     cfg_dir = _write_integrations(tmp_path, [{"email": "rovik@example.com"}])
 
     set_calls: list[tuple[str, str]] = []
@@ -38,14 +54,7 @@ def test_auth_refresh_happy_path_single_account(tmp_path: Path) -> None:
             "cosinabox.cli.auth_refresh._railway.whoami",
             return_value="rovik@example.com",
         ),
-        patch(
-            "cosinabox.cli.auth_refresh._railway.status",
-            return_value={
-                "projectName": "rovik-keevs",
-                "serviceName": "bot",
-                "latestDeployment": {"status": "SUCCESS"},
-            },
-        ),
+        patch("cosinabox.cli.auth_refresh._railway.status", return_value=_REAL_STATUS),
         patch(
             "cosinabox.cli.auth_refresh._railway.get_variable",
             side_effect=lambda name: {
@@ -59,10 +68,6 @@ def test_auth_refresh_happy_path_single_account(tmp_path: Path) -> None:
         ),
         patch("cosinabox.cli.auth_refresh._railway.redeploy") as redeploy,
         patch(
-            "cosinabox.cli.auth_refresh._railway.wait_for_deployment",
-            return_value=True,
-        ),
-        patch(
             "cosinabox.cli.auth_refresh.mint_refresh_token",
             return_value="rt-fresh-from-google",
         ),
@@ -74,16 +79,19 @@ def test_auth_refresh_happy_path_single_account(tmp_path: Path) -> None:
     assert "Pick" not in result.output and "Choose" not in result.output
     # The chosen account is announced.
     assert "rovik@example.com" in result.output
+    # The detected project + service render correctly from the real schema.
+    assert "rovik-keevs" in result.output
+    assert "bot" in result.output
     # The token was written to slot _1.
     assert ("GOOGLE_OAUTH_REFRESH_TOKEN_1", "rt-fresh-from-google") in set_calls
-    # Redeploy fired and we reported success.
+    # Redeploy fired and we pointed the user at auth_health for verification.
     redeploy.assert_called_once()
     assert "redeploy" in result.output.lower()
-    assert "success" in result.output.lower() or "auth_health" in result.output.lower()
+    assert "auth_health" in result.output.lower()
 
 
-# Helper consumed by M5/M6 — wires the bundle of patches needed for the
-# happy-path orchestration so individual tests can vary one piece without
+# Helper that wires the bundle of patches needed for the happy-path
+# orchestration so individual tests can vary one piece without
 # repeating the full mock stack.
 def _patch_happy_path_railway(token_for_email: dict[str, str]) -> Any:
     from contextlib import ExitStack
@@ -97,14 +105,7 @@ def _patch_happy_path_railway(token_for_email: dict[str, str]) -> Any:
         )
         stack.enter_context(patch("cosinabox.cli.auth_refresh._railway.whoami", return_value="x"))
         stack.enter_context(
-            patch(
-                "cosinabox.cli.auth_refresh._railway.status",
-                return_value={
-                    "projectName": "rovik-keevs",
-                    "serviceName": "bot",
-                    "latestDeployment": {"status": "SUCCESS"},
-                },
-            )
+            patch("cosinabox.cli.auth_refresh._railway.status", return_value=_REAL_STATUS)
         )
         stack.enter_context(
             patch(
@@ -122,12 +123,6 @@ def _patch_happy_path_railway(token_for_email: dict[str, str]) -> Any:
             )
         )
         stack.enter_context(patch("cosinabox.cli.auth_refresh._railway.redeploy"))
-        stack.enter_context(
-            patch(
-                "cosinabox.cli.auth_refresh._railway.wait_for_deployment",
-                return_value=True,
-            )
-        )
 
         def fake_mint(*, client_id: str, client_secret: str, expected_email: str | None) -> str:
             assert expected_email is not None
@@ -168,8 +163,6 @@ def test_auth_refresh_account_flag_selects_named_account(tmp_path: Path) -> None
 
 def test_auth_refresh_account_flag_unknown_email_errors(tmp_path: Path) -> None:
     cfg_dir = _write_integrations(tmp_path, [{"email": "primary@example.com"}])
-    # No mocks needed past load_integrations — we should bail before
-    # touching Railway.
     result = CliRunner().invoke(
         cli,
         [
@@ -184,7 +177,7 @@ def test_auth_refresh_account_flag_unknown_email_errors(tmp_path: Path) -> None:
     )
     assert result.exit_code != 0
     assert "stranger@example.com" in result.output
-    assert "primary@example.com" in result.output  # configured ones listed
+    assert "primary@example.com" in result.output
 
 
 def test_auth_refresh_picker_writes_to_chosen_slot(tmp_path: Path) -> None:
@@ -195,14 +188,12 @@ def test_auth_refresh_picker_writes_to_chosen_slot(tmp_path: Path) -> None:
     enter = _patch_happy_path_railway({"secondary@example.com": "rt-picked"})
     stack, set_calls = enter()
     with stack:
-        # CliRunner's `input` feeds stdin to click.prompt.
         result = CliRunner().invoke(
             cli,
             ["-C", str(cfg_dir), "auth", "refresh", "--yes"],
             input="2\n",
         )
     assert result.exit_code == 0, result.output
-    # Picker lines printed.
     assert "1. primary@example.com" in result.output
     assert "2. secondary@example.com" in result.output
     assert ("GOOGLE_OAUTH_REFRESH_TOKEN_2", "rt-picked") in set_calls
@@ -229,7 +220,7 @@ def test_auth_refresh_account_flag_is_case_insensitive(tmp_path: Path) -> None:
     assert ("GOOGLE_OAUTH_REFRESH_TOKEN_1", "rt-case") in set_calls
 
 
-# --- Failure modes from spec docs/specs/2026-05-06-oauth-ux-rework.md ---
+# --- Failure modes ---
 
 
 def test_railway_cli_missing_friendly_error(tmp_path: Path) -> None:
@@ -277,17 +268,13 @@ def test_railway_no_service_linked_friendly_error(tmp_path: Path) -> None:
 
 
 def test_account_mismatch_surfaces_friendly_error(tmp_path: Path) -> None:
-    """Spec failure #3 + #4: wrong consent account must NOT silently write a token."""
     cfg_dir = _write_integrations(tmp_path, [{"email": "intended@example.com"}])
     from cosinabox.cli.auth_google import AccountMismatchError
 
     with (
         patch("cosinabox.cli.auth_refresh._railway.cli_available", return_value=True),
         patch("cosinabox.cli.auth_refresh._railway.whoami", return_value="x"),
-        patch(
-            "cosinabox.cli.auth_refresh._railway.status",
-            return_value={"projectName": "p", "serviceName": "s"},
-        ),
+        patch("cosinabox.cli.auth_refresh._railway.status", return_value=_REAL_STATUS),
         patch(
             "cosinabox.cli.auth_refresh._railway.get_variable",
             side_effect=lambda n: {
@@ -309,17 +296,12 @@ def test_account_mismatch_surfaces_friendly_error(tmp_path: Path) -> None:
     assert result.exit_code != 0
     assert "stranger@example.com" in result.output
     assert "intended@example.com" in result.output
-    # Critical: nothing is written to Railway and no redeploy happens.
     set_var.assert_not_called()
     redeploy.assert_not_called()
 
 
 def test_announces_chosen_slot_in_output(tmp_path: Path) -> None:
-    """Spec failure #5: the _N → email mapping must be visible to the user.
-
-    Output must mention which env var slot the new token went into, so
-    the user can map it to their Railway dashboard if they need to.
-    """
+    """Spec failure #5: the _N → email mapping must be visible to the user."""
     cfg_dir = _write_integrations(
         tmp_path,
         [{"email": "first@example.com"}, {"email": "second@example.com"}],
@@ -343,45 +325,10 @@ def test_announces_chosen_slot_in_output(tmp_path: Path) -> None:
     assert "GOOGLE_OAUTH_REFRESH_TOKEN_2" in result.output
 
 
-def test_redeploy_timeout_returns_actionable_error(tmp_path: Path) -> None:
-    cfg_dir = _write_integrations(tmp_path, [{"email": "rovik@example.com"}])
-    enter = _patch_happy_path_railway({"rovik@example.com": "rt-x"})
-    stack, _ = enter()
-    import contextlib
-
-    with stack, contextlib.ExitStack() as inner:
-        # Override the wait_for_deployment patch from the helper to
-        # simulate a redeploy that doesn't reach SUCCESS in time.
-        inner.enter_context(
-            patch(
-                "cosinabox.cli.auth_refresh._railway.wait_for_deployment",
-                return_value=False,
-            )
-        )
-        result = CliRunner().invoke(cli, ["-C", str(cfg_dir), "auth", "refresh", "--yes"])
-    assert result.exit_code != 0
-    assert "railway logs" in result.output.lower()
-
-
-def test_no_wait_flag_skips_deployment_poll(tmp_path: Path) -> None:
-    cfg_dir = _write_integrations(tmp_path, [{"email": "rovik@example.com"}])
-    enter = _patch_happy_path_railway({"rovik@example.com": "rt-x"})
-    stack, _ = enter()
-    with stack, patch("cosinabox.cli.auth_refresh._railway.wait_for_deployment") as wait:
-        result = CliRunner().invoke(
-            cli,
-            ["-C", str(cfg_dir), "auth", "refresh", "--yes", "--no-wait"],
-        )
-    assert result.exit_code == 0, result.output
-    wait.assert_not_called()
-    assert "queued" in result.output.lower() or "auth_health" in result.output.lower()
-
-
 def test_legacy_unsuffixed_token_emits_warning(tmp_path: Path) -> None:
     cfg_dir = _write_integrations(tmp_path, [{"email": "rovik@example.com"}])
 
     def fake_get(name: str) -> str | None:
-        # Simulate a deploy that has the legacy unsuffixed var but no _1.
         return {
             "GOOGLE_OAUTH_CLIENT_ID": "cid",
             "GOOGLE_OAUTH_CLIENT_SECRET": "sec",
@@ -391,24 +338,13 @@ def test_legacy_unsuffixed_token_emits_warning(tmp_path: Path) -> None:
     with (
         patch("cosinabox.cli.auth_refresh._railway.cli_available", return_value=True),
         patch("cosinabox.cli.auth_refresh._railway.whoami", return_value="x"),
-        patch(
-            "cosinabox.cli.auth_refresh._railway.status",
-            return_value={
-                "projectName": "p",
-                "serviceName": "s",
-                "latestDeployment": {"status": "SUCCESS"},
-            },
-        ),
+        patch("cosinabox.cli.auth_refresh._railway.status", return_value=_REAL_STATUS),
         patch(
             "cosinabox.cli.auth_refresh._railway.get_variable",
             side_effect=fake_get,
         ),
         patch("cosinabox.cli.auth_refresh._railway.set_variable"),
         patch("cosinabox.cli.auth_refresh._railway.redeploy"),
-        patch(
-            "cosinabox.cli.auth_refresh._railway.wait_for_deployment",
-            return_value=True,
-        ),
         patch(
             "cosinabox.cli.auth_refresh.mint_refresh_token",
             return_value="rt-new",
@@ -437,12 +373,7 @@ def test_missing_oauth_client_creds_friendly_error(tmp_path: Path) -> None:
     with (
         patch("cosinabox.cli.auth_refresh._railway.cli_available", return_value=True),
         patch("cosinabox.cli.auth_refresh._railway.whoami", return_value="x"),
-        patch(
-            "cosinabox.cli.auth_refresh._railway.status",
-            return_value={"projectName": "p", "serviceName": "s"},
-        ),
-        # Both CLIENT_ID and CLIENT_SECRET return None — simulates the
-        # spec's truncation/absence failure on the deploy side.
+        patch("cosinabox.cli.auth_refresh._railway.status", return_value=_REAL_STATUS),
         patch(
             "cosinabox.cli.auth_refresh._railway.get_variable",
             return_value=None,
@@ -452,5 +383,90 @@ def test_missing_oauth_client_creds_friendly_error(tmp_path: Path) -> None:
         result = CliRunner().invoke(cli, ["-C", str(cfg_dir), "auth", "refresh", "--yes"])
     assert result.exit_code != 0
     assert "GOOGLE_OAUTH_CLIENT_ID" in result.output
-    # Critical: we did NOT proceed to mint a token against missing creds.
     mint.assert_not_called()
+
+
+# --- Stress-test fixes (S5, S6) ---
+
+
+def test_orchestrator_catches_runtime_error_from_mint(tmp_path: Path) -> None:
+    """S5: if google_auth_oauthlib isn't installed, mint_refresh_token
+    raises RuntimeError. Orchestrator must surface that as a friendly
+    ClickException, not a raw traceback to the user.
+    """
+    cfg_dir = _write_integrations(tmp_path, [{"email": "rovik@example.com"}])
+
+    with (
+        patch("cosinabox.cli.auth_refresh._railway.cli_available", return_value=True),
+        patch("cosinabox.cli.auth_refresh._railway.whoami", return_value="x"),
+        patch("cosinabox.cli.auth_refresh._railway.status", return_value=_REAL_STATUS),
+        patch(
+            "cosinabox.cli.auth_refresh._railway.get_variable",
+            side_effect=lambda n: {
+                "GOOGLE_OAUTH_CLIENT_ID": "cid",
+                "GOOGLE_OAUTH_CLIENT_SECRET": "sec",
+            }.get(n),
+        ),
+        patch(
+            "cosinabox.cli.auth_refresh.mint_refresh_token",
+            side_effect=RuntimeError(
+                "google-auth-oauthlib is not installed. Run: pip install google-auth-oauthlib"
+            ),
+        ),
+    ):
+        result = CliRunner().invoke(cli, ["-C", str(cfg_dir), "auth", "refresh", "--yes"])
+    assert result.exit_code != 0
+    # Friendly ClickException, not a Python traceback.
+    assert "Traceback" not in result.output
+    assert "google-auth-oauthlib" in result.output
+    assert "pip install" in result.output
+
+
+def test_orchestrator_handles_malformed_yaml(tmp_path: Path) -> None:
+    """S6: a syntax typo in integrations.yaml must surface a friendly
+    error pointing at the file + the validate command, not a raw YAML
+    traceback.
+    """
+    (tmp_path / "integrations.yaml").write_text(
+        "schema_version: 1\nintegrations:\n  google:\n    enabled: true\n"
+        "    accounts:\n      - email: rovik@example.com\n      bad-indent: x\n"
+    )
+    result = CliRunner().invoke(cli, ["-C", str(tmp_path), "auth", "refresh", "--yes"])
+    assert result.exit_code != 0
+    assert "Traceback" not in result.output
+    assert "integrations.yaml" in result.output
+    assert "cosinabox validate" in result.output
+
+
+# --- Stress-test fixes (S1, S2): real railway status schema ---
+
+
+def test_status_displays_real_railway_4_schema_fields(tmp_path: Path) -> None:
+    """S1+S2: the project+service line must read from real railway 4.x
+    fields ('name' for project, 'services.edges[].node.name' for
+    services), not from imaginary 'projectName' / 'serviceName' keys.
+    """
+    cfg_dir = _write_integrations(tmp_path, [{"email": "rovik@example.com"}])
+    enter = _patch_happy_path_railway({"rovik@example.com": "rt-x"})
+    stack, _ = enter()
+    with stack:
+        result = CliRunner().invoke(cli, ["-C", str(cfg_dir), "auth", "refresh", "--yes"])
+    assert result.exit_code == 0, result.output
+    # Real schema → real fields render. "(unknown)" sentinels would
+    # mean we silently regressed back to reading projectName/serviceName.
+    assert "rovik-keevs" in result.output  # from _REAL_STATUS["name"]
+    assert "bot" in result.output  # from _REAL_STATUS["services"]["edges"][0]["node"]["name"]
+    assert "(unknown" not in result.output
+
+
+def test_no_wait_flag_no_longer_exists(tmp_path: Path) -> None:
+    """S1+S2: --no-wait was a flag on the old wait_for_deployment path.
+    With wait_for_deployment removed, the flag is removed too. Surface
+    the removal so CI fails loudly if someone re-introduces it without
+    re-introducing the broken polling.
+    """
+    cfg_dir = _write_integrations(tmp_path, [{"email": "rovik@example.com"}])
+    result = CliRunner().invoke(cli, ["-C", str(cfg_dir), "auth", "refresh", "--yes", "--no-wait"])
+    # Click rejects unknown flags with exit code 2.
+    assert result.exit_code != 0
+    assert "no-wait" in result.output.lower() or "no such option" in result.output.lower()
