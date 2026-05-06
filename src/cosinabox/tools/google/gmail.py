@@ -112,15 +112,15 @@ class GmailTool:
         query = f"after:{after}"
         seen: set[str] = set()
         out: list[GmailMessage] = []
-        for svc in self._services:
+        for i, svc in enumerate(self._services, start=1):
             try:
                 for msg in _fetch_messages(svc, query, max_results):
                     if msg.id not in seen:
                         seen.add(msg.id)
                         out.append(msg)
             except _GOOGLE_AUTH_ERRORS as exc:
-                logger.warning("Gmail OAuth failure: %s", exc)
-                _runtime_oauth_alert(exc)
+                logger.warning("Gmail OAuth failure (account %d): %s", i, exc)
+                _runtime_oauth_alert(exc, account_index=i)
                 return []
         return out
 
@@ -170,15 +170,15 @@ class GmailTool:
     def search(self, query: str, *, max_results: int = 25) -> list[GmailMessage]:
         seen: set[str] = set()
         out: list[GmailMessage] = []
-        for svc in self._services:
+        for i, svc in enumerate(self._services, start=1):
             try:
                 for msg in _fetch_messages(svc, query, max_results):
                     if msg.id not in seen:
                         seen.add(msg.id)
                         out.append(msg)
             except _GOOGLE_AUTH_ERRORS as exc:
-                logger.warning("Gmail OAuth failure: %s", exc)
-                _runtime_oauth_alert(exc)
+                logger.warning("Gmail OAuth failure (account %d): %s", i, exc)
+                _runtime_oauth_alert(exc, account_index=i)
                 return []
         return out
 

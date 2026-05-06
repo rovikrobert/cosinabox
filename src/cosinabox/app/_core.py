@@ -145,10 +145,19 @@ class App:
         }
 
         # Set runtime timezone from personality.md — scheduler uses this
-        from cosinabox.timezone import set_timezone
+        from cosinabox.timezone import load_timezone_override, set_timezone
 
         set_timezone(timezone)
-        logger.info("Timezone set to %s", timezone)
+        # If the user previously ran `/timezone` to override at runtime, that
+        # override is persisted in SQLite and takes precedence over
+        # personality.md until they explicitly change it. Without this load,
+        # `/timezone` would only work until the next deploy/restart.
+        override = load_timezone_override(self.config_dir / ".cosinabox" / "memory.db")
+        if override:
+            timezone = override
+            logger.info("Timezone overridden from SQLite: %s", timezone)
+        else:
+            logger.info("Timezone set to %s", timezone)
 
         bot_token = os.environ.get("TELEGRAM_BOT_TOKEN")
         chat_id = os.environ.get("TELEGRAM_CHAT_ID")
@@ -313,9 +322,24 @@ class App:
 
         # --- Telegram ---
         from cosinabox.app.alerts import make_send_telegram, send_auth_error_alert
+        from cosinabox.tools.google._runtime_alert import (
+            set_account_emails,
+            set_send_telegram,
+        )
 
         send_telegram = make_send_telegram(bot_token, chat_id)
         send_auth_error_alert(send_telegram, auth_errors)
+        # Wire the runtime OAuth alert path so token expirations during
+        # scheduled jobs page Telegram instead of logging "no Telegram
+        # configured" silently. set_send_telegram() existed since #22 but
+        # was never called from production startup.
+        set_send_telegram(send_telegram)
+        # Multi-account users get account labels in OAuth alerts ("expired
+        # for rovik@cantina.ai (account 2)") instead of opaque "expired".
+        google_accounts = integrations.get("google", {}).get("accounts", []) or []
+        set_account_emails(
+            [str(a["email"]) for a in google_accounts if isinstance(a, dict) and a.get("email")]
+        )
 
         # --- Register jobs that need send_telegram ---
         from cosinabox.app.jobs import register_telegram_jobs
@@ -384,6 +408,7 @@ class App:
             build_brief_handler,
             build_cost_handler,
             build_status_handler,
+            build_timezone_handler,
             cmd_help,
         )
 
@@ -423,6 +448,15 @@ class App:
                 "analytics",
                 build_analytics_handler(
                     db=memory,
+                ),
+            )
+        )
+        tg_app.add_handler(
+            CommandHandler(
+                "timezone",
+                build_timezone_handler(
+                    scheduler=scheduler,
+                    db_path=self.config_dir / ".cosinabox" / "memory.db",
                 ),
             )
         )

@@ -53,7 +53,7 @@ def register_core_jobs(
                 attio=attio,
                 drive=drive,
             )
-            scheduler.add_job(job, cron=cfg["schedule"])
+            scheduler.add_job(job, cron=cfg["schedule"], timezone=cfg.get("timezone"))
             logger.info("Registered %s at %s", job_name, cfg["schedule"])
 
         elif job_name == "evening_wrap" and cfg.get("schedule"):
@@ -65,7 +65,7 @@ def register_core_jobs(
                 db=memory,
                 drive=drive,
             )
-            scheduler.add_job(job, cron=cfg["schedule"])
+            scheduler.add_job(job, cron=cfg["schedule"], timezone=cfg.get("timezone"))
             logger.info("Registered %s at %s", job_name, cfg["schedule"])
 
         elif job_name == "pre_meeting_prep":
@@ -78,7 +78,7 @@ def register_core_jobs(
                 relevance_domains=relevance_domains,
             )
             cron = cfg.get("schedule", "*/5 * * * *")
-            scheduler.add_job(job, cron=cron)
+            scheduler.add_job(job, cron=cron, timezone=cfg.get("timezone"))
             logger.info("Registered %s at %s", job_name, cron)
 
         elif job_name == "weekly_review" and cfg.get("schedule"):
@@ -92,7 +92,7 @@ def register_core_jobs(
                 db=memory,
                 drive=drive,
             )
-            scheduler.add_job(job, cron=cfg["schedule"])
+            scheduler.add_job(job, cron=cfg["schedule"], timezone=cfg.get("timezone"))
             logger.info("Registered %s at %s", job_name, cfg["schedule"])
 
         elif job_name == "followup_reminder":
@@ -102,7 +102,7 @@ def register_core_jobs(
             # "cooling" reminders for people you emailed yesterday.
             job = FollowupReminderJob(stakeholders=stakeholders, gmail=gmail)
             cron = cfg.get("schedule", "30 9 * * *")
-            scheduler.add_job(job, cron=cron)
+            scheduler.add_job(job, cron=cron, timezone=cfg.get("timezone"))
             logger.info("Registered %s at %s", job_name, cron)
 
     # auth_health: always-on by default; registered outside the iteration loop
@@ -114,7 +114,7 @@ def register_core_jobs(
     auth_health_cfg = jobs_config.get("auth_health", {})
     if auth_health_cfg.get("enabled", True):
         cron = auth_health_cfg.get("schedule", defaults.AUTH_HEALTH_DEFAULT_SCHEDULE)
-        scheduler.add_job(AuthHealthJob(), cron=cron)
+        scheduler.add_job(AuthHealthJob(), cron=cron, timezone=auth_health_cfg.get("timezone"))
         logger.info("Registered auth_health at %s", cron)
 
 
@@ -154,7 +154,7 @@ def register_telegram_jobs(
                 poll_interval_minutes=google_cfg.get("poll_interval_minutes", 5),
             )
             cron = cfg.get("schedule", "*/5 * * * *")
-            scheduler.add_job(job, cron=cron)
+            scheduler.add_job(job, cron=cron, timezone=cfg.get("timezone"))
             logger.info("Registered %s at %s", job_name, cron)
         elif job_name == "crm_email_sync":
             from cosinabox.jobs.crm_email_sync import CrmEmailSyncJob
@@ -164,7 +164,7 @@ def register_telegram_jobs(
                 attio=tool_instances.get("attio"),
             )
             cron = cfg.get("schedule", "45 17 * * *")
-            scheduler.add_job(job, cron=cron)
+            scheduler.add_job(job, cron=cron, timezone=cfg.get("timezone"))
             logger.info("Registered %s at %s", job_name, cron)
         elif job_name == "extract_fireflies":
             from cosinabox.jobs.extract_fireflies import ExtractFirefliesJob
@@ -177,7 +177,7 @@ def register_telegram_jobs(
                 cost_tracker=loop.cost,
             )
             cron = cfg.get("schedule", "0 7 * * *")
-            scheduler.add_job(job, cron=cron)
+            scheduler.add_job(job, cron=cron, timezone=cfg.get("timezone"))
             logger.info("Registered %s at %s", job_name, cron)
         elif job_name == "extract_gmail":
             from cosinabox.jobs.extract_gmail import ExtractGmailJob
@@ -191,7 +191,7 @@ def register_telegram_jobs(
                 cost_tracker=loop.cost,
             )
             cron = cfg.get("schedule", "15 7 * * *")
-            scheduler.add_job(job, cron=cron)
+            scheduler.add_job(job, cron=cron, timezone=cfg.get("timezone"))
             logger.info("Registered %s at %s", job_name, cron)
         elif job_name == "post_meeting_debrief":
             from cosinabox.jobs.post_meeting_debrief import PostMeetingDebriefJob
@@ -225,7 +225,7 @@ def register_telegram_jobs(
                 dm_session=f"dm-{chat_id}",
             )
             cron = cfg.get("schedule", "*/5 * * * *")
-            scheduler.add_job(job, cron=cron)
+            scheduler.add_job(job, cron=cron, timezone=cfg.get("timezone"))
             logger.info("Registered %s at %s", job_name, cron)
         elif job_name == "scheduling_poll_check":
             from cosinabox.jobs.scheduling_poll_check import SchedulingPollCheckJob
@@ -240,7 +240,7 @@ def register_telegram_jobs(
                 send_fn=send_telegram,
             )
             cron = cfg.get("schedule", "*/30 * * * *")
-            scheduler.add_job(job, cron=cron)
+            scheduler.add_job(job, cron=cron, timezone=cfg.get("timezone"))
             logger.info("Registered %s at %s", job_name, cron)
         elif job_name == "rela_daily_scan":
             from cosinabox.jobs.rela_daily_scan import RelaDailyScanJob
@@ -250,5 +250,5 @@ def register_telegram_jobs(
                 stakeholders=stakeholders,
             )
             cron = cfg.get("schedule", "50 7 * * *")
-            scheduler.add_job(job, cron=cron)
+            scheduler.add_job(job, cron=cron, timezone=cfg.get("timezone"))
             logger.info("Registered %s at %s", job_name, cron)
