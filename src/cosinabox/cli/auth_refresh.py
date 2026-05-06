@@ -4,7 +4,14 @@ Collapses the 10-step manual re-auth flow (Google Cloud Console hunt →
 pull creds from Railway → run consent → write token back → redeploy
 → verify) into one command.
 
-Initiative A of the OAuth UX rework spec (2026-05-06).
+Initiative A of the OAuth UX rework spec (2026-05-06). Stress-tested
+and patched against the real Railway 4.30.2 CLI on the same date.
+
+Verification path: there is no in-process verification of the new
+token. The deploy's existing ``auth_health`` job (every ~15 min)
+exercises every configured refresh token and Telegrams the user on
+failure. That's the source of truth for "did the new token work" — we
+don't try to re-implement it here.
 """
 
 from __future__ import annotations
@@ -13,6 +20,7 @@ from pathlib import Path
 from typing import Any
 
 import click
+import yaml
 
 from cosinabox.cli import _railway
 from cosinabox.cli.auth_google import (
@@ -23,10 +31,21 @@ from cosinabox.cli.auth_google import (
 
 
 def _load_google_accounts(config_dir: Path) -> list[dict[str, Any]]:
-    """Return the configured Google accounts list from integrations.yaml."""
+    """Return the configured Google accounts list from integrations.yaml.
+
+    Wraps a yaml.YAMLError into a friendly ClickException so a syntax
+    typo in integrations.yaml doesn't dump a raw YAML traceback at the
+    user. ``cosinabox validate`` is the canonical fixer.
+    """
     from cosinabox.app.config import load_integrations
 
-    integrations = load_integrations(config_dir)
+    try:
+        integrations = load_integrations(config_dir)
+    except yaml.YAMLError as e:
+        raise click.ClickException(
+            f"Could not parse {config_dir / 'integrations.yaml'}: {e}\n"
+            "Run `cosinabox validate` to find and fix the syntax error."
+        ) from e
     google = integrations.get("google", {})
     if not isinstance(google, dict) or not google.get("enabled"):
         raise click.ClickException(
@@ -80,6 +99,28 @@ def _pick_account(
     return choice, accounts[choice - 1]
 
 
+def _summarize_status(st: dict[str, Any]) -> tuple[str, str]:
+    """Return (project_name, service_name) from a `railway status --json` payload.
+
+    Schema (railway 4.30.2):
+        st["name"] is the project name.
+        st["services"]["edges"][i]["node"]["name"] is each service name.
+    Falls back to "(unknown)" sentinels rather than raising — display
+    only.
+    """
+    project = str(st.get("name") or "(unknown project)")
+    service = "(no services linked)"
+    services = st.get("services") or {}
+    edges = services.get("edges") if isinstance(services, dict) else None
+    if isinstance(edges, list) and edges:
+        node = edges[0].get("node") if isinstance(edges[0], dict) else None
+        if isinstance(node, dict) and node.get("name"):
+            service = str(node["name"])
+            if len(edges) > 1:
+                service = f"{service} (and {len(edges) - 1} others)"
+    return project, service
+
+
 def _check_railway_environment(yes: bool) -> dict[str, Any]:
     """Verify Railway CLI is installed, logged in, and a service is linked.
 
@@ -101,8 +142,7 @@ def _check_railway_environment(yes: bool) -> dict[str, Any]:
     except _railway.RailwayError as e:
         raise click.ClickException(str(e)) from e
 
-    project = st.get("projectName") or st.get("project") or "(unknown project)"
-    service = st.get("serviceName") or st.get("service") or "(unknown service)"
+    project, service = _summarize_status(st)
     click.echo(f"Detected Railway: project={project} service={service}")
     if not yes and not click.confirm("Continue?", default=False):
         raise click.ClickException("Aborted by user.")
@@ -143,14 +183,8 @@ def _resolve_token_var_name(slot: int) -> str:
     default=False,
     help="Skip the project/service confirmation prompt.",
 )
-@click.option(
-    "--no-wait",
-    is_flag=True,
-    default=False,
-    help="Don't wait for the redeploy to finish before returning.",
-)
 @click.pass_context
-def auth_refresh_cmd(ctx: click.Context, requested: str | None, yes: bool, no_wait: bool) -> None:
+def auth_refresh_cmd(ctx: click.Context, requested: str | None, yes: bool) -> None:
     """Run the full Google OAuth re-auth flow against the linked deploy.
 
     Reads integrations.yaml, picks an account (or auto-selects when one
@@ -158,6 +192,13 @@ def auth_refresh_cmd(ctx: click.Context, requested: str | None, yes: bool, no_wa
     in the browser, writes the new refresh token back to Railway, and
     triggers a redeploy. Use after `auth_health` alerts you to a dead
     token.
+
+    The new token is verified end-to-end by the next ``auth_health``
+    tick (≤15 min). This command does not block waiting for the
+    redeploy — railway 4.x doesn't expose deployment status via
+    `railway status --json`, so polling for "deploy succeeded" is not
+    reliable. The deploy's own ``auth_health`` job is the verification
+    surface.
     """
     config_dir: Path = ctx.obj["config_dir"]
 
@@ -187,6 +228,12 @@ def auth_refresh_cmd(ctx: click.Context, requested: str | None, yes: bool, no_wa
         raise click.ClickException(str(e)) from e
     except AccountUnverifiableError as e:
         raise click.ClickException(str(e)) from e
+    except RuntimeError as e:
+        # mint_refresh_token raises RuntimeError when google_auth_oauthlib
+        # isn't installed (the [google] extra is missing). Surface the
+        # underlying message verbatim — it already tells the user what to
+        # pip install.
+        raise click.ClickException(str(e)) from e
 
     var_name = _resolve_token_var_name(slot)
     click.echo(f"Writing new refresh token to {var_name}...")
@@ -201,24 +248,8 @@ def auth_refresh_cmd(ctx: click.Context, requested: str | None, yes: bool, no_wa
     except _railway.RailwayError as e:
         raise click.ClickException(str(e)) from e
 
-    if no_wait:
-        click.echo(
-            "Redeploy queued. Check `railway logs` and watch the next "
-            "auth_health Telegram alert (≤15 min) to confirm the new "
-            "token works."
-        )
-        return
-
-    click.echo("Waiting for the redeploy to complete (timeout 5 min)...")
-    if _railway.wait_for_deployment(timeout_seconds=300, poll_interval=5):
-        click.echo(
-            f"Redeploy succeeded. The next auth_health tick (≤15 min) will "
-            f"confirm {picked_email} works. You'll get a Telegram alert if "
-            "it doesn't."
-        )
-    else:
-        raise click.ClickException(
-            "Redeploy did not reach SUCCESS within 5 minutes. The token "
-            "was written to Railway, but the deploy may have failed. Run "
-            "`railway logs` to inspect."
-        )
+    click.echo(
+        f"Redeploy queued. The next auth_health tick (≤15 min) will exercise "
+        f"the new token for {picked_email} and Telegram you if it doesn't "
+        "work. You can also tail `railway logs` to watch the deploy live."
+    )

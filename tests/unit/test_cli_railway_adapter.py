@@ -49,22 +49,38 @@ def test_whoami_raises_railway_error_on_nonzero() -> None:
     assert "railway login" in str(exc.value).lower()
 
 
-def test_status_returns_parsed_dict() -> None:
-    payload = {"projectId": "p1", "projectName": "rovik-keevs", "serviceName": "bot"}
+# `railway status --json` schema observed against railway 4.30.2 (2026-05-06):
+# Top level: {id, name, deletedAt, workspace, environments, services}.
+# - "name" is the project name.
+# - "services.edges[].node.name" is each service name.
+# There is NO "projectName" / "serviceName" / "latestDeployment" key. Tests
+# below pin the real schema so a future refactor can't silently revert to
+# the imaginary one.
+
+_REAL_STATUS_PAYLOAD = {
+    "id": "p-uuid",
+    "name": "rovik-keevs",
+    "deletedAt": None,
+    "workspace": {"id": "w-uuid", "name": "Personal"},
+    "environments": {"edges": [{"node": {"id": "e-uuid", "name": "production"}}]},
+    "services": {"edges": [{"node": {"id": "s-uuid", "name": "bot"}}]},
+}
+
+
+def test_status_returns_real_railway_4_schema() -> None:
     with patch(
         "cosinabox.cli._railway.subprocess.run",
-        return_value=_make_completed(stdout=json.dumps(payload)),
+        return_value=_make_completed(stdout=json.dumps(_REAL_STATUS_PAYLOAD)),
     ):
         s = _railway.status()
-    assert s["projectName"] == "rovik-keevs"
-    assert s["serviceName"] == "bot"
+    assert s["name"] == "rovik-keevs"
+    # Service name lives nested.
+    svc = s["services"]["edges"][0]["node"]
+    assert svc["name"] == "bot"
 
 
 def test_status_raises_when_no_service_linked() -> None:
-    # `railway status --json` exits non-zero in some "no service" states; in
-    # others it returns a payload missing the service field. Cover the
-    # nonzero-exit case here; the orchestrator checks for missing fields
-    # at the call site.
+    # `railway status --json` exits non-zero when no service is linked.
     with (
         patch(
             "cosinabox.cli._railway.subprocess.run",
@@ -94,32 +110,52 @@ def test_get_variable_returns_none_when_absent() -> None:
         assert _railway.get_variable("MISSING") is None
 
 
-def test_set_variable_passes_kv_to_cli() -> None:
-    captured: dict[str, list[str]] = {}
+def test_set_variable_uses_stdin_not_argv() -> None:
+    """Refresh tokens are secrets; argv is observable via `ps -ef` for any
+    user on the box. Using --stdin keeps the value out of argv entirely.
+    """
+    captured: dict[str, object] = {}
 
-    def fake_run(args: list[str], **_: object) -> subprocess.CompletedProcess[str]:
+    def fake_run(args: list[str], **kw: object) -> subprocess.CompletedProcess[str]:
         captured["args"] = list(args)
+        captured["input"] = kw.get("input")
         return _make_completed()
 
     with patch("cosinabox.cli._railway.subprocess.run", side_effect=fake_run):
-        _railway.set_variable("GOOGLE_OAUTH_REFRESH_TOKEN_1", "rt-new")
+        _railway.set_variable("GOOGLE_OAUTH_REFRESH_TOKEN_1", "rt-secret-1234")
 
-    assert "variables" in captured["args"]
-    # The CLI form is `railway variables --set "K=V"`. The K=V pair must
-    # appear intact in the command for Railway to accept it.
-    joined = " ".join(captured["args"])
-    assert "GOOGLE_OAUTH_REFRESH_TOKEN_1=rt-new" in joined
+    args = captured["args"]
+    assert isinstance(args, list)
+    # New subcommand syntax: `railway variable set <KEY> --stdin`. The
+    # value MUST NOT appear anywhere in argv.
+    assert "variable" in args  # singular subcommand
+    assert "set" in args
+    assert "--stdin" in args
+    assert "GOOGLE_OAUTH_REFRESH_TOKEN_1" in args
+    joined = " ".join(args)
+    assert "rt-secret-1234" not in joined  # no value leakage in argv
+    # The value reaches the CLI via subprocess stdin instead.
+    assert captured["input"] == "rt-secret-1234"
 
 
-def test_set_variable_raises_on_failure() -> None:
+def test_set_variable_error_does_not_leak_value() -> None:
+    """Railway's CLI can echo the K=V (or just the value) on failure
+    (e.g. validation error). The adapter must NOT fold raw stdout/stderr
+    into the user-facing error or the token leaks into a click exception.
+    """
+    leaky_stdout = "error: variable rt-secret-1234 rejected by Railway"
     with (
         patch(
             "cosinabox.cli._railway.subprocess.run",
-            return_value=_make_completed(returncode=1, stdout="permission denied"),
+            return_value=_make_completed(returncode=1, stdout=leaky_stdout),
         ),
-        pytest.raises(_railway.RailwayError),
+        pytest.raises(_railway.RailwayError) as exc,
     ):
-        _railway.set_variable("X", "y")
+        _railway.set_variable("GOOGLE_OAUTH_REFRESH_TOKEN_1", "rt-secret-1234")
+    # The variable name SHOULD be in the error so the user knows what
+    # failed; the value must NOT be.
+    assert "GOOGLE_OAUTH_REFRESH_TOKEN_1" in str(exc.value)
+    assert "rt-secret-1234" not in str(exc.value)
 
 
 def test_redeploy_invokes_deploy_verb() -> None:
@@ -132,63 +168,15 @@ def test_redeploy_invokes_deploy_verb() -> None:
     with patch("cosinabox.cli._railway.subprocess.run", side_effect=fake_run):
         _railway.redeploy()
 
-    # Either `railway redeploy` or `railway up --ci` is acceptable; the
-    # impl picks one. Test that *some* deploy verb is invoked.
-    assert any(verb in captured["args"] for verb in ("redeploy", "up"))
+    assert "redeploy" in captured["args"]
+    # -y / --yes is required to skip the interactive confirmation.
+    assert any(flag in captured["args"] for flag in ("-y", "--yes"))
 
 
-def test_wait_for_deployment_polls_until_success() -> None:
-    """Polls `railway status --json` until deployment reaches SUCCESS."""
-    payloads = iter(
-        [
-            json.dumps({"latestDeployment": {"status": "BUILDING"}}),
-            json.dumps({"latestDeployment": {"status": "DEPLOYING"}}),
-            json.dumps({"latestDeployment": {"status": "SUCCESS"}}),
-        ]
-    )
-    with (
-        patch(
-            "cosinabox.cli._railway.subprocess.run",
-            side_effect=lambda *_a, **_kw: _make_completed(stdout=next(payloads)),
-        ),
-        patch("cosinabox.cli._railway.time.sleep") as fake_sleep,
-    ):
-        ok = _railway.wait_for_deployment(timeout_seconds=60, poll_interval=2)
-    assert ok is True
-    assert fake_sleep.called
-
-
-def test_wait_for_deployment_returns_false_on_failure_status() -> None:
-    payloads = iter(
-        [
-            json.dumps({"latestDeployment": {"status": "BUILDING"}}),
-            json.dumps({"latestDeployment": {"status": "FAILED"}}),
-        ]
-    )
-    with (
-        patch(
-            "cosinabox.cli._railway.subprocess.run",
-            side_effect=lambda *_a, **_kw: _make_completed(stdout=next(payloads)),
-        ),
-        patch("cosinabox.cli._railway.time.sleep"),
-    ):
-        ok = _railway.wait_for_deployment(timeout_seconds=60, poll_interval=2)
-    assert ok is False
-
-
-def test_wait_for_deployment_returns_false_on_timeout() -> None:
-    with (
-        patch(
-            "cosinabox.cli._railway.subprocess.run",
-            return_value=_make_completed(
-                stdout=json.dumps({"latestDeployment": {"status": "BUILDING"}})
-            ),
-        ),
-        patch("cosinabox.cli._railway.time.sleep"),
-        # First monotonic call is the loop's `start` sentinel; subsequent
-        # calls are the loop guard. Returning increasing values guarantees
-        # the elapsed > timeout check fires after one iteration.
-        patch("cosinabox.cli._railway.time.monotonic", side_effect=[0, 0, 100, 200]),
-    ):
-        ok = _railway.wait_for_deployment(timeout_seconds=60, poll_interval=2)
-    assert ok is False
+# `wait_for_deployment` was removed (S1+S2 stress-test fix): railway 4.x
+# doesn't expose deployment status via `railway status --json`, so the
+# poll loop always timed out and reported successful redeploys as
+# failures. The orchestrator now relies on `auth_health` for verification.
+# Surface the removal so a future plan doesn't accidentally re-introduce it.
+def test_wait_for_deployment_function_does_not_exist() -> None:
+    assert not hasattr(_railway, "wait_for_deployment")
