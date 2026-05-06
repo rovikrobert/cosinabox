@@ -14,9 +14,19 @@ repos:
         name: secret-scan
         # The hook's own regex contains the sentinel prefixes (sk-ant-,
         # xoxb-, etc.), so greping staged files self-matches whenever
-        # this config itself is staged. Exclude the config file — it's
-        # maintainer-only, never carries user-supplied content.
-        entry: bash -c 'git diff --cached --name-only -z | grep -vz "^\.pre-commit-config\.yaml$" | xargs -0 grep -lE "(sk-ant-|xoxb-|AIza[0-9A-Za-z_-]{35}|ghp_[A-Za-z0-9]{36})" && exit 1 || exit 0'
+        # one of those literals appears in source. Exclude:
+        #   - this config (regex source-of-truth)
+        #   - src/cosinabox/doctor/checks.py: SecretInTrackedFileCheck's
+        #     own _SECRET_PATTERNS contains the literals by design;
+        #     SecretInTrackedFileCheck is what guards user repos against
+        #     real secret leaks.
+        # Both are maintainer-only files; neither carries user content.
+        #
+        # Implementation note: capture grep's filename output instead of
+        # relying on the pipeline exit code. macOS BSD xargs exits 0 on
+        # empty input (no-run-if-empty by default), which previously
+        # tripped `&& exit 1` whenever every staged file was excluded.
+        entry: bash -c 'matches=$(git diff --cached --name-only -z | grep -vzE "^(\.pre-commit-config\.yaml|src/cosinabox/doctor/checks\.py)$" | xargs -0 -r grep -lE "(sk-ant-|xoxb-|AIza[0-9A-Za-z_-]{35}|ghp_[A-Za-z0-9]{36})"); if [ -n "$matches" ]; then echo "Secret pattern found in:"; echo "$matches"; exit 1; fi; exit 0'
         language: system
         pass_filenames: false
         stages: [pre-commit]

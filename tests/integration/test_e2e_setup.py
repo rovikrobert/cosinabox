@@ -38,4 +38,7 @@ def test_init_then_interview_then_doctor(tmp_path, monkeypatch) -> None:
     import json
 
     data = json.loads(r.output)
-    assert len(data) == 10
+    # 11 = 10 existing checks + the new oauth_refresh_live (Initiative B,
+    # PR #88). The check warns on a fresh `cosinabox init` repo (no
+    # GOOGLE_OAUTH_* env vars) rather than fails — opted out, not broken.
+    assert len(data) == 11
