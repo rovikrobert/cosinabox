@@ -19,14 +19,20 @@ class SchedulerRunner:
         self._scheduler = scheduler
         self._jobs: dict[str, Job] = {}
 
-    def add_job(self, job: Job, *, cron: str) -> None:
+    def add_job(self, job: Job, *, cron: str, timezone: str | None = None) -> None:
+        # CronTrigger.from_crontab() defaults to OS-local TZ via tzlocal, NOT
+        # the scheduler's configured timezone. On Railway (UTC container) this
+        # silently shifts every cron job by the user's UTC offset. Pass the
+        # engine's configured TZ explicitly. `timezone` arg, when provided,
+        # is the per-job override from jobs.yaml.
         self._jobs[job.name] = job
         if hasattr(self._scheduler, "add_job"):
             from apscheduler.triggers.cron import CronTrigger
 
+            tz = ZoneInfo(timezone or get_timezone())
             self._scheduler.add_job(
                 lambda j=job: j.run(JobContext()),
-                trigger=CronTrigger.from_crontab(cron),
+                trigger=CronTrigger.from_crontab(cron, timezone=tz),
                 id=job.name,
                 replace_existing=True,
             )
