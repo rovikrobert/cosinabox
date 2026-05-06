@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Callable, Iterable
+from pathlib import Path
 from typing import Any
 
 from cosinabox.jobs.base import Job, JobContext
@@ -20,11 +21,14 @@ from cosinabox.tools.google.auth import GoogleAuthError, build_all_credentials
 
 logger = logging.getLogger("cosinabox")
 
+# After Initiative A (`cosinabox auth refresh`) shipped in v0.1.6, the fix
+# instruction collapses from a three-step manual flow (auth google + update
+# GOOGLE_OAUTH_REFRESH_TOKEN_<N> on Railway + redeploy) to a single command.
+# Surfaces that still referenced the old text were updated in lockstep.
 _FAILURE_TEMPLATE = (
     "Google auth failed for account #{i}.\n"
     "Gmail and Calendar reads will be silently skipped until re-auth.\n"
-    "Fix: `cosinabox auth google`, update GOOGLE_OAUTH_REFRESH_TOKEN_{i} on "
-    "Railway, redeploy."
+    "Run: cosinabox auth refresh"
 )
 _RECOVERY_TEMPLATE = "Google auth restored for account #{i}."
 
@@ -36,8 +40,25 @@ class AuthHealthJob(Job):
         self,
         *,
         credentials_factory: Callable[[], Iterable[Any]] = build_all_credentials,
+        db_path: Path | None = None,
+        account_emails: list[str] | None = None,
     ) -> None:
+        """Args:
+        credentials_factory: callable returning the list of Credentials
+            to probe each tick. Defaults to ``build_all_credentials``.
+        db_path: path to the user repo's ``memory.db``. When provided,
+            each tick persists per-account status to the
+            ``auth_health_status`` table for ``/status`` to read.
+            Optional so existing callers (and most tests) don't need
+            to thread it.
+        account_emails: ordered list of emails matching the credentials
+            returned by the factory. Used as the email field in
+            persisted rows. When None, falls back to ``"(unknown)"`` so
+            persistence still works.
+        """
         self.credentials_factory = credentials_factory
+        self.db_path = db_path
+        self.account_emails = list(account_emails or [])
         self._health: dict[int, bool] = {}
 
     def run(self, context: JobContext) -> str:
@@ -67,6 +88,9 @@ class AuthHealthJob(Job):
                     i,
                     type(exc).__name__,
                 )
+                # Skip the persistence write below so the prior known
+                # status survives the network blip — same semantic as
+                # the in-memory _health dict.
                 continue
 
             prev = self._health.get(i)
@@ -75,6 +99,21 @@ class AuthHealthJob(Job):
             elif ok is True and prev is False:
                 newly_recovered.append(_RECOVERY_TEMPLATE.format(i=i))
             self._health[i] = ok
+
+            if self.db_path is not None:
+                from cosinabox.jobs.auth_health_persist import record_auth_health
+
+                email = (
+                    self.account_emails[i - 1] if 0 < i <= len(self.account_emails) else "(unknown)"
+                )
+                try:
+                    record_auth_health(self.db_path, account_index=i, email=email, ok=ok)
+                except Exception:  # noqa: BLE001 — persistence must never break the watcher
+                    logger.warning(
+                        "Auth-health: failed to persist account #%d state",
+                        i,
+                        exc_info=True,
+                    )
 
         sections: list[str] = []
         if newly_failed:

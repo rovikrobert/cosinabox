@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from pathlib import Path
 from typing import Any
 
 from cosinabox.agent.loop import AgentLoop
@@ -26,8 +27,17 @@ def register_core_jobs(
     memory: Any | None = None,
     attio: Any | None = None,
     drive: Any | None = None,
+    auth_health_db_path: Path | None = None,
+    auth_health_account_emails: list[str] | None = None,
 ) -> None:
-    """Register the 5 core scheduled jobs (no send_telegram dependency)."""
+    """Register the 5 core scheduled jobs (no send_telegram dependency).
+
+    Args:
+        auth_health_db_path: when provided, AuthHealthJob persists per-account
+            status to this SQLite DB after each tick. Read by /status.
+        auth_health_account_emails: ordered list of Google account emails
+            from integrations.yaml. Used as the email field in persisted rows.
+    """
     from cosinabox.jobs.evening_wrap import EveningWrapJob
     from cosinabox.jobs.followup_reminder import FollowupReminderJob
     from cosinabox.jobs.morning_briefing import MorningBriefingJob
@@ -114,7 +124,14 @@ def register_core_jobs(
     auth_health_cfg = jobs_config.get("auth_health", {})
     if auth_health_cfg.get("enabled", True):
         cron = auth_health_cfg.get("schedule", defaults.AUTH_HEALTH_DEFAULT_SCHEDULE)
-        scheduler.add_job(AuthHealthJob(), cron=cron, timezone=auth_health_cfg.get("timezone"))
+        scheduler.add_job(
+            AuthHealthJob(
+                db_path=auth_health_db_path,
+                account_emails=auth_health_account_emails,
+            ),
+            cron=cron,
+            timezone=auth_health_cfg.get("timezone"),
+        )
         logger.info("Registered auth_health at %s", cron)
 
 

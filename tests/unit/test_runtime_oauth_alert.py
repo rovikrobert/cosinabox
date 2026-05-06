@@ -119,6 +119,26 @@ class TestRuntimeAlertAccountLabel:
         assert len(sent) == 1
         assert "account" not in sent[0].lower() or "Run:" in sent[0]
 
+    def test_alert_uses_auth_refresh_command(self) -> None:
+        """The alert must point users at `cosinabox auth refresh` (Initiative A's
+        single-command fix), not the legacy `auth google` flow which required a
+        manual env-var update + redeploy.
+        """
+        _runtime_alert._last_alert_at = 0.0
+        _runtime_alert.set_account_emails(["rovik@example.com"])
+        sent: list[str] = []
+        _runtime_alert.set_send_telegram(lambda msg: sent.append(msg))
+        try:
+            _runtime_alert.runtime_oauth_alert(Exception("invalid_grant"), account_index=1)
+        finally:
+            _runtime_alert.set_send_telegram(None)  # type: ignore[arg-type]
+            _runtime_alert.set_account_emails([])
+
+        assert len(sent) == 1
+        assert "cosinabox auth refresh" in sent[0]
+        # Old wording must be gone.
+        assert "cosinabox auth google" not in sent[0]
+
 
 class TestRuntimeAlertWiring:
     """Regression: set_send_telegram must be called from production startup.
