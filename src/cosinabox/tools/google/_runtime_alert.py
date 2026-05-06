@@ -23,6 +23,11 @@ _alert_lock = threading.Lock()
 # If not set, we log a warning instead.
 _send_telegram_fn: Callable[[str], None] | None = None
 
+# Account emails parallel to GOOGLE_OAUTH_REFRESH_TOKEN_N (1-indexed at the
+# env-var level, 0-indexed here). Populated by App at startup from
+# integrations.yaml so multi-account users see *which* account failed.
+_account_emails: list[str] = []
+
 
 def set_send_telegram(fn: Callable[[str], None]) -> None:
     """Register the send_telegram callback (called once by App at startup)."""
@@ -30,10 +35,24 @@ def set_send_telegram(fn: Callable[[str], None]) -> None:
     _send_telegram_fn = fn
 
 
-def runtime_oauth_alert(exc: Exception) -> None:
+def set_account_emails(emails: list[str]) -> None:
+    """Register the account-email list (parallel to refresh-token env vars).
+
+    Index 0 corresponds to GOOGLE_OAUTH_REFRESH_TOKEN_1, etc. Empty list
+    disables per-account labelling (single-account fallback).
+    """
+    global _account_emails
+    _account_emails = list(emails)
+
+
+def runtime_oauth_alert(exc: Exception, *, account_index: int | None = None) -> None:
     """Send a Telegram alert for a runtime Google OAuth failure.
 
     Deduplicates: only sends once per cooldown window.
+
+    ``account_index`` is 1-based (matches GOOGLE_OAUTH_REFRESH_TOKEN_N). When
+    provided alongside a configured email list, the alert names the dead
+    account explicitly so multi-account users don't have to grep.
     """
     global _last_alert_at
     with _alert_lock:
@@ -42,7 +61,15 @@ def runtime_oauth_alert(exc: Exception) -> None:
             return
         _last_alert_at = now
 
-    msg = f"[auth] Google OAuth token expired. Run: cosinabox auth google\n\nError: {exc}"
+    label = ""
+    if account_index is not None:
+        idx = account_index - 1
+        if 0 <= idx < len(_account_emails):
+            label = f" for {_account_emails[idx]} (account {account_index})"
+        else:
+            label = f" for account {account_index}"
+
+    msg = f"[auth] Google OAuth token expired{label}. Run: cosinabox auth google\n\nError: {exc}"
     if _send_telegram_fn is not None:
         try:
             _send_telegram_fn(msg)

@@ -109,15 +109,15 @@ class CalendarTool:
     def list_events(self, *, start: datetime, end: datetime) -> list[CalendarEvent]:
         seen: set[str] = set()
         out: list[CalendarEvent] = []
-        for svc in self._services:
+        for i, svc in enumerate(self._services, start=1):
             try:
                 for evt in _list_events_for_service(svc, self.calendar_id, start, end):
                     if evt.id not in seen:
                         seen.add(evt.id)
                         out.append(evt)
             except _GOOGLE_AUTH_ERRORS as exc:
-                logger.warning("Google Calendar OAuth failure: %s", exc)
-                _runtime_oauth_alert(exc)
+                logger.warning("Google Calendar OAuth failure (account %d): %s", i, exc)
+                _runtime_oauth_alert(exc, account_index=i)
                 return []
         return out
 

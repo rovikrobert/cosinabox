@@ -313,7 +313,10 @@ class App:
 
         # --- Telegram ---
         from cosinabox.app.alerts import make_send_telegram, send_auth_error_alert
-        from cosinabox.tools.google._runtime_alert import set_send_telegram
+        from cosinabox.tools.google._runtime_alert import (
+            set_account_emails,
+            set_send_telegram,
+        )
 
         send_telegram = make_send_telegram(bot_token, chat_id)
         send_auth_error_alert(send_telegram, auth_errors)
@@ -322,6 +325,12 @@ class App:
         # configured" silently. set_send_telegram() existed since #22 but
         # was never called from production startup.
         set_send_telegram(send_telegram)
+        # Multi-account users get account labels in OAuth alerts ("expired
+        # for rovik@cantina.ai (account 2)") instead of opaque "expired".
+        google_accounts = integrations.get("google", {}).get("accounts", []) or []
+        set_account_emails(
+            [str(a["email"]) for a in google_accounts if isinstance(a, dict) and a.get("email")]
+        )
 
         # --- Register jobs that need send_telegram ---
         from cosinabox.app.jobs import register_telegram_jobs
