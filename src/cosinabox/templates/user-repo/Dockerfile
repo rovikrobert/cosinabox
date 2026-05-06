@@ -7,11 +7,16 @@ FROM ghcr.io/rovikrobert/cosinabox-runtime:0.1
 WORKDIR /app
 
 # Resolve the user-repo's pyproject pin on top of the baked install.
-# No-op when the pin is compatible with the image (fastest case);
-# otherwise pip pulls what's needed. Also where extras like [attio]
-# or [fireflies] get layered in.
+# `--upgrade-strategy eager` is critical: without it, pip's default
+# (only-if-needed) sees that the baked cosinabox version satisfies the
+# pin (e.g. 0.1.2 satisfies >=0.1,<0.2) and skips the upgrade, even
+# when the floating :0.1 image has been retagged to a newer patch.
+# Railway's docker layer cache holds the resolved base-image digest
+# across redeploys, so without this flag a deploy can stay frozen on
+# an older patch indefinitely. Eager forces pip to resolve cosinabox
+# (and its deps) against PyPI on every build.
 COPY pyproject.toml /app/
-RUN pip install --no-cache-dir -e .
+RUN pip install --no-cache-dir --upgrade --upgrade-strategy eager -e .
 
 COPY . /app
 
