@@ -108,19 +108,27 @@ def get_variable(name: str) -> str | None:
 
 
 def set_variable(name: str, value: str) -> None:
-    """Set a Railway service variable.
+    """Set a Railway service variable WITHOUT triggering a deploy.
 
-    Uses ``railway variable set <KEY> --stdin`` so the *value* is passed
-    via subprocess stdin and never appears in argv. Argv is observable
-    to other users on the system via ``ps -ef``; for refresh tokens this
-    is a real disclosure surface, hence the stdin path.
+    Uses ``railway variable set <KEY> --stdin --skip-deploys``:
+      - ``--stdin``: the value is passed via subprocess stdin and never
+        appears in argv. Argv is observable to other users on the system
+        via ``ps -ef``; for refresh tokens this is a real disclosure
+        surface.
+      - ``--skip-deploys``: Railway's default is to redeploy on every
+        variable change. The orchestrator's flow is `set_variable` →
+        `redeploy`; without --skip-deploys the implicit deploy from set
+        races with the explicit redeploy and one of them exits 1 because
+        a deploy is already in flight. (Found by M8 smoke against
+        rovik-keevs after PR #88 merged.) Skipping the implicit deploy
+        keeps the orchestrator the only thing kicking deploys.
 
     On failure, raises ``RailwayError`` with the variable name and exit
     code only — never the captured stdout/stderr, because Railway can
     echo the value back in validation errors.
     """
     res = _run(
-        ["railway", "variable", "set", name, "--stdin"],
+        ["railway", "variable", "set", name, "--stdin", "--skip-deploys"],
         stdin_value=value,
     )
     if res.returncode != 0:
@@ -137,12 +145,16 @@ def redeploy() -> None:
     Verification of the new state is the job of the next ``auth_health``
     tick on the deploy itself (see auth_refresh.auth_refresh_cmd output).
 
-    The error message intentionally omits captured stdout/stderr to keep
-    the variable-leak avoidance discipline consistent across this module.
+    Unlike ``set_variable``, ``redeploy`` carries no secret in its argv
+    or stdin — so on failure we fold the captured stderr/stdout into the
+    user-facing error so the actual Railway-CLI message is visible. The
+    prior shape ("railway CLI exit 1" alone) was too sparse to diagnose:
+    M8 smoke found a race condition that took five minutes to identify
+    because the actual error string was hidden.
     """
     res = _run(["railway", "redeploy", "--yes"])
     if res.returncode != 0:
+        cli_msg = (res.stderr or res.stdout or "").strip() or "(no output captured)"
         raise RailwayError(
-            f"Could not trigger redeploy (railway CLI exit {res.returncode}). "
-            "Run `railway logs` to inspect, then retry."
+            f"Could not trigger redeploy (railway CLI exit {res.returncode}): {cli_msg}"
         )
