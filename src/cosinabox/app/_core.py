@@ -313,9 +313,15 @@ class App:
 
         # --- Telegram ---
         from cosinabox.app.alerts import make_send_telegram, send_auth_error_alert
+        from cosinabox.tools.google._runtime_alert import set_send_telegram
 
         send_telegram = make_send_telegram(bot_token, chat_id)
         send_auth_error_alert(send_telegram, auth_errors)
+        # Wire the runtime OAuth alert path so token expirations during
+        # scheduled jobs page Telegram instead of logging "no Telegram
+        # configured" silently. set_send_telegram() existed since #22 but
+        # was never called from production startup.
+        set_send_telegram(send_telegram)
 
         # --- Register jobs that need send_telegram ---
         from cosinabox.app.jobs import register_telegram_jobs

@@ -70,6 +70,30 @@ class TestCalendarRuntimeOAuthAlert:
         assert "OAuth" in sent[0]
 
 
+class TestRuntimeAlertWiring:
+    """Regression: set_send_telegram must be called from production startup.
+
+    The bug: set_send_telegram() existed and worked in unit tests (where the
+    global was set directly), but was never invoked from app code. Every
+    runtime OAuth failure logged "no Telegram configured" instead of paging
+    the user, even though the bot was running.
+    """
+
+    def test_app_run_wires_runtime_alert(self) -> None:
+        """app/_core.py's run() must call set_send_telegram after building send_telegram."""
+        import inspect
+
+        from cosinabox.app import _core
+
+        src = inspect.getsource(_core)
+        assert "set_send_telegram" in src, (
+            "app/_core.py does not call set_send_telegram(). "
+            "Runtime OAuth failures will not page Telegram. "
+            "Add: from cosinabox.tools.google._runtime_alert import set_send_telegram; "
+            "set_send_telegram(send_telegram)."
+        )
+
+
 class TestGmailRuntimeOAuthAlert:
     def test_refresh_error_sends_telegram_alert(self) -> None:
         """list_recent raising RefreshError -> send_telegram called with auth alert."""
