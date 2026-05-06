@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "cosinabox"
-version = "0.1.5"
+version = "0.1.6"
 description = "Open-source Chief of Staff in a box. Opinionated, proactive, runs on your own infra."
 readme = "README.md"
 requires-python = ">=3.11"

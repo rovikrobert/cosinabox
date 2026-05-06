@@ -6,6 +6,34 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.1.6] — 2026-05-06
+
+OAuth UX rework — Initiatives A → C of `docs/specs/2026-05-06-oauth-ux-rework.md`. Re-authenticating an expired Google refresh token used to be a 10-step manual scavenger hunt across Google Cloud Console, Railway, a local terminal, and Telegram. After this release, it's one command, one browser consent, and a Telegram alert that confirms the new token works.
+
+### Added
+- `cosinabox auth refresh` — single-command Google OAuth re-auth orchestrator. Reads `integrations.yaml`, picks an account (auto-selects single-account; numbered picker for multi-account; `--account <email>` for non-interactive), pulls OAuth client creds from the linked Railway service, runs consent in the browser, writes the new refresh token back to Railway, and triggers a redeploy. The next `auth_health` tick (≤15 min) confirms the new token works and Telegrams the user if it doesn't. Initiative A. (#86, #87, #90)
+- `cosinabox doctor` actively probes refresh tokens. New `oauth_refresh_live` check loops `build_all_credentials()` and attempts `cred.refresh(Request())` per account, reporting `pass` / `fail` / `warn` (with the failing account's email and `Run: cosinabox auth refresh` hint). Catches dead tokens proactively rather than waiting for the next briefing to render an empty calendar. Initiative B. (#88)
+- `cosinabox doctor --offline` flag — skips checks that require network access (e.g. the new live OAuth probe). Lets doctor run in CI / on planes without spurious failures. Backed by a new `network: bool = False` attr on the `Check` ABC. (#88)
+- `/status` Telegram command appends per-account OAuth health: `OAuth: ✓ rovik@majiq.agency | ✗ rovik@cantina.ai`. Hidden on fresh deploys until the watcher's first tick — uniformity for empty state would be noise. Initiative C. (#89)
+- `auth_health_status` SQLite table inside `memory.db` persists per-account refresh-token state. PK on account_index; transient errors don't write so prior known state survives network blips. Read by `/status`. (#89)
+- Pre-commit secret-scan hook gained `src/cosinabox/doctor/checks.py` to its exclude list and was rewritten to handle the "all staged files excluded" case (macOS xargs no-run-if-empty edge). The doctor file's `_SECRET_PATTERNS` regex contains the literal sentinel prefixes by design — same self-match the existing `.pre-commit-config.yaml` exclusion was added for. (#88)
+
+### Changed
+- Auth-health Telegram alert template (`auth_health.py:_FAILURE_TEMPLATE`) and runtime OAuth alert (`_runtime_alert.py`) now both end with `Run: cosinabox auth refresh`. Replaces the legacy three-step "auth google + update GOOGLE_OAUTH_REFRESH_TOKEN_<N> on Railway + redeploy" instruction wherever it appeared in user-facing strings. (#89)
+- User-repo template `oauth-walkthrough.md` leads with the `cosinabox auth refresh` flow; the manual ten-step GCP-console flow stays as fallback for first-time setup, non-Railway deploys, and the case where the new command itself errors. (#86)
+- `_railway.set_variable` passes the value via `--stdin` (kept out of argv so other users on the box can't see it via `ps -ef`) and `--skip-deploys` (so it doesn't kick off its own deploy and race with `_railway.redeploy()`). Determines the orchestrator's flow as `set` → `redeploy`, no implicit deploys. (#87, #90)
+- `_railway.redeploy` failures now include the captured Railway CLI stderr/stdout in the user-facing error so the actual cause is visible. `set_variable` keeps stripping captured output (Railway can echo the value back on validation errors). Differential leak avoidance. (#90)
+
+### Fixed
+- Stress-test pass post PR #86 caught six bugs against the real `railway` CLI 4.30.2: `railway status --json` schema mismatch (`name` / `services.edges[].node.name`, not `projectName`/`serviceName`); `wait_for_deployment` polled `latestDeployment.status` which doesn't exist in railway 4.x output (function removed entirely; `auth_health` is the verification path); refresh token went through argv (now `--stdin`); `set_variable` error string echoed captured stdout/stderr (now hides them); orchestrator caught typed exceptions but not `RuntimeError` from `mint_refresh_token` (missing `[google]` extra) — now caught and surfaced as a friendly ClickException; malformed `integrations.yaml` raised a raw YAML traceback (now wrapped). (#87)
+- Race condition between `set_variable`'s implicit deploy (Railway's default) and `auth refresh`'s explicit `redeploy()` — caught by M8 manual smoke against `rovik-keevs`. (#90)
+- `tests/integration/test_e2e_setup.py` doctor count assertion updated 10 → 11 for the new `oauth_refresh_live` check. CI caught what unit tests missed. (#88)
+
+### Docs
+- Three retros: Initiative A (`oauth-auth-refresh`, with two addenda for PR #87's six-bug stress test and PR #90's M8 race fix), Initiative B (`doctor-oauth-probe`, with M5b real-Google smoke recorded as pass), Initiative C (`status-and-alerts`).
+- Three plans: `2026-05-06-oauth-auth-refresh.md`, `2026-05-06-doctor-oauth-probe.md`, `2026-05-06-status-and-alerts.md`.
+- `feedback_cli_wrapper_smoke_test.md` (maintainer's private memory): manual smoke is non-negotiable before merge for plans that subprocess to external CLIs. Validated three times this release: PR #87 found six bugs (deferred-then-stress-tested), PR #88 passed clean (rule working), PR #90 found a race condition (M8 ran late but caught real-world delta).
+
 ## [0.1.5] — 2026-05-06
 
 ### Fixed
