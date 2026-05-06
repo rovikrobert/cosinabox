@@ -75,3 +75,31 @@ None observed during implementation. Worktree set up at session start (CLAUDE.md
 ## Process
 
 Plan → 9 milestones, TDD per task, single PR with auto-merge. Five sign-off questions surfaced before code. No drift; no design changes mid-execution. Retro filed within 30 min of merge.
+
+---
+
+## Addendum (same day, after stress test) — six bugs that PR #87 fixed
+
+**M8 manual smoke was deferred in PR #86. That was wrong.** Within an hour of the merge, a stress test against the real `railway` CLI 4.30.2 surfaced six bugs — two of them critical. Fixed in PR #87.
+
+| # | Severity | Bug | Why M8 would have caught it |
+|---|---|---|---|
+| S1 | Critical | `railway status --json` schema is `{name, services.edges[].node.name}` — not `{projectName, serviceName}`. Confirmation line always rendered `(unknown project) (unknown service)`. | The first thing the user sees after `--yes` |
+| S2 | Critical | `wait_for_deployment` polls `latestDeployment.status` which doesn't exist in railway 4.x output → default path always reports successful redeploys as 5-min timeouts | Default-path failure on every real run |
+| S3 | High | Refresh token went through argv (`--set "K=V"`), exposing it via `ps -ef` | Token-in-process-listing leak |
+| S4 | High | `set_variable` error string echoed `res.stdout`/`res.stderr` — Railway can echo the value back on validation failure | Token in user-facing exception string |
+| S5 | Medium | Orchestrator caught typed exceptions but not `RuntimeError` from `mint_refresh_token` (missing `[google]` extra) → traceback to user | First-time setup with stale venv |
+| S6 | Medium | Malformed `integrations.yaml` raised raw YAML traceback | Any typo in config |
+
+**The 5-minute probe that would have surfaced S1+S2:** `railway status --json | python -c 'import json,sys; print(list(json.load(sys.stdin).keys()))'`. That's the entire test. The maintainer's machine had `railway` installed; I didn't run it.
+
+### What this changes for future plans
+
+- **Manual-smoke milestones are non-negotiable when a plan wraps an external CLI.** Do not defer them, even if the diff "feels small" or all unit tests are mocked. Mocked tests verify orchestration; only the real binary verifies schema. New feedback memory candidate.
+- **Adapter modules should pin the real schema in a comment or a fixture.** The new `_railway.py` docstrings now spell out the exact railway 4.30.2 shape. Drift is detectable.
+- **Default paths must be exercised, not just the bypass flags.** I had thorough `--no-wait` tests but the wait path itself was broken. Tests that mock `wait_for_deployment.return_value=True` told me nothing about whether the real function works.
+
+### Updated estimate calibration
+
+The "M2–M7 took ~50% of plan budget" data point above was misleading: it counted *test-passing* time, not *correct* time. The real Initiative A cost was Plan + PR #86 (~2.5 hr) + PR #87 stress fixes (~1 hr) = ~3.5 hr against the 5 hr budget. Closer to 70% of plan, not 50%. The deferred M8 was hidden technical debt that came due immediately.
+
