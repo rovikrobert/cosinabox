@@ -1,1 +1,1 @@
-[Port consult from cos-agent → cosinabox (native MCP server)](plans/2026-04-20-port-consult-mcp.md)
+[OAuth UX rework — Initiative A: `cosinabox auth refresh`](plans/2026-05-06-oauth-auth-refresh.md)
