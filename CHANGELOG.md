@@ -6,6 +6,23 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.1.5] — 2026-05-06
+
+### Fixed
+- Cron triggers now fire in the user's configured timezone instead of the OS-local one. `CronTrigger.from_crontab()` defaults to `tzlocal.get_localzone()`, which on Railway (UTC container) silently shifted every cron-scheduled job by the user's UTC offset — `morning_briefing` at `0 8 * * *` with `personality.md` `timezone: Asia/Singapore` was firing at 16:00 SGT instead of 08:00 SGT. `SchedulerRunner.add_job` now passes `timezone=ZoneInfo(get_timezone())` explicitly. (#85)
+- Runtime OAuth alert now reaches Telegram. `set_send_telegram()` was defined since the runtime-alert PR but never called from production startup, so every token expiration during a scheduled job logged "no Telegram configured" silently instead of paging. Wired in `App.run()` right after `make_send_telegram()`. (#85)
+- User-repo template `Dockerfile` uses `pip install --upgrade --upgrade-strategy eager`. Without it, pip's default skip-if-pin-already-satisfied keeps deploys frozen on the baked-in cosinabox version even when the floating `:0.1` runtime tag has been retagged to a newer patch — bit us live: rovik-keevs ran 0.1.2 even after 0.1.4 had shipped. (#85)
+
+### Added
+- `jobs.yaml` per-job `timezone:` field is now honoured. Threads through `SchedulerRunner.add_job(*, cron, timezone=None)` so a user can run e.g. `morning_briefing` in their local zone while keeping `auth_health` on UTC. (#85)
+- `/timezone` Telegram command (ported from cos-agent). No args: shows current TZ + local time. With arg: resolves via fuzzy matcher, persists to SQLite, and reschedules every cron-trigger job in place — so users travelling to a new TZ don't have to edit `personality.md` and redeploy. (#85)
+- `App.run()` now calls `load_timezone_override()` at boot, giving the persisted `/timezone` override precedence over `personality.md`. The function existed since timezone.py landed but was never called, which meant runtime TZ changes were silently lost on the next restart. (#85)
+- `cosinabox auth google --account <email>` flag verifies the consented Google account matches before printing the refresh token. Eliminates the silent-corruption mode where a stray browser session could mint a token for the wrong inbox. Mismatch raises `ClickException` with both emails shown and refuses to leak the token. (#85)
+- Runtime OAuth alerts now name the failing account in multi-account setups: `OAuth token expired for rovik@cantina.ai (account 2)`. App boot populates `set_account_emails()` from `integrations.yaml`'s `google.accounts` list. (#85)
+
+### Docs
+- Added `docs/specs/2026-05-06-oauth-ux-rework.md` scoping the broader OAuth UX rework (one-shot `auth refresh` orchestration, doctor active probe, per-account `/status` surface, web-based OAuth flow). Spec only — implementation lands separately.
+
 ## [0.1.4] — 2026-04-21
 
 ### Fixed
