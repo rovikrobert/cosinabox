@@ -4,6 +4,7 @@ import os
 from typing import Any
 from unittest.mock import MagicMock, patch
 
+import pytest
 from click.testing import CliRunner
 
 from cosinabox.cli.main import cli
@@ -94,3 +95,79 @@ def test_auth_google_account_match_is_case_insensitive() -> None:
     result = _invoke_with_consent("Rovik@Cantina.AI", ["--account", "rovik@cantina.ai"])
     assert result.exit_code == 0
     assert "rt-test" in result.output
+
+
+# --- mint_refresh_token() helper (extracted for `auth refresh` reuse) ---
+
+
+def test_mint_refresh_token_returns_token_when_no_account_check() -> None:
+    from cosinabox.cli.auth_google import mint_refresh_token
+
+    fake_flow = MagicMock()
+    fake_creds = MagicMock(refresh_token="rt-helper")
+    fake_flow.run_local_server.return_value = fake_creds
+    with patch(
+        "cosinabox.cli.auth_google.InstalledAppFlow.from_client_config",
+        return_value=fake_flow,
+    ):
+        token = mint_refresh_token(client_id="cid", client_secret="sec", expected_email=None)
+    assert token == "rt-helper"
+
+
+def test_mint_refresh_token_match_returns_token() -> None:
+    from cosinabox.cli.auth_google import mint_refresh_token
+
+    fake_flow = MagicMock()
+    fake_flow.run_local_server.return_value = MagicMock(refresh_token="rt-match")
+    with (
+        patch(
+            "cosinabox.cli.auth_google.InstalledAppFlow.from_client_config",
+            return_value=fake_flow,
+        ),
+        patch(
+            "cosinabox.cli.auth_google._consented_email",
+            return_value="rovik@example.com",
+        ),
+    ):
+        token = mint_refresh_token(
+            client_id="cid", client_secret="sec", expected_email="rovik@example.com"
+        )
+    assert token == "rt-match"
+
+
+def test_mint_refresh_token_mismatch_raises() -> None:
+    from cosinabox.cli.auth_google import AccountMismatchError, mint_refresh_token
+
+    fake_flow = MagicMock()
+    fake_flow.run_local_server.return_value = MagicMock(refresh_token="rt-bad")
+    with (
+        patch(
+            "cosinabox.cli.auth_google.InstalledAppFlow.from_client_config",
+            return_value=fake_flow,
+        ),
+        patch(
+            "cosinabox.cli.auth_google._consented_email",
+            return_value="someone-else@example.com",
+        ),
+        pytest.raises(AccountMismatchError) as exc,
+    ):
+        mint_refresh_token(client_id="cid", client_secret="sec", expected_email="rovik@example.com")
+    msg = str(exc.value)
+    assert "someone-else@example.com" in msg
+    assert "rovik@example.com" in msg
+
+
+def test_mint_refresh_token_unverifiable_raises() -> None:
+    from cosinabox.cli.auth_google import AccountUnverifiableError, mint_refresh_token
+
+    fake_flow = MagicMock()
+    fake_flow.run_local_server.return_value = MagicMock(refresh_token="rt-x")
+    with (
+        patch(
+            "cosinabox.cli.auth_google.InstalledAppFlow.from_client_config",
+            return_value=fake_flow,
+        ),
+        patch("cosinabox.cli.auth_google._consented_email", return_value=None),
+        pytest.raises(AccountUnverifiableError),
+    ):
+        mint_refresh_token(client_id="cid", client_secret="sec", expected_email="rovik@example.com")

@@ -5,6 +5,23 @@
 
 This script walks the user through getting a Google OAuth refresh token for Gmail + Calendar. The agent reads each step *one at a time* and waits for the user's confirmation before moving to the next.
 
+## Re-auth: token expired
+
+If `auth_health` Telegrammed you that a Google token expired, you do **not** need to repeat the manual GCP-console steps below. Run:
+
+```bash
+cosinabox auth refresh
+```
+
+This pulls your OAuth client creds from Railway, runs consent in your browser, writes the new refresh token back to Railway, and redeploys. If you have multiple Google accounts, it'll ask which one. If exactly one, it auto-selects.
+
+Use the manual flow below only when:
+- you're setting up a brand-new CoS for the first time, or
+- you're not deploying to Railway (AWS / Fly support is on the roadmap), or
+- `cosinabox auth refresh` itself errors out.
+
+## First-time setup (manual GCP console flow)
+
 ## Why this is manual
 
 Google OAuth requires manual clicks in the GCP console. There is no API to automate this for the consumer flow. Plan ~15 minutes.
