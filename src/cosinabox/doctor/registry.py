@@ -7,6 +7,7 @@ from cosinabox.doctor.checks import (
     Check,
     CostRunawayCheck,
     OAuthExpiringCheck,
+    OAuthRefreshLiveCheck,
     PersonalityThinCheck,
     PrepNoiseCheck,
     SchemaOutdatedCheck,
@@ -26,5 +27,6 @@ REGISTRY: list[Check] = [
     SecretInTrackedFileCheck(),
     StaleFollowupsCheck(),
     OAuthExpiringCheck(),
+    OAuthRefreshLiveCheck(),  # network=True; gated by --offline
     SchemaOutdatedCheck(),
 ]
