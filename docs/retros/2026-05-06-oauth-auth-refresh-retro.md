@@ -103,3 +103,44 @@ Plan → 9 milestones, TDD per task, single PR with auto-merge. Five sign-off qu
 
 The "M2–M7 took ~50% of plan budget" data point above was misleading: it counted *test-passing* time, not *correct* time. The real Initiative A cost was Plan + PR #86 (~2.5 hr) + PR #87 stress fixes (~1 hr) = ~3.5 hr against the 5 hr budget. Closer to 70% of plan, not 50%. The deferred M8 was hidden technical debt that came due immediately.
 
+---
+
+## Addendum 2 (same day, M8 finally ran) — one race, one diagnostic gap (PR #90)
+
+The maintainer ran the real `cosinabox auth refresh` against `rovik-keevs` after PR #88 merged. The flow ran cleanly through:
+
+- ✅ Project/service detection (`Detected Railway: project=rovik-keevs service=rovik-keevs` — confirms PR #87's S1+S2 schema fix against the real CLI).
+- ✅ Multi-account picker rendered correctly with both emails.
+- ✅ Confirmation prompt + browser consent.
+- ✅ Token written to `GOOGLE_OAUTH_REFRESH_TOKEN_2` (correct slot for account #2; no leak in stdout).
+
+Then **`railway redeploy --yes` exited 1**: "Could not trigger redeploy (railway CLI exit 1). Run `railway logs` to inspect, then retry."
+
+### The race
+
+Railway's `variable set` triggers a deploy automatically by default. Our flow was:
+1. `railway variable set GOOGLE_OAUTH_REFRESH_TOKEN_2 --stdin` → Railway queued a deploy
+2. Our code immediately ran `railway redeploy --yes` → exit 1, "deploy already in progress"
+3. Maintainer ran `railway redeploy --yes` manually a few seconds later → worked
+
+The token write succeeded, so the flow's *outcome* was fine. But the failure surface was visible to the user, and the second issue made it five minutes of debugging.
+
+### The diagnostic gap
+
+PR #87 stripped captured `stdout`/`stderr` from `RailwayError` messages to prevent token leaks (S4). I applied that hardening to **both** `set_variable` (where the leak risk is real) and `redeploy` (where there's no secret in the invocation). Result: Railway's actual "deploy already in progress" message was hidden behind the generic "railway CLI exit 1." Differential leak avoidance is the right shape: hide output from `set_variable` (carries secrets), surface it from `redeploy` (carries none).
+
+### PR #90 fixes
+
+1. `set_variable` passes `--skip-deploys` so it doesn't kick off its own deploy. The orchestrator's explicit `redeploy()` is the only deploy trigger.
+2. `redeploy` failures fold the captured stderr/stdout into the user-facing error.
+
+Both have new unit tests. Real-binary M8 already ran (that's where the bug was found); future invocations against any Railway deploy avoid the race.
+
+### What this changes (third confirmation of the rule)
+
+- **PR #87** (post-merge stress test): six bugs in two minutes of manual smoke. Validated the rule.
+- **PR #88** (M5b real-Google API smoke): passed clean. Validated the rule by virtue of *not* finding bugs — discipline working as intended.
+- **PR #90** (M8 against real Railway, finally): one race + one diagnostic gap. Validated the rule again.
+
+The rule from `feedback_cli_wrapper_smoke_test.md` is now backed by three concrete data points across three PRs in one session. **It works.**
+
