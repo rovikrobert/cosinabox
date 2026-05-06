@@ -139,3 +139,91 @@ def _patch_happy_path_railway(token_for_email: dict[str, str]) -> Any:
         return stack, set_calls
 
     return enter
+
+
+def test_auth_refresh_account_flag_selects_named_account(tmp_path: Path) -> None:
+    cfg_dir = _write_integrations(
+        tmp_path,
+        [{"email": "primary@example.com"}, {"email": "secondary@example.com"}],
+    )
+    enter = _patch_happy_path_railway({"secondary@example.com": "rt-secondary"})
+    stack, set_calls = enter()
+    with stack:
+        result = CliRunner().invoke(
+            cli,
+            [
+                "-C",
+                str(cfg_dir),
+                "auth",
+                "refresh",
+                "--account",
+                "secondary@example.com",
+                "--yes",
+            ],
+        )
+    assert result.exit_code == 0, result.output
+    # Slot 2 because secondary is accounts[1].
+    assert ("GOOGLE_OAUTH_REFRESH_TOKEN_2", "rt-secondary") in set_calls
+
+
+def test_auth_refresh_account_flag_unknown_email_errors(tmp_path: Path) -> None:
+    cfg_dir = _write_integrations(tmp_path, [{"email": "primary@example.com"}])
+    # No mocks needed past load_integrations — we should bail before
+    # touching Railway.
+    result = CliRunner().invoke(
+        cli,
+        [
+            "-C",
+            str(cfg_dir),
+            "auth",
+            "refresh",
+            "--account",
+            "stranger@example.com",
+            "--yes",
+        ],
+    )
+    assert result.exit_code != 0
+    assert "stranger@example.com" in result.output
+    assert "primary@example.com" in result.output  # configured ones listed
+
+
+def test_auth_refresh_picker_writes_to_chosen_slot(tmp_path: Path) -> None:
+    cfg_dir = _write_integrations(
+        tmp_path,
+        [{"email": "primary@example.com"}, {"email": "secondary@example.com"}],
+    )
+    enter = _patch_happy_path_railway({"secondary@example.com": "rt-picked"})
+    stack, set_calls = enter()
+    with stack:
+        # CliRunner's `input` feeds stdin to click.prompt.
+        result = CliRunner().invoke(
+            cli,
+            ["-C", str(cfg_dir), "auth", "refresh", "--yes"],
+            input="2\n",
+        )
+    assert result.exit_code == 0, result.output
+    # Picker lines printed.
+    assert "1. primary@example.com" in result.output
+    assert "2. secondary@example.com" in result.output
+    assert ("GOOGLE_OAUTH_REFRESH_TOKEN_2", "rt-picked") in set_calls
+
+
+def test_auth_refresh_account_flag_is_case_insensitive(tmp_path: Path) -> None:
+    cfg_dir = _write_integrations(tmp_path, [{"email": "Mixed@Example.COM"}])
+    enter = _patch_happy_path_railway({"Mixed@Example.COM": "rt-case"})
+    stack, set_calls = enter()
+    with stack:
+        result = CliRunner().invoke(
+            cli,
+            [
+                "-C",
+                str(cfg_dir),
+                "auth",
+                "refresh",
+                "--account",
+                "mixed@example.com",
+                "--yes",
+            ],
+        )
+    assert result.exit_code == 0, result.output
+    assert ("GOOGLE_OAUTH_REFRESH_TOKEN_1", "rt-case") in set_calls
