@@ -15,8 +15,10 @@ import pytest
 from cosinabox.cli import _railway
 
 
-def _make_completed(stdout: str = "", returncode: int = 0) -> subprocess.CompletedProcess[str]:
-    return subprocess.CompletedProcess(args=[], returncode=returncode, stdout=stdout, stderr="")
+def _make_completed(
+    stdout: str = "", returncode: int = 0, stderr: str = ""
+) -> subprocess.CompletedProcess[str]:
+    return subprocess.CompletedProcess(args=[], returncode=returncode, stdout=stdout, stderr=stderr)
 
 
 def test_cli_available_true_when_on_path() -> None:
@@ -138,6 +140,28 @@ def test_set_variable_uses_stdin_not_argv() -> None:
     assert captured["input"] == "rt-secret-1234"
 
 
+def test_set_variable_passes_skip_deploys_to_avoid_race() -> None:
+    """Railway's `variable set` triggers a redeploy automatically by default.
+    The orchestrator wants to be the only thing triggering deploys (so its
+    explicit `redeploy` call is the deterministic one). Without
+    --skip-deploys, the implicit deploy from `variable set` races with our
+    explicit one, and the explicit redeploy fails with exit 1 because a
+    deploy is already in flight. Found by M8 smoke against rovik-keevs.
+    """
+    captured: dict[str, object] = {}
+
+    def fake_run(args: list[str], **kw: object) -> subprocess.CompletedProcess[str]:
+        captured["args"] = list(args)
+        return _make_completed()
+
+    with patch("cosinabox.cli._railway.subprocess.run", side_effect=fake_run):
+        _railway.set_variable("FOO", "bar")
+
+    args = captured["args"]
+    assert isinstance(args, list)
+    assert "--skip-deploys" in args
+
+
 def test_set_variable_error_does_not_leak_value() -> None:
     """Railway's CLI can echo the K=V (or just the value) on failure
     (e.g. validation error). The adapter must NOT fold raw stdout/stderr
@@ -171,6 +195,30 @@ def test_redeploy_invokes_deploy_verb() -> None:
     assert "redeploy" in captured["args"]
     # -y / --yes is required to skip the interactive confirmation.
     assert any(flag in captured["args"] for flag in ("-y", "--yes"))
+
+
+def test_redeploy_error_includes_railway_cli_output() -> None:
+    """Unlike set_variable, redeploy carries no secret in its argv — so
+    the captured stderr can safely be folded into the user-facing error
+    message. The previous shape ("railway CLI exit 1") was too sparse to
+    diagnose: M8 smoke found a Railway-side race condition that took five
+    minutes to identify because the actual error string was hidden.
+    """
+    actual_railway_output = (
+        "Error: A deployment is already in progress. Please wait for it "
+        "to finish before triggering another."
+    )
+    with (
+        patch(
+            "cosinabox.cli._railway.subprocess.run",
+            return_value=_make_completed(returncode=1, stdout="", stderr=actual_railway_output),
+        ),
+        pytest.raises(_railway.RailwayError) as exc,
+    ):
+        _railway.redeploy()
+    msg = str(exc.value)
+    # The real Railway output must be visible so the user can diagnose.
+    assert "deployment is already in progress" in msg.lower()
 
 
 # `wait_for_deployment` was removed (S1+S2 stress-test fix): railway 4.x
