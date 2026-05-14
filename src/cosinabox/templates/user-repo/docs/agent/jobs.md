@@ -4,6 +4,7 @@ Your CoS runs background jobs on a schedule. Enable or disable them in `jobs.yam
 
 | Job | Default | Schedule | What it does |
 |-----|---------|----------|-------------|
+| auth_health | enabled | every 15 min | Probes Google refresh tokens; alerts on revocation. Run `cosinabox auth refresh` to fix. |
 | morning_briefing | enabled | 8:00 AM | Daily briefing: calendar, email, priorities |
 | pre_meeting_prep | enabled | every 5 min | Sends context 30 min before meetings |
 | evening_wrap | disabled | 6:00 PM | End-of-day summary |

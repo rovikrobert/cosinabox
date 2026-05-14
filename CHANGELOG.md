@@ -6,6 +6,18 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+- `SECURITY.md` — security policy and private vulnerability reporting channel via GitHub Security Advisories.
+
+### Changed
+- README job count corrected from "5 built-in jobs" to "13" (existing breadth was undersold).
+- `pyproject.toml` author updated to "Rovik Robert" (was "Cantina").
+- `docs/agent/jobs.md` (user-repo template) now lists the `auth_health` job that already ships enabled by default.
+
+### Fixed
+- README and CONTRIBUTING.md `git clone` placeholder URL (`github.com/user/cosinabox`) replaced with the real URL.
+- User-repo template `CLAUDE.md` engine-docs link no longer points at a non-existent `cosinabox/cosinabox` org with internal lore in parentheses.
+
 ## [0.1.6] — 2026-05-06
 
 OAuth UX rework — Initiatives A → C of `docs/specs/2026-05-06-oauth-ux-rework.md`. Re-authenticating an expired Google refresh token used to be a 10-step manual scavenger hunt across Google Cloud Console, Railway, a local terminal, and Telegram. After this release, it's one command, one browser consent, and a Telegram alert that confirms the new token works.
