@@ -43,7 +43,7 @@ These files are intentionally small so the agent can load each one fully when re
 ## See also
 
 - `BEST_PRACTICES.md` — the wisdom file. Short. Read it.
-- The engine docs: https://github.com/cosinabox/cosinabox (public after Plan 3)
+- The engine docs: https://github.com/rovikrobert/cosinabox
 
 ## What's next
 

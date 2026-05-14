@@ -5,7 +5,7 @@ Thank you for your interest in contributing!
 ## Development Setup
 
 ```bash
-git clone https://github.com/user/cosinabox.git
+git clone https://github.com/rovikrobert/cosinabox.git
 cd cosinabox
 python -m venv .venv
 source .venv/bin/activate

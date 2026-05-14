@@ -5,11 +5,11 @@
 
 Open-source Chief of Staff in a box. Opinionated, proactive, runs on your own infra.
 
-CoSinaBox is a self-hosted AI Chief of Staff agent that runs your day. It ships with default morning briefing, pre-meeting prep, evening wrap, weekly review, and follow-up tracking. You configure *who it's for*, not *what it does*.
+CoSinaBox is a self-hosted AI Chief of Staff agent that runs your day. Out of the box: morning briefing, pre-meeting prep, evening wrap, weekly review, follow-up tracking. Optional jobs cover urgent-email triage, meeting-transcript extraction, CRM sync, and multi-person scheduling. You configure *who it's for*, not *what it does*.
 
 ## Key Features
 
-- **5 built-in jobs:** morning briefing, pre-meeting prep, evening wrap, weekly review, follow-up nudges
+- **13 built-in jobs:** daily briefings (morning / evening / weekly), pre- and post-meeting prep, follow-up nudges, urgent-email alerts, meeting-transcript extraction, CRM sync, multi-person scheduling, OAuth health monitoring
 - **Telegram-first:** primary interface via Telegram bot
 - **Google integration:** Calendar, Gmail, Drive (optional)
 - **SQLite memory:** persistent context without external databases
@@ -50,7 +50,7 @@ cosinabox run
 
 ```bash
 # Clone and install in dev mode
-git clone https://github.com/user/cosinabox.git
+git clone https://github.com/rovikrobert/cosinabox.git
 cd cosinabox
 python -m venv .venv
 source .venv/bin/activate
@@ -78,7 +78,7 @@ cosinabox/
 │   ├── app/           # App orchestrator (config, tools, jobs, alerts, chat)
 │   ├── bot/           # Telegram adapter
 │   ├── cli/           # CLI commands (init, run, doctor)
-│   ├── jobs/          # 5 built-in jobs
+│   ├── jobs/          # 13 built-in jobs
 │   ├── memory/        # SQLite persistence layer
 │   ├── scheduling/    # APScheduler integration
 │   ├── tools/         # External integrations (Google, Fireflies, Serper)
