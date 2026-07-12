@@ -78,10 +78,14 @@ def _make_fireflies() -> MagicMock:
     return ff
 
 
-def _make_web_search() -> MagicMock:
-    ws = MagicMock()
-    ws.search.return_value = [{"title": "Result 1", "link": "https://example.com"}]
-    return ws
+def _make_web_search() -> bool:
+    """Presence sentinel — Anthropic runs web_search server-side; no local instance."""
+    return True
+
+
+def _is_custom_tool(defn: dict) -> bool:
+    """True for locally-dispatched tools; False for Anthropic server tools."""
+    return "input_schema" in defn
 
 
 # ---------------------------------------------------------------------------
@@ -138,18 +142,23 @@ class TestBuildToolRegistry:
             "web_search": _make_web_search(),
         }
         defs, handlers = build_tool_registry(instances)
-        expected_count = (
+        expected_defs = (
             len(GMAIL_TOOL_DEFINITIONS)
             + len(CALENDAR_TOOL_DEFINITIONS)
             + len(ATTIO_TOOL_DEFINITIONS)
             + len(FIREFLIES_TOOL_DEFINITIONS)
             + len(WEB_SEARCH_TOOL_DEFINITIONS)
         )
-        assert len(defs) == expected_count
-        assert len(handlers) == expected_count
+        assert len(defs) == expected_defs
+        # web_search is an Anthropic server tool — no local handler.
+        assert len(handlers) == expected_defs - len(WEB_SEARCH_TOOL_DEFINITIONS)
 
     def test_definition_handler_names_match(self) -> None:
-        """Every definition has a matching handler, no orphans."""
+        """Every custom-tool definition has a matching handler, no orphans.
+
+        Server tools (Anthropic-managed) have no local handler and are
+        excluded from this check.
+        """
         instances = {
             "gmail": _make_gmail(),
             "calendar": _make_calendar(),
@@ -158,11 +167,15 @@ class TestBuildToolRegistry:
             "web_search": _make_web_search(),
         }
         defs, handlers = build_tool_registry(instances)
-        def_names = {d["name"] for d in defs}
-        assert def_names == set(handlers.keys())
+        custom_def_names = {d["name"] for d in defs if _is_custom_tool(d)}
+        assert custom_def_names == set(handlers.keys())
 
     def test_definitions_have_required_fields(self) -> None:
-        """All tool definitions have name, description, and input_schema."""
+        """Custom tool definitions have name, description, and input_schema.
+
+        Server tools (Anthropic-managed) have a distinct shape: `type` +
+        `name` only, and their own version-specific optional fields.
+        """
         instances = {
             "gmail": _make_gmail(),
             "calendar": _make_calendar(),
@@ -173,6 +186,10 @@ class TestBuildToolRegistry:
         defs, _ = build_tool_registry(instances)
         for d in defs:
             assert "name" in d, f"Missing 'name' in {d}"
+            if not _is_custom_tool(d):
+                # Server tool: only requires `type` + `name`.
+                assert "type" in d, f"Server tool '{d.get('name')}' missing 'type'"
+                continue
             assert "description" in d, f"Missing 'description' in {d.get('name')}"
             assert "input_schema" in d, f"Missing 'input_schema' in {d.get('name')}"
             schema = d["input_schema"]
@@ -181,7 +198,10 @@ class TestBuildToolRegistry:
             assert "required" in schema
 
     def test_no_hardcoded_user_names_in_descriptions(self) -> None:
-        """OSS-friendly: no hardcoded names like 'Rovik' in tool descriptions."""
+        """OSS-friendly: no hardcoded names like 'Rovik' in tool descriptions.
+
+        Server tools have no `description` field — skipped.
+        """
         instances = {
             "gmail": _make_gmail(),
             "calendar": _make_calendar(),
@@ -192,7 +212,10 @@ class TestBuildToolRegistry:
         defs, _ = build_tool_registry(instances)
         forbidden = ["rovik", "cantina", "majiq"]
         for d in defs:
-            desc_lower = d["description"].lower()
+            desc = d.get("description")
+            if not desc:
+                continue
+            desc_lower = desc.lower()
             for word in forbidden:
                 assert word not in desc_lower, (
                     f"Tool '{d['name']}' description contains '{word}' — not OSS-friendly"
@@ -254,11 +277,13 @@ class TestHandlerExecution:
         result = handlers["crm_get_person"](name="Nobody")
         assert "No person found" in result
 
-    def test_web_search_caps_num(self) -> None:
-        ws = _make_web_search()
-        _, handlers = build_tool_registry({"web_search": ws})
-        handlers["web_search"](query="test", num=20)
-        ws.search.assert_called_once_with("test", num=10)
+    def test_web_search_registered_as_server_tool(self) -> None:
+        """web_search should register a server tool (no local handler)."""
+        defs, handlers = build_tool_registry({"web_search": _make_web_search()})
+        assert "web_search" not in handlers
+        server_defs = [d for d in defs if d.get("name") == "web_search"]
+        assert len(server_defs) == 1
+        assert server_defs[0]["type"].startswith("web_search_")
 
     def test_fireflies_list_meetings(self) -> None:
         ff = _make_fireflies()

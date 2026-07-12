@@ -81,24 +81,11 @@ def build_tools(
                 errors.append(f"Fireflies init failed: {exc}")
 
     if integrations.get("web_search", {}).get("enabled"):
-        api_key = os.getenv("SERPER_API_KEY")
-        if not api_key:
-            msg = (
-                "Web search enabled in integrations.yaml but "
-                "SERPER_API_KEY not set in .env — skipping. "
-                "Web search will be unavailable."
-            )
-            logger.warning(msg)
-            errors.append(msg)
-        else:
-            try:
-                from cosinabox.tools.web_search import WebSearchTool
-
-                tools["web_search"] = WebSearchTool(api_key=api_key)
-                logger.info("Web search tool loaded")
-            except Exception as exc:
-                logger.warning("Web search unavailable", exc_info=True)
-                errors.append(f"Web search init failed: {exc}")
+        # Anthropic-managed server tool: no external API key needed. The
+        # value here is just a presence sentinel so build_tool_registry
+        # registers the tool definition.
+        tools["web_search"] = True
+        logger.info("Web search tool enabled (Anthropic server tool)")
 
     if integrations.get("attio", {}).get("enabled"):
         try:

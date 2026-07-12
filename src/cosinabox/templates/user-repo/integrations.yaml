@@ -14,7 +14,7 @@ integrations:
   fireflies:
     enabled: false   # Meeting transcripts — requires FIREFLIES_API_KEY in .env
   web_search:
-    enabled: false   # Google search via Serper.dev — requires SERPER_API_KEY in .env
+    enabled: false   # Anthropic-managed server tool — no API key needed
 
 # Scheduling sub-system configuration (optional).
 # The presence of this section (OR `scheduling_poll_check` in jobs.yaml) wires

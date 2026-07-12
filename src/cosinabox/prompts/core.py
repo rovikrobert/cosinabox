@@ -99,4 +99,6 @@ _SYSTEM_PROMPT = Template(_SYSTEM_PROMPT_SRC)
 
 
 def render_system_prompt(*, personality: str, name: str, timezone: str) -> str:
-    return _SYSTEM_PROMPT.render(personality=personality, name=name, timezone=timezone)
+    # jinja2's Template.render() returns str at runtime but its post-2026-05
+    # stubs type it as Any; the str() cast keeps mypy --strict happy.
+    return str(_SYSTEM_PROMPT.render(personality=personality, name=name, timezone=timezone))

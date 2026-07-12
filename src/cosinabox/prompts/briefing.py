@@ -34,10 +34,13 @@ def render_briefing_prompt(
     email_summary: str,
     followups: str,
 ) -> str:
-    return _BRIEFING_PROMPT.render(
-        personality=personality,
-        name=name,
-        calendar_summary=calendar_summary,
-        email_summary=email_summary,
-        followups=followups,
+    # See prompts/core.py — jinja2 stubs type Template.render() as Any.
+    return str(
+        _BRIEFING_PROMPT.render(
+            personality=personality,
+            name=name,
+            calendar_summary=calendar_summary,
+            email_summary=email_summary,
+            followups=followups,
+        )
     )
