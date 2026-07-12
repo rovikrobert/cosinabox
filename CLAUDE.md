@@ -75,7 +75,7 @@ These are strong defaults. Breaking them requires a one-line justification in th
 
 4. **No personal data in tests.** Tests use generic fixtures (`tests/fixtures/sample/`). Never use real stakeholder names, real meeting titles, or real email content. If a test needs realistic data, generate it.
 
-5. **Optional integrations are optional dependencies.** Anything beyond Anthropic + Telegram + Google goes in an extras group in `pyproject.toml` (`[fireflies]`, `[search]`, etc.). The engine must run with only the core install.
+5. **Optional integrations are optional dependencies.** Anything beyond Anthropic + Telegram + Google goes in an extras group in `pyproject.toml` (`[fireflies]`, `[attio]`, etc.). The engine must run with only the core install.
 
 6. **Graceful degradation.** Every job must handle "tool not configured" without crashing. If `fireflies` isn't installed, `morning_briefing` runs without the meeting transcript section, not with a stack trace.
 

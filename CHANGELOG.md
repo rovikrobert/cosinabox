@@ -86,7 +86,7 @@ Initial public release.
 - Google integration (optional extra `[google]`): Calendar + Gmail tools, OAuth flow.
 - Attio integration (optional extra `[attio]`): stakeholder CRM sync, keep-warm reminders.
 - Fireflies integration (optional extra `[fireflies]`): meeting transcript ingest for post-meeting debrief.
-- Serper integration (optional extra `[search]`): web search tool.
+- Web search tool: Anthropic-managed server tool (no external API key required).
 - Persona templates (one ships: `founder`).
 - Setup interview state machine via `cosinabox init`.
 - JSON Schemas for `personality.md`, `stakeholders.yaml`, `jobs.yaml`, `integrations.yaml`.

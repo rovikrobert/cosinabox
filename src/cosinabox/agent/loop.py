@@ -108,8 +108,24 @@ def _wrap_untrusted(data: str) -> str:
     return "<untrusted_tool_output>\n" + data + "\n</untrusted_tool_output>"
 
 
+def _is_advisor_block(b: Any) -> bool:
+    """True iff a content block is an advisor-specific server tool artifact.
+
+    Filters by tool name, not just type — otherwise this also strips
+    web_search server_tool_use / web_search_tool_result blocks, which
+    remain valid history when the web_search server tool is enabled.
+    """
+    if isinstance(b, dict):
+        t = b.get("type")
+        name = b.get("name")
+    else:
+        t = getattr(b, "type", None)
+        name = getattr(b, "name", None)
+    return t == "advisor_tool_result" or (t == "server_tool_use" and name == "advisor")
+
+
 def _strip_advisor_blocks(messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """Remove server_tool_use and advisor_tool_result blocks from history.
+    """Remove advisor server_tool_use and advisor_tool_result blocks from history.
 
     Required because the API returns 400 if the current turn doesn't use
     advisor but history contains advisor blocks.
@@ -118,17 +134,7 @@ def _strip_advisor_blocks(messages: list[dict[str, Any]]) -> list[dict[str, Any]
     for msg in messages:
         content = msg.get("content")
         if isinstance(content, list):
-            filtered = [
-                b
-                for b in content
-                if not (
-                    isinstance(b, dict)
-                    and b.get("type") in ("server_tool_use", "advisor_tool_result")
-                )
-                and not (
-                    hasattr(b, "type") and b.type in ("server_tool_use", "advisor_tool_result")
-                )
-            ]
+            filtered = [b for b in content if not _is_advisor_block(b)]
             if filtered:
                 cleaned.append({**msg, "content": filtered})
         else:

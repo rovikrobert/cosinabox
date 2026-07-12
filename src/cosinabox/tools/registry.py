@@ -415,27 +415,15 @@ FIREFLIES_TOOL_DEFINITIONS: list[dict[str, Any]] = [
 # Web search tool definitions
 # ---------------------------------------------------------------------------
 
+# Anthropic-managed server tool: search runs inside messages.create, no
+# local handler and no external API key. The 20250305 type is the oldest
+# stable version and remains the safest pin. Bumping requires re-testing
+# against the server's return-block schema.
 WEB_SEARCH_TOOL_DEFINITIONS: list[dict[str, Any]] = [
     {
+        "type": "web_search_20250305",
         "name": "web_search",
-        "description": (
-            "Search the web via Google. Returns organic results with titles, links, and snippets."
-        ),
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "query": {
-                    "type": "string",
-                    "description": "Search query.",
-                },
-                "num": {
-                    "type": "integer",
-                    "description": "Number of results (default 5, max 10).",
-                    "default": 5,
-                },
-            },
-            "required": ["query"],
-        },
+        "max_uses": 5,
     },
 ]
 
@@ -784,16 +772,6 @@ def _build_fireflies_handlers(fireflies: Any) -> dict[str, Callable[..., str]]:
     }
 
 
-def _build_web_search_handlers(web_search: Any) -> dict[str, Callable[..., str]]:
-    """Build handler dict from a WebSearchTool instance."""
-
-    def do_web_search(query: str, num: int = 5) -> str:
-        results = web_search.search(query, num=min(num, 10))
-        return _serialize(results)
-
-    return {"web_search": do_web_search}
-
-
 # ---------------------------------------------------------------------------
 # Public API: build_tool_registry
 # ---------------------------------------------------------------------------
@@ -844,8 +822,10 @@ def build_tool_registry(
         logger.info("Registered %d Fireflies tools", len(FIREFLIES_TOOL_DEFINITIONS))
 
     if "web_search" in tool_instances:
+        # Server tool: no local handler. Anthropic runs the search inside
+        # messages.create and returns web_search_tool_result blocks that
+        # Claude reads directly.
         definitions.extend(WEB_SEARCH_TOOL_DEFINITIONS)
-        handlers.update(_build_web_search_handlers(tool_instances["web_search"]))
         logger.info("Registered %d web search tools", len(WEB_SEARCH_TOOL_DEFINITIONS))
 
     # Rela query tool (registered if rela agent is available)
@@ -884,12 +864,14 @@ def build_tool_registry(
         handlers.update(build_commitment_handlers(memory))
         logger.info("Registered %d commitment tools", len(COMMITMENT_TOOL_DEFINITIONS))
 
-    # Consistency check: every definition has a matching handler
-    def_names = {d["name"] for d in definitions}
+    # Consistency check: every custom-tool definition has a matching handler.
+    # Server tools (Anthropic-managed, identified by absence of input_schema)
+    # execute inside messages.create and have no local handler.
+    custom_def_names = {d["name"] for d in definitions if "input_schema" in d}
     handler_names = set(handlers.keys())
-    assert def_names == handler_names, (
+    assert custom_def_names == handler_names, (
         f"Tool definition/handler mismatch: "
-        f"defs={def_names - handler_names}, handlers={handler_names - def_names}"
+        f"defs={custom_def_names - handler_names}, handlers={handler_names - custom_def_names}"
     )
 
     logger.info("Tool registry: %d tools registered", len(definitions))

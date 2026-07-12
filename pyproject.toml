@@ -41,7 +41,6 @@ google = [
   "google-auth-httplib2>=0.2",
 ]
 fireflies = ["httpx>=0.27"]
-search = ["httpx>=0.27"]
 attio = ["httpx>=0.27"]
 # MCP consult endpoint (cosinabox consult-serve). Optional per CLAUDE.md rule 5:
 # not every deployment exposes a consult server, so the `mcp` Python SDK stays
