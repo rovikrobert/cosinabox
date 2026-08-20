@@ -17,6 +17,7 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ### Fixed
 - README and CONTRIBUTING.md `git clone` placeholder URL (`github.com/user/cosinabox`) replaced with the real URL.
 - User-repo template `CLAUDE.md` engine-docs link no longer points at a non-existent `cosinabox/cosinabox` org with internal lore in parentheses.
+- `pip install cosinabox[consult]` no longer installs a broken consult server. The `mcp` requirement was unbounded (`>=1.12`), so a fresh resolve picked up **mcp 2.0.0**, which removed the `mcp.server.fastmcp` package `consult/server.py` imports — the 2.0.0 wheel ships no `fastmcp` path at all. Now capped at `>=1.12,<2` in both the `consult` and `dev` groups. CI was green only because earlier runs predated the 2.0.0 release; it went red on the next PR against an untouched file.
 
 ## [0.1.6] — 2026-05-06
 
