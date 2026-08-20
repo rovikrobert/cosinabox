@@ -13,11 +13,13 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - README job count corrected from "5 built-in jobs" to "13" (existing breadth was undersold).
 - `pyproject.toml` author updated to "Rovik Robert" (was "Cantina").
 - `docs/agent/jobs.md` (user-repo template) now lists the `auth_health` job that already ships enabled by default.
+- New `defaults.TRANSCRIPT_TITLE_MIN_TOKEN_CHARS` (3) replaces an inline `len(w) > 2` in the debrief matcher, per CLAUDE.md rule 3. (#94)
 
 ### Fixed
 - README and CONTRIBUTING.md `git clone` placeholder URL (`github.com/user/cosinabox`) replaced with the real URL.
 - User-repo template `CLAUDE.md` engine-docs link no longer points at a non-existent `cosinabox/cosinabox` org with internal lore in parentheses.
 - `pip install cosinabox[consult]` no longer installs a broken consult server. The `mcp` requirement was unbounded (`>=1.12`), so a fresh resolve picked up **mcp 2.0.0**, which removed the `mcp.server.fastmcp` package `consult/server.py` imports — the 2.0.0 wheel ships no `fastmcp` path at all. Now capped at `>=1.12,<2` in both the `consult` and `dev` groups. CI was green only because earlier runs predated the 2.0.0 release; it went red on the next PR against an untouched file.
+- `post_meeting_debrief` no longer reports "no transcript" for a meeting whose transcript exists. Title-word overlap dropped every token under 3 characters, discarding short letter+digit words like `Q3`, `V2` or `F1` — frequently the only word two titles share, and the only signal available at all when a transcript source populates `participants` with the owner alone (which makes the attendee-overlap check a no-op). Titles are now split on punctuation too, so `Q3-planning` can overlap `Q3 planning` and `budget,` can overlap `budget`. Time proximity stays mandatory, so nothing outside `TRANSCRIPT_TIME_WINDOW_SECONDS` can be pulled in, and bare numbers (`10`) plus short pure-alpha words (`go`) stay filtered as noise. (#94)
 
 ## [0.1.6] — 2026-05-06
 

@@ -56,6 +56,34 @@ def _owner_first_names(owner_emails: Iterable[str]) -> set[str]:
     return names
 
 
+_TOKEN_SPLIT_RE = re.compile(r"[^a-z0-9]+")
+
+
+def _title_tokens(title: str, exclude: set[str]) -> set[str]:
+    """Topic-bearing words in a meeting title, minus ``exclude``.
+
+    Splits on any run of non-alphanumerics, so "Q3-planning" yields
+    "q3" + "planning" and "budget," sheds its comma. Without that, a title
+    written with punctuation can never overlap its unpunctuated twin.
+
+    Tokens shorter than ``defaults.TRANSCRIPT_TITLE_MIN_TOKEN_CHARS`` are
+    dropped as noise, EXCEPT letter+digit mixes ("q3", "v2", "f1"), which
+    are usually the most distinctive word in a title. That exemption is
+    load-bearing: when a transcript source reports only the owner as a
+    participant, the attendee-overlap check below can never fire and title
+    text is the sole live signal, so dropping a short token like "q3" can
+    lose the only pairing evidence available.
+    """
+    tokens: set[str] = set()
+    for tok in _TOKEN_SPLIT_RE.split((title or "").lower()):
+        if not tok or tok in exclude:
+            continue
+        is_alphanumeric_mix = any(c.isdigit() for c in tok) and any(c.isalpha() for c in tok)
+        if len(tok) >= defaults.TRANSCRIPT_TITLE_MIN_TOKEN_CHARS or is_alphanumeric_mix:
+            tokens.add(tok)
+    return tokens
+
+
 def _transcript_matches(
     transcript: dict[str, Any],
     *,
@@ -74,9 +102,13 @@ def _transcript_matches(
 
     Plus at least one of:
       - title substring (case-insensitive, either direction)
-      - title word overlap (>2 chars), excluding the owner's own
-        first-name fragments (e.g. ``alice`` from ``alice@x.com``)
+      - title word overlap (see ``_title_tokens``), excluding the owner's
+        own first-name fragments (e.g. ``alice`` from ``alice@x.com``)
       - attendee email overlap, excluding the owner's own emails
+
+    Note that some transcript sources populate ``participants`` with the
+    owner alone, which makes the last check a no-op and leaves title text
+    as the only signal that can pair a transcript with its meeting.
     """
     t_dt = _parse_iso_date(transcript.get("date"))
     if t_dt is None:
@@ -94,8 +126,8 @@ def _transcript_matches(
         return True
 
     owner_names = _owner_first_names(owner_emails)
-    cal_words = {w for w in cal_lower.split() if len(w) > 2 and w not in owner_names}
-    t_words = {w for w in t_title.split() if len(w) > 2 and w not in owner_names}
+    cal_words = _title_tokens(cal_lower, owner_names)
+    t_words = _title_tokens(t_title, owner_names)
     if cal_words & t_words:
         return True
 
