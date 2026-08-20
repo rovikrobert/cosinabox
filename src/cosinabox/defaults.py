@@ -128,6 +128,14 @@ KEEP_WARM_REVIEW_MAX_ROWS: int = 20
 # (2026-04-17 — added when fixing cross-matched debrief transcripts.)
 TRANSCRIPT_TIME_WINDOW_SECONDS: int = 30 * 60
 
+# Title-word overlap ignores tokens shorter than this. Room numbers,
+# headcounts and stopwords ("of", "go", "10") carry no topic signal, so
+# matching on them would cross-pair adjacent meetings. Letter+digit tokens
+# ("q3", "v2") are exempt — see _title_tokens in jobs/post_meeting_debrief.
+# (2026-08-20 — moved from an inline `len(w) > 2` when a debrief missed its
+# own transcript because the only word the two titles shared was 2 chars.)
+TRANSCRIPT_TITLE_MIN_TOKEN_CHARS: int = 3
+
 # --- Consult (MCP endpoint) ---
 # 2026-04-20 — per cos-agent precedent; one stray Cowork/Claude Code loop
 # calling consult() in a tight loop shouldn't rack up $40 before the owner

@@ -177,6 +177,99 @@ class TestTranscriptMatchingTitle:
         )
 
 
+class TestTranscriptMatchingTitleTokens:
+    """Title tokenisation.
+
+    Two properties matter. Short alphanumeric tokens ("q3", "v2", "f1") are
+    often the most distinctive word in a meeting title and must survive the
+    noise filter — a plain length cutoff drops exactly the token that tells
+    two adjacent meetings apart. And tokens must split on punctuation, so a
+    title written "Q3-planning" can still overlap one written "Q3 planning".
+
+    Bare numbers and short pure-alpha words stay filtered: room numbers,
+    headcounts and stopwords carry no topic signal.
+    """
+
+    def test_short_alphanumeric_token_overlap_matches(self):
+        # The only word shared by the two titles is "q3" — every other token
+        # differs, participants are owner-only, and neither title contains the
+        # other. A length-only filter drops "q3" and loses a valid pairing.
+        assert _transcript_matches(
+            {
+                "title": "Q3 planning — budget, venue, and headcount with Bob",
+                "participants": ["alice@x.com"],
+                "date": "2026-04-13T10:05:00+00:00",
+            },
+            cal_title="AC/Alice - Q3 Offsite",
+            cal_emails={"alice@x.com"},
+            cal_start=CAL_START,
+            cal_end=CAL_END,
+            owner_emails={"alice@x.com"},
+        )
+
+    def test_punctuation_glued_tokens_still_overlap(self):
+        # "Q3-planning" must split into "q3" + "planning", and "budget," must
+        # shed its comma, or neither can ever match its unpunctuated twin.
+        assert _transcript_matches(
+            {
+                "title": "budget, planning",
+                "participants": ["alice@x.com"],
+                "date": "2026-04-13T10:05:00+00:00",
+            },
+            cal_title="Q3-planning",
+            cal_emails={"alice@x.com"},
+            cal_start=CAL_START,
+            cal_end=CAL_END,
+            owner_emails={"alice@x.com"},
+        )
+
+    def test_bare_number_overlap_does_not_match(self):
+        # "10" is a room number or a headcount, never a topic. Keeping short
+        # tokens must not degrade into matching on digits alone.
+        assert not _transcript_matches(
+            {
+                "title": "Retro 10",
+                "participants": ["alice@x.com"],
+                "date": "2026-04-13T10:05:00+00:00",
+            },
+            cal_title="Standup 10",
+            cal_emails={"alice@x.com"},
+            cal_start=CAL_START,
+            cal_end=CAL_END,
+            owner_emails={"alice@x.com"},
+        )
+
+    def test_short_alpha_word_overlap_does_not_match(self):
+        # Two-letter pure-alpha tokens ("go", initials like "ac") are noise.
+        assert not _transcript_matches(
+            {
+                "title": "Go retro",
+                "participants": ["alice@x.com"],
+                "date": "2026-04-13T10:05:00+00:00",
+            },
+            cal_title="Go standup",
+            cal_emails={"alice@x.com"},
+            cal_start=CAL_START,
+            cal_end=CAL_END,
+            owner_emails={"alice@x.com"},
+        )
+
+    def test_short_token_does_not_bypass_the_time_window(self):
+        # A shared "q3" must not rescue a transcript from a different slot.
+        assert not _transcript_matches(
+            {
+                "title": "Q3 planning — budget, venue, and headcount with Bob",
+                "participants": ["alice@x.com"],
+                "date": "2026-04-13T15:00:00+00:00",
+            },
+            cal_title="AC/Alice - Q3 Offsite",
+            cal_emails={"alice@x.com"},
+            cal_start=CAL_START,
+            cal_end=CAL_END,
+            owner_emails={"alice@x.com"},
+        )
+
+
 class TestTranscriptTieBreak:
     """When multiple transcripts pass, pick the one closest to cal_start;
     further tiebreak by longer duration."""
