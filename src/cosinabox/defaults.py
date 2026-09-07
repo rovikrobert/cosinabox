@@ -231,3 +231,9 @@ RESEARCH_SYNTHESIS_WARN_RATIO: float = 0.8
 # Observed characters per output token for this JSON shape, used to convert the
 # token ceiling into the character budget the alert compares against.
 RESEARCH_SYNTHESIS_CHARS_PER_TOKEN: float = 3.6
+
+# Rolling database backups kept on disk. The store holds primary data —
+# research signals, commitments, autonomy history — on a single volume, so a
+# volume loss with no copy is unrecoverable. Seven daily-ish copies is a week
+# of runway at a few MB each. (2026-08-20)
+MEMORY_BACKUP_KEEP: int = 7
