@@ -29,6 +29,7 @@ def register_core_jobs(
     drive: Any | None = None,
     auth_health_db_path: Path | None = None,
     auth_health_account_emails: list[str] | None = None,
+    owner_emails: list[str] | None = None,
 ) -> None:
     """Register the 5 core scheduled jobs (no send_telegram dependency).
 
@@ -37,6 +38,11 @@ def register_core_jobs(
             status to this SQLite DB after each tick. Read by /status.
         auth_health_account_emails: ordered list of Google account emails
             from integrations.yaml. Used as the email field in persisted rows.
+        owner_emails: the owner's own Google addresses, from
+            integrations.google.accounts[].email. Lets calendar filters tell
+            "a meeting with someone" from "a block on my own calendar" —
+            Google lists the owner as an attendee on events they create for
+            themselves. Omitted means no exclusion.
     """
     from cosinabox.jobs.evening_wrap import EveningWrapJob
     from cosinabox.jobs.followup_reminder import FollowupReminderJob
@@ -46,6 +52,7 @@ def register_core_jobs(
 
     relevance_keywords = list((event_relevance or {}).get("keywords") or [])
     relevance_domains = list((event_relevance or {}).get("domains") or [])
+    owner_emails = list(owner_emails or [])
 
     for job_name, cfg in jobs_config.items():
         if not cfg.get("enabled"):
@@ -86,6 +93,7 @@ def register_core_jobs(
                 skip_titles=cfg.get("skip_if_calendar_title_matches", []),
                 relevance_keywords=relevance_keywords,
                 relevance_domains=relevance_domains,
+                owner_emails=owner_emails,
             )
             cron = cfg.get("schedule", "*/5 * * * *")
             scheduler.add_job(job, cron=cron, timezone=cfg.get("timezone"))
@@ -213,13 +221,16 @@ def register_telegram_jobs(
         elif job_name == "post_meeting_debrief":
             from cosinabox.jobs.post_meeting_debrief import PostMeetingDebriefJob
 
-            # Owner emails feed the matcher's "exclude self from overlap"
-            # rule. Without this, every transcript the owner attended
-            # would cross-match every other meeting. Source of truth is
-            # integrations.google.accounts[].email; missing config means
-            # "no owner exclusion" (matcher still requires time + at
-            # least one of title/attendee, so the bot is safe but more
-            # permissive).
+            # Owner emails do two jobs here. They feed the matcher's
+            # "exclude self from overlap" rule — without this, every
+            # transcript the owner attended would cross-match every other
+            # meeting — and they let is_prep_worthy recognise the owner's
+            # own attendance, so a solo event stays a block rather than
+            # matching the domain allowlist via the owner's own address.
+            # Source of truth is integrations.google.accounts[].email;
+            # missing config means "no owner exclusion" (the matcher still
+            # requires time plus one of title/attendee, so the bot is safe
+            # but more permissive).
             google_accounts = integrations.get("google", {}).get("accounts", [])
             owner_emails: list[str] = [
                 str(a["email"]) for a in google_accounts if isinstance(a, dict) and a.get("email")

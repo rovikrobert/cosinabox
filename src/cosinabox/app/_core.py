@@ -89,6 +89,7 @@ class App:
         drive: Any | None = None,
         auth_health_db_path: Path | None = None,
         auth_health_account_emails: list[str] | None = None,
+        owner_emails: list[str] | None = None,
     ) -> None:
         from cosinabox.app.jobs import register_core_jobs
 
@@ -107,6 +108,7 @@ class App:
             drive=drive,
             auth_health_db_path=auth_health_db_path,
             auth_health_account_emails=auth_health_account_emails,
+            owner_emails=owner_emails,
         )
 
     # ------------------------------------------------------------------
@@ -332,6 +334,10 @@ class App:
             drive=tool_instances.get("drive"),
             auth_health_db_path=memory_db_path,
             auth_health_account_emails=auth_health_emails,
+            # Same list, different job: the auth probe uses it to label rows,
+            # the calendar filters use it to recognise the owner's own
+            # attendance and treat a solo event as a block, not a meeting.
+            owner_emails=auth_health_emails,
         )
 
         # --- Telegram ---
