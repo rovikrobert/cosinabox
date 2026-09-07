@@ -376,5 +376,63 @@ class Memory:
         self._conn.commit()
         return cur.rowcount
 
+    def record_job_run(
+        self,
+        *,
+        job_name: str,
+        started_at: datetime,
+        duration_ms: int,
+        status: str,
+        output_length: int = 0,
+    ) -> None:
+        """Record that a scheduled job executed.
+
+        The `job_runs` table and `analytics.get_job_health` both predate any
+        writer, so job counts and per-job failure stats reported zero for the
+        life of the project. This is that writer, and it is what makes
+        `JobWatchdogJob` able to tell "ran and failed" from "never fired".
+        """
+        with self.lock:
+            self._conn.execute(
+                "INSERT INTO job_runs "
+                "(job_name, started_at, duration_ms, status, output_length, created_at) "
+                "VALUES (?, ?, ?, ?, ?, ?)",
+                (
+                    job_name,
+                    started_at.isoformat(),
+                    duration_ms,
+                    status,
+                    output_length,
+                    datetime.now(UTC).isoformat(),
+                ),
+            )
+            self._conn.commit()
+
+    def last_job_run(self, job_name: str) -> datetime | None:
+        """When ``job_name`` last started, or None if it has never run.
+
+        A failed run still counts as a run — the watchdog's job is to spot
+        silence, and existing alerting already covers jobs that ran badly.
+        """
+        with self.lock:
+            cur = self._conn.execute(
+                "SELECT started_at FROM job_runs WHERE job_name = ? "
+                "ORDER BY started_at DESC LIMIT 1",
+                (job_name,),
+            )
+            row = cur.fetchone()
+        return datetime.fromisoformat(row["started_at"]) if row else None
+
+    def first_job_run(self) -> datetime | None:
+        """The earliest recorded run across all jobs — how long we've watched.
+
+        Distinguishes "this job never fires" from "we only just booted", so a
+        fresh deployment does not page for every job before its first cycle.
+        """
+        with self.lock:
+            cur = self._conn.execute("SELECT MIN(started_at) AS first FROM job_runs")
+            row = cur.fetchone()
+        return datetime.fromisoformat(row["first"]) if row and row["first"] else None
+
     def close(self) -> None:
         self._conn.close()

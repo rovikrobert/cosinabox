@@ -378,6 +378,11 @@ class App:
 
         self._wire_telegram_output(scheduler, send_telegram)
 
+        # Last, so it sees every registered job and wraps their final run().
+        from cosinabox.app.jobs import register_watchdog
+
+        register_watchdog(scheduler, jobs_config, send_telegram=send_telegram, memory=memory)
+
         # --- Start scheduler ---
         logger.info("Starting scheduler with %d jobs", len(scheduler._jobs))
         scheduler.start()

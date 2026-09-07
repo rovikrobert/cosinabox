@@ -135,6 +135,44 @@ def register_core_jobs(
         logger.info("Registered auth_health at %s", cron)
 
 
+def register_watchdog(
+    scheduler: SchedulerRunner,
+    jobs_config: dict[str, Any],
+    *,
+    send_telegram: Any,
+    memory: Any,
+) -> None:
+    """Register the dead-man's switch, and start recording every job run.
+
+    Call this LAST — after every other job is registered and after
+    ``wire_telegram_output`` — for two reasons: the watchdog reports on
+    whatever is registered at the time it runs, and ``wire_job_recording``
+    wraps each job's ``run``, so anything registered afterwards would go
+    unrecorded and then look to the watchdog like a job that never fires.
+
+    Always-on by default, like auth_health, so a jobs.yaml that predates
+    this change still gets outage detection.
+    """
+    from cosinabox import defaults
+    from cosinabox.jobs.job_watchdog import JobWatchdogJob
+    from cosinabox.scheduler.recording import wire_job_recording
+
+    cfg = jobs_config.get("job_watchdog", {})
+    if not cfg.get("enabled", True):
+        logger.info("job_watchdog disabled by config — jobs runs still recorded")
+        wire_job_recording(scheduler, memory)
+        return
+
+    cron = cfg.get("schedule", defaults.JOB_WATCHDOG_DEFAULT_SCHEDULE)
+    scheduler.add_job(
+        JobWatchdogJob(scheduler=scheduler, db=memory, alert_fn=send_telegram),
+        cron=cron,
+        timezone=cfg.get("timezone"),
+    )
+    wire_job_recording(scheduler, memory)
+    logger.info("Registered job_watchdog at %s", cron)
+
+
 def register_telegram_jobs(
     scheduler: SchedulerRunner,
     jobs_config: dict[str, Any],

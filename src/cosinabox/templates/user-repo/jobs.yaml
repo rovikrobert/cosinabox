@@ -3,6 +3,9 @@ jobs:
   auth_health:
     enabled: true
     schedule: "*/15 * * * *"   # every 15 min — alerts on revoked Google tokens
+  job_watchdog:
+    enabled: true
+    schedule: "0 * * * *"      # hourly — alerts when a job stops firing at all
   morning_briefing:
     enabled: true
     schedule: "0 8 * * *"

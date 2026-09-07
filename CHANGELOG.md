@@ -7,6 +7,8 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- `job_watchdog` — a dead-man's switch that alerts when a scheduled job stops firing at all. Every other health check only catches a job that ran *badly*; the scheduler heartbeat proves the process is alive, not that any given job executed. Enabled by default, hourly. It derives each job's expected cadence from its own cron trigger (using the longest gap, so a Mon–Fri job is not paged every weekend) and allows half a cycle of grace before alerting.
+- Job-run recording. The `job_runs` table and `analytics.get_job_health` both shipped without a writer, so job counts and per-job failure stats reported zero for the life of the project. `wire_job_recording` is that writer; `Memory.record_job_run` / `last_job_run` / `first_job_run` back it. Recording stays on even if `job_watchdog` is disabled, since `/analytics` depends on it.
 - `SECURITY.md` — security policy and private vulnerability reporting channel via GitHub Security Advisories.
 
 ### Changed
