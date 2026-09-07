@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import os
 from pathlib import Path
 from typing import Any
 
@@ -197,9 +198,14 @@ def register_telegram_jobs(
     scheduling_ctx: Any | None,  # SchedulingContext or None
     anthropic_factory: Any,
     chat_id: str,
+    config_dir: Path,
     event_relevance: dict[str, list[str]] | None = None,
 ) -> None:
-    """Register jobs that need send_telegram (runs AFTER send_telegram exists)."""
+    """Register jobs that need send_telegram (runs AFTER send_telegram exists).
+
+    ``config_dir`` is where user config lives; research_digest reads
+    ``research.yaml`` from it.
+    """
     relevance_keywords = list((event_relevance or {}).get("keywords") or [])
     relevance_domains = list((event_relevance or {}).get("domains") or [])
     for job_name, cfg in jobs_config.items():
@@ -316,5 +322,27 @@ def register_telegram_jobs(
                 stakeholders=stakeholders,
             )
             cron = cfg.get("schedule", "50 7 * * *")
+            scheduler.add_job(job, cron=cron, timezone=cfg.get("timezone"))
+            logger.info("Registered %s at %s", job_name, cron)
+        elif job_name == "research_digest":
+            from cosinabox import defaults
+            from cosinabox.jobs.research_digest import ResearchDigestJob
+
+            # Synthesis is a workhorse summarisation task over pre-fetched
+            # data, so it pins Sonnet rather than routing: the Router picks
+            # per-message based on conversational intent, which has no
+            # meaning for a scheduled job. Failover still walks the chain.
+            job = ResearchDigestJob(
+                config_dir=config_dir,
+                db=memory,
+                anthropic_client=anthropic_factory(),
+                search_api_key=os.environ.get("TAVILY_API_KEY", ""),
+                send_telegram=send_telegram,
+                # Same channel as the digest itself; the job prefixes its
+                # alerts with "research_digest:" so they stay distinguishable.
+                notify_error=send_telegram,
+                model=defaults.SONNET_MODEL_ID,
+            )
+            cron = cfg.get("schedule", "30 8 * * 1")
             scheduler.add_job(job, cron=cron, timezone=cfg.get("timezone"))
             logger.info("Registered %s at %s", job_name, cron)

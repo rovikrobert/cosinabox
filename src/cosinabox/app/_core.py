@@ -380,6 +380,7 @@ class App:
             anthropic_factory=_Anthropic,
             event_relevance=event_relevance,
             chat_id=chat_id,
+            config_dir=self.config_dir,
         )
 
         self._wire_telegram_output(scheduler, send_telegram)

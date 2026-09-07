@@ -6,6 +6,9 @@ jobs:
   job_watchdog:
     enabled: true
     schedule: "0 * * * *"      # hourly — alerts when a job stops firing at all
+  research_digest:
+    enabled: false
+    schedule: "30 8 * * 1"     # Mon 8:30 AM — weekly digest; needs research.yaml
   morning_briefing:
     enabled: true
     schedule: "0 8 * * *"

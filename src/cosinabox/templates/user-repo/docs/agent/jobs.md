@@ -6,6 +6,7 @@ Your CoS runs background jobs on a schedule. Enable or disable them in `jobs.yam
 |-----|---------|----------|-------------|
 | auth_health | enabled | every 15 min | Probes Google refresh tokens; alerts on revocation. Run `cosinabox auth refresh` to fix. |
 | job_watchdog | enabled | hourly | Alerts when a job stops firing at all. Every other check only catches a job that ran *badly*. |
+| research_digest | disabled | Mon 8:30 AM | Weekly digest on the orgs and people you track. See setup below. |
 | morning_briefing | enabled | 8:00 AM | Daily briefing: calendar, email, priorities |
 | pre_meeting_prep | enabled | every 5 min | Sends context 30 min before meetings |
 | evening_wrap | disabled | 6:00 PM | End-of-day summary |
@@ -92,3 +93,43 @@ Tell Claude Code things like:
 ### Coexistence with followup_reminder
 
 Both surface overdue people. Use Attio Keep Warm for the handful of relationships you care most about (per-person cadence + note); use `stakeholders.yaml` + `followup_reminder` for the broader stakeholder set with coarse weekly/monthly cadences. The briefing will show them as separate sections.
+
+## research_digest — weekly digest on what you track
+
+Disabled by default because it needs three things you must supply:
+
+1. **`research.yaml`** in your repo root. Groups hold the orgs and people you
+   want tracked; each entity contributes search queries. `priority` decides
+   who survives the result cap — **lower numbers are kept first**, so give
+   your few high-value groups a low number and a large noisy group a high one.
+   A template ships with `cosinabox init`.
+2. **`TAVILY_API_KEY`** in `.env`. Tavily specifically, because it exposes a
+   news topic and a date window — a general web search over the same queries
+   returns evergreen product pages, which then get discarded as not-recent.
+3. **The `research` extra**: `pip install 'cosinabox[research]'` (Tavily
+   client + RSS reader).
+
+Miss any of the three and the job reports "not configured" and returns
+without raising. It never partially runs.
+
+### What it does
+
+Collects candidates from your queries and any RSS feeds, drops off-topic feed
+items, asks the cheapest model to filter out passing mentions, then makes one
+streamed call to write the digest. Signals persist to `research_signals` —
+**that table is the only place a signal survives after delivery**, so it is
+primary data, not a cache. The store is backed up to `backups/` before each
+run for that reason.
+
+### What you lose by leaving it disabled
+
+Nothing else depends on it. No other job reads `research.yaml`, and the
+`research_signals` and `research_dedup` tables stay empty.
+
+### When it complains
+
+It pages on its own channel prefixed `research_digest:` — every search query
+failing, no candidates collected, a synthesis that produced zero signals, and
+output approaching the response ceiling. "The job ran" is deliberately not
+treated as success: in the system this was ported from, a broken digest went
+unnoticed for two weeks because nothing checked the output.
