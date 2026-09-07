@@ -6,6 +6,9 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+- Solo calendar events no longer earn pre-meeting prep or a post-meeting debrief. Google lists the calendar owner as an attendee on events they create for themselves, so a personal appointment had one attendee rather than zero and escaped the solo-event rule — and if the owner's own domain was in `event_relevance.domains` (the usual case, since it is the domain they work at), it satisfied the allowlist too. `is_prep_worthy` now accepts `owner_emails` and counts attendees *other than* the owner; omitting it preserves the previous behavior exactly.
+
 ### Added
 - `SECURITY.md` — security policy and private vulnerability reporting channel via GitHub Security Advisories.
 

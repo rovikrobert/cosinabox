@@ -24,6 +24,7 @@ class PreMeetingPrepJob(Job):
         skip_titles: list[str] | None = None,
         relevance_keywords: list[str] | None = None,
         relevance_domains: list[str] | None = None,
+        owner_emails: list[str] | None = None,
     ) -> None:
         self.calendar = calendar
         self.agent_loop = agent_loop
@@ -33,6 +34,7 @@ class PreMeetingPrepJob(Job):
         self.skip_titles = [t.lower() for t in (skip_titles or [])]
         self.relevance_keywords = list(relevance_keywords or [])
         self.relevance_domains = list(relevance_domains or [])
+        self.owner_emails = [e.lower() for e in (owner_emails or [])]
         # Track which events we've already prepped, with timestamps so we
         # can evict entries older than the prep window * 2. Prevents
         # unbounded memory growth on long-running deployments.
@@ -62,6 +64,7 @@ class PreMeetingPrepJob(Job):
                 skip_titles=self.skip_titles,
                 relevance_keywords=self.relevance_keywords,
                 relevance_domains=self.relevance_domains,
+                owner_emails=self.owner_emails,
             )
         ]
 

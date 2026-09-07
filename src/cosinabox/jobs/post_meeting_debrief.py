@@ -307,6 +307,7 @@ class PostMeetingDebriefJob(Job):
                 skip_titles=self.skip_titles,
                 relevance_keywords=self.relevance_keywords,
                 relevance_domains=self.relevance_domains,
+                owner_emails=self.owner_emails,
             ):
                 # Solo block, personal pattern, or user skip — no debrief.
                 # Mark it so we don't re-evaluate every poll cycle.

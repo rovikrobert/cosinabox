@@ -6,8 +6,9 @@ OSS engine doesn't assume who matters to you, but lets you declare it.
 
 The contract is a *blocklist first, allowlist second*:
 
-1. Solo events (no attendees) are never prep-worthy — they're time blocks,
-   not meetings.
+1. Solo events are never prep-worthy — they're time blocks, not meetings.
+   "Solo" counts attendees *other than* the owner (see ``owner_emails``),
+   because Google lists you as an attendee on events you create yourself.
 2. Titles matching built-in personal-block patterns
    (``DEFAULT_PERSONAL_BLOCK_PATTERNS`` in ``defaults.py``) are skipped.
 3. Per-job user ``skip_titles`` are honored in addition.
@@ -35,14 +36,27 @@ def is_prep_worthy(
     skip_titles: Iterable[str] = (),
     relevance_keywords: Iterable[str] = (),
     relevance_domains: Iterable[str] = (),
+    owner_emails: Iterable[str] = (),
 ) -> bool:
     """Return True if ``event`` deserves agent-generated prep or debrief.
 
     ``event`` is expected to have ``summary: str`` and
     ``attendees: list[str]`` — the ``CalendarEvent`` shape. Duck-typed for
     test fakes.
+
+    ``owner_emails`` are the calendar owner's own addresses. Google lists
+    the owner as an attendee on events they create for themselves, so
+    without this a solo appointment has one attendee rather than zero and
+    escapes the solo-event rule. Worse, if the owner's own domain is in
+    ``relevance_domains`` — the usual case, since it is the domain they
+    work at — the event also satisfies the allowlist, and a recurring
+    personal appointment earns a full brief every week. Empty/omitted
+    preserves the previous behavior exactly.
     """
-    attendees = getattr(event, "attendees", None) or []
+    owners = {e.lower() for e in owner_emails if e}
+    attendees = [a for a in (getattr(event, "attendees", None) or []) if a.lower() not in owners]
+    # Counts attendees *other than* the owner: an event only you attend is a
+    # time block however it was created.
     if len(attendees) == 0:
         return False
 
