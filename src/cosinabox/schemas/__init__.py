@@ -6,7 +6,7 @@ import json
 from importlib.resources import files
 from typing import Any
 
-SCHEMA_NAMES = ("personality", "stakeholders", "jobs", "integrations")
+SCHEMA_NAMES = ("personality", "stakeholders", "jobs", "integrations", "research")
 
 
 def load_schema(name: str) -> dict[str, Any]:

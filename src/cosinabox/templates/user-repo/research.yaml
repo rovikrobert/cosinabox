@@ -1,0 +1,39 @@
+# Weekly research digest targets. Read only by the `research_digest` job;
+# delete this file if you don't use it.
+#
+# Each group is a bucket of things you want tracked. `priority` decides who
+# survives the result cap when a run collects more than it can synthesize:
+# LOWER priority numbers are kept first. Give your few high-value groups a
+# low number so a large, noisy group can't crowd them out.
+schema_version: 1
+
+groups:
+  - name: <YOUR_GROUP_NAME>        # e.g. "frontier-labs"
+    priority: 0                     # kept first under the cap
+    search:
+      country: us                   # 2-letter code passed to the search backend
+      topic: news                   # "news" + time_range scopes to fresh articles
+      time_range: week
+      results_per_query: 5
+    entities:
+      - name: <ORG_NAME>
+        aliases: [<ORG_SHORT_NAME>]           # also used to filter feed noise
+        queries: ["<ORG_NAME> product launch"]
+
+  - name: <YOUR_SECOND_GROUP>      # e.g. "people-to-watch"
+    priority: 1
+    search:
+      country: us
+      topic: news
+      time_range: week
+    entities:
+      - name: <PERSON_NAME>
+        queries: ['"<PERSON_NAME>" <ORG_NAME>']
+
+# Optional RSS/Atom feeds. Feed items are dropped unless their title or
+# summary mentions a tracked entity name or alias — without that filter a
+# high-volume feed floods the candidate set.
+feeds: []
+
+# Optional broad queries with no single owning entity (field-level trends).
+field_queries: []

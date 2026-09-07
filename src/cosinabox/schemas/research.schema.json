@@ -1,0 +1,43 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "research.yaml",
+  "type": "object",
+  "required": ["schema_version", "groups"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "groups": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name", "priority", "entities"],
+        "properties": {
+          "name": {"type": "string", "minLength": 1},
+          "priority": {"type": "integer", "minimum": 0},
+          "search": {
+            "type": "object",
+            "properties": {
+              "country": {"type": "string", "minLength": 2, "maxLength": 2},
+              "topic": {"enum": ["general", "news"]},
+              "time_range": {"enum": ["day", "week", "month", "year"]},
+              "results_per_query": {"type": "integer", "minimum": 1, "maximum": 20}
+            }
+          },
+          "entities": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["name"],
+              "properties": {
+                "name": {"type": "string", "minLength": 1},
+                "aliases": {"type": "array", "items": {"type": "string"}},
+                "queries": {"type": "array", "items": {"type": "string"}}
+              }
+            }
+          }
+        }
+      }
+    },
+    "feeds": {"type": "array", "items": {"type": "string"}},
+    "field_queries": {"type": "array", "items": {"type": "string"}}
+  }
+}
