@@ -215,3 +215,19 @@ RESEARCH_FEED_MAX_AGE_DAYS: int = 7
 # (2026-08-20 — ported from cos-agent's intel classifier.)
 RESEARCH_CLASSIFIER_MODEL: str = "claude-haiku-4-5-20251001"
 RESEARCH_CLASSIFIER_MAX_TOKENS: int = 2048
+
+# Streamed synthesis ceiling. Generous on purpose: the call streams, so a high
+# ceiling costs nothing unless the model actually uses it, whereas a low one
+# silently truncates a long structured response mid-object.
+# (2026-08-20 — the legacy non-streaming call capped at 16000 and cut two
+# weekly digests off at ~56k characters.)
+RESEARCH_SYNTHESIS_MAX_TOKENS: int = 32_000
+
+# Warn when output reaches this share of the ceiling. Legacy output crept
+# 33k -> 49k chars over four weeks before the first truncation; a warning at
+# 80% turns the next one into a heads-up instead of a lost digest.
+RESEARCH_SYNTHESIS_WARN_RATIO: float = 0.8
+
+# Observed characters per output token for this JSON shape, used to convert the
+# token ceiling into the character budget the alert compares against.
+RESEARCH_SYNTHESIS_CHARS_PER_TOKEN: float = 3.6
