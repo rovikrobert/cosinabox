@@ -174,3 +174,19 @@ AUTH_HEALTH_DEFAULT_SCHEDULE: str = "*/15 * * * *"
 # period: the watchdog measures staleness against each job's own cadence,
 # so it need not run as often as the jobs it watches.
 JOB_WATCHDOG_DEFAULT_SCHEDULE: str = "0 * * * *"
+
+# --- Research digest ---
+# Search-backend defaults for a group that omits its own `search:` block.
+# "general" + no time window is the safe default: it never silently narrows a
+# user's query. Groups that want fresh announcements opt into news+week, which
+# is what the legacy tracker needed to stop missing dated releases.
+# (2026-08-20 — ported from cos-agent's intel collector.)
+RESEARCH_SEARCH_COUNTRY: str = "us"
+RESEARCH_SEARCH_TOPIC: str = "general"
+RESEARCH_RESULTS_PER_QUERY: int = 5
+
+# Feed items and search results whose title/summary mentions no tracked term
+# are dropped. Terms shorter than this match too much ("AI", two-char CJK
+# aliases), so they are excluded from the filter set.
+# (2026-08-20 — ported; the legacy collector used the same floor.)
+RESEARCH_MIN_TRACKED_TERM_CHARS: int = 3
