@@ -63,6 +63,11 @@ def validate_cmd(ctx: click.Context, json_out: bool) -> None:
         ("integrations.yaml", "integrations", _yaml_loader),
     ]
     results = [_validate_one(config_dir, *t) for t in targets]
+    # research.yaml is opt-in: only the research_digest job reads it, and
+    # every repo scaffolded before it existed has none. Validate when present,
+    # stay silent when absent — a missing optional file is not an error.
+    if (config_dir / "research.yaml").exists():
+        results.append(_validate_one(config_dir, "research.yaml", "research", _yaml_loader))
     if json_out:
         click.echo(
             json.dumps(
