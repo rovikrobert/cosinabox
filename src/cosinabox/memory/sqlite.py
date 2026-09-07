@@ -218,6 +218,28 @@ CREATE TABLE IF NOT EXISTS keep_warm_note_history (
 );
 CREATE INDEX IF NOT EXISTS idx_kwh_person_time
     ON keep_warm_note_history (person_record_id, archived_at DESC);
+
+-- Durable record of every reported research signal. This is the only place a
+-- signal survives after the digest is delivered, so treat it as primary data,
+-- not as a cache. UNIQUE(week_of, source_url) makes a re-run idempotent.
+CREATE TABLE IF NOT EXISTS research_signals (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    week_of TEXT NOT NULL,
+    headline TEXT NOT NULL DEFAULT '',
+    source_url TEXT NOT NULL DEFAULT '',
+    entity TEXT NOT NULL DEFAULT '',
+    why_it_matters TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE(week_of, source_url)
+);
+
+-- What we have already reported, fed back into the next run's prompt so the
+-- digest doesn't repeat itself. Pruned by age on read.
+CREATE TABLE IF NOT EXISTS research_dedup (
+    url TEXT PRIMARY KEY,
+    headline TEXT NOT NULL DEFAULT '',
+    week_of TEXT NOT NULL
+);
 """
 
 
@@ -433,6 +455,85 @@ class Memory:
             cur = self._conn.execute("SELECT MIN(started_at) AS first FROM job_runs")
             row = cur.fetchone()
         return datetime.fromisoformat(row["first"]) if row and row["first"] else None
+
+    def save_research_signals(self, signals: list[Any], *, week_of: str) -> int:
+        """Persist this week's signals. Returns the number of rows written.
+
+        Malformed entries are skipped rather than raising: the model produces
+        this list, and one bad row must not cost the whole week's record.
+        """
+        written = 0
+        with self.lock:
+            for signal in signals:
+                if not isinstance(signal, dict):
+                    continue
+                url = str(signal.get("source_url") or "")
+                headline = str(signal.get("headline") or "")
+                if not url and not headline:
+                    continue
+                cur = self._conn.execute(
+                    """
+                    INSERT OR IGNORE INTO research_signals
+                        (week_of, headline, source_url, entity, why_it_matters)
+                    VALUES (?, ?, ?, ?, ?)
+                    """,
+                    (
+                        week_of,
+                        headline,
+                        url,
+                        str(signal.get("entity") or ""),
+                        str(signal.get("why_it_matters") or ""),
+                    ),
+                )
+                written += cur.rowcount or 0
+            self._conn.commit()
+        return written
+
+    def research_signal_count(self, *, week_of: str) -> int:
+        with self.lock:
+            row = self._conn.execute(
+                "SELECT COUNT(*) FROM research_signals WHERE week_of = ?", (week_of,)
+            ).fetchone()
+        return int(row[0]) if row else 0
+
+    def save_research_dedup(self, entries: list[Any], *, week_of: str) -> None:
+        with self.lock:
+            for entry in entries:
+                if not isinstance(entry, dict):
+                    continue
+                url = str(entry.get("url") or "")
+                if not url:
+                    continue
+                self._conn.execute(
+                    """
+                    INSERT INTO research_dedup (url, headline, week_of) VALUES (?, ?, ?)
+                    ON CONFLICT(url) DO UPDATE SET
+                        headline = excluded.headline, week_of = excluded.week_of
+                    """,
+                    (url, str(entry.get("headline") or ""), week_of),
+                )
+            self._conn.commit()
+
+    def load_research_dedup(
+        self, *, now: datetime, ttl_days: int, cap: int
+    ) -> list[dict[str, str]]:
+        """Recent dedup entries, newest first, pruned by age and capped.
+
+        The cap protects the synthesis prompt's token budget — an unbounded
+        index grows forever and eventually crowds out the candidates.
+        """
+        cutoff = (now - timedelta(days=ttl_days)).date().isoformat()
+        with self.lock:
+            rows = self._conn.execute(
+                """
+                SELECT url, headline, week_of FROM research_dedup
+                WHERE week_of >= ?
+                ORDER BY week_of DESC, url ASC
+                LIMIT ?
+                """,
+                (cutoff, cap),
+            ).fetchall()
+        return [{"url": r[0], "headline": r[1], "week_of": r[2]} for r in rows]
 
     def close(self) -> None:
         self._conn.close()
