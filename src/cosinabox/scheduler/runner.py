@@ -18,6 +18,11 @@ class SchedulerRunner:
             scheduler = BackgroundScheduler(timezone=get_timezone())
         self._scheduler = scheduler
         self._jobs: dict[str, Job] = {}
+        # job name -> (cron expression, per-job timezone override or None).
+        # Kept here rather than read back off the APScheduler job so the
+        # watchdog can infer a job's expected cadence without depending on
+        # scheduler internals, and so it works with a stub scheduler in tests.
+        self._schedules: dict[str, tuple[str, str | None]] = {}
 
     def add_job(self, job: Job, *, cron: str, timezone: str | None = None) -> None:
         # CronTrigger.from_crontab() defaults to OS-local TZ via tzlocal, NOT
@@ -26,6 +31,7 @@ class SchedulerRunner:
         # engine's configured TZ explicitly. `timezone` arg, when provided,
         # is the per-job override from jobs.yaml.
         self._jobs[job.name] = job
+        self._schedules[job.name] = (cron, timezone)
         if hasattr(self._scheduler, "add_job"):
             from apscheduler.triggers.cron import CronTrigger
 
@@ -68,6 +74,10 @@ class SchedulerRunner:
             sched_job.reschedule(trigger=new_trigger)
             count += 1
         return count
+
+    def schedules(self) -> dict[str, tuple[str, str | None]]:
+        """Registered job name -> (cron expression, timezone override)."""
+        return dict(self._schedules)
 
     def run_now(self, job_name: str, *, context: JobContext | None = None) -> str:
         job = self._jobs[job_name]

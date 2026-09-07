@@ -166,3 +166,11 @@ CONSULT_BRAINSTORM_OVERRIDE_DEFAULT: str = (
 # revoked token looped `invalid_grant` silently for days. See
 # docs/specs/2026-04-17-auth-health-watcher-design.md.
 AUTH_HEALTH_DEFAULT_SCHEDULE: str = "*/15 * * * *"
+
+# Dead-man's-switch cadence. Hourly is frequent enough that even the
+# slowest thing it can catch is reported the same day it goes missing, and
+# cheap enough to ignore — the check is two indexed SQLite reads per
+# registered job, no network. Deliberately not tied to the shortest job's
+# period: the watchdog measures staleness against each job's own cadence,
+# so it need not run as often as the jobs it watches.
+JOB_WATCHDOG_DEFAULT_SCHEDULE: str = "0 * * * *"
