@@ -31,7 +31,7 @@ Every task's requirements implicitly include these.
 ## Deferred — do not build here
 
 - **Publication**: `digest_publisher.py` (901 lines — GitHub markdown + CSV, deep-dive generation, glossary, backlog/curriculum splicing, site index). Its own plan. When it lands, carry the scar from cos-agent #187: **never treat a failed read as an empty file** — the publisher appended to `""` and offered the result as a whole-file replacement; only GitHub's `422 "sha wasn't supplied"` prevented data loss.
-- **Dead-man's switch** ("has each expected job logged a start in its window?"). The migration note assigns this to cosinabox's scheduler, and it is scheduler-wide rather than research-specific — a 2026-06-15 → 07-20 outage produced four weeks of silence in the legacy system. It deserves its own plan covering every job, not a corner of this one.
+- **Dead-man's switch** ("has each expected job logged a start in its window?"). **Shipped 2026-09-07 in #98**, before this port was executed; the note below is kept for the reasoning. The migration note assigns this to cosinabox's scheduler, and it is scheduler-wide rather than research-specific — a 2026-06-15 → 07-20 outage produced four weeks of silence in the legacy system. It deserves its own plan covering every job, not a corner of this one.
 
 ---
 
