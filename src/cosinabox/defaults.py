@@ -208,3 +208,10 @@ RESEARCH_MAX_WORKERS: int = 4
 # Feed items older than this are ignored — the digest is weekly, so a month-old
 # post is not news. (2026-08-20 — ported.)
 RESEARCH_FEED_MAX_AGE_DAYS: int = 7
+
+# The relevance pre-pass runs on the cheapest model: it answers one narrow
+# question ("is this item about a tracked entity?") thousands of times, and
+# using the synthesis model for it costs roughly 20x for no gain.
+# (2026-08-20 — ported from cos-agent's intel classifier.)
+RESEARCH_CLASSIFIER_MODEL: str = "claude-haiku-4-5-20251001"
+RESEARCH_CLASSIFIER_MAX_TOKENS: int = 2048
