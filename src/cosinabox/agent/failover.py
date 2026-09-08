@@ -116,3 +116,62 @@ def call_with_failover(
 
     assert last_error is not None  # chain is non-empty; fall-through means we errored
     raise last_error
+
+
+def call_with_failover_stream(
+    client: Any,
+    model: str,
+    *,
+    system: Any,
+    messages: list[dict[str, Any]],
+    max_tokens: int,
+    tools: list[dict[str, Any]] | None = None,
+) -> tuple[str, str]:
+    """Streamed sibling of `call_with_failover`, returning accumulated text.
+
+    Streaming exists here for one reason: a non-streamed call must declare a
+    `max_tokens` it will not exceed, and a long structured response silently
+    truncates against it. Streaming lets the ceiling be set generously without
+    risking a mid-object cut, which is what corrupted two weekly digests in the
+    legacy implementation.
+
+    Returns `(text, model_actually_used)` so the caller can attribute cost.
+    Raises `anthropic.APIError` once the whole chain is exhausted.
+    """
+    try:
+        start_idx = MODEL_FAILOVER_CHAIN.index(model)
+        chain: tuple[str, ...] = MODEL_FAILOVER_CHAIN[start_idx:]
+    except ValueError:
+        chain = (model,)
+
+    last_error: Exception | None = None
+    for candidate in chain:
+        kwargs: dict[str, Any] = {
+            "model": candidate,
+            "max_tokens": max_tokens,
+            "messages": messages,
+        }
+        if system:
+            kwargs["system"] = system
+        if tools:
+            kwargs["tools"] = tools
+
+        try:
+            chunks: list[str] = []
+            with client.messages.stream(**kwargs) as stream:
+                for chunk in stream.text_stream:
+                    chunks.append(chunk)
+            return "".join(chunks), candidate
+        except anthropic.APIError as exc:
+            last_error = exc
+            status = getattr(exc, "status_code", None)
+            message = str(exc)
+            retryable = status in (429, 529) or "overloaded" in message.lower()
+            if not retryable:
+                raise
+            logger.warning(
+                "Streamed call to %s failed (%s) — trying next in chain", candidate, status
+            )
+
+    assert last_error is not None
+    raise last_error
