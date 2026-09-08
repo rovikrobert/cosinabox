@@ -190,3 +190,21 @@ RESEARCH_RESULTS_PER_QUERY: int = 5
 # aliases), so they are excluded from the filter set.
 # (2026-08-20 — ported; the legacy collector used the same floor.)
 RESEARCH_MIN_TRACKED_TERM_CHARS: int = 3
+
+# Hard cap on candidates handed to synthesis. Sized for the synthesis prompt's
+# token budget, not for completeness — beyond this, extra candidates cost
+# tokens without changing the digest. Items are dropped lowest-priority-first
+# so a large noisy group cannot displace a targeted one.
+# (2026-08-20 — ported; the legacy cap silently sliced off an entire region's
+# results for eleven weeks because it capped in append order instead.)
+RESEARCH_MAX_CANDIDATES: int = 120
+
+# Concurrent search requests. The backend rate-limits, and the legacy
+# implementation ran queries strictly sequentially for that reason; a small
+# pool is a measured relaxation, not a free-for-all.
+# (2026-08-20)
+RESEARCH_MAX_WORKERS: int = 4
+
+# Feed items older than this are ignored — the digest is weekly, so a month-old
+# post is not news. (2026-08-20 — ported.)
+RESEARCH_FEED_MAX_AGE_DAYS: int = 7
